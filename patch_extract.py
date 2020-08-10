@@ -12,6 +12,12 @@ from multiprocessing.pool import Pool
 from pathlib import Path
 from tqdm import tqdm
 
+import skimage
+from skimage.color import rgb2gray
+from skimage.color import gray2rgb
+from skimage import measure
+from skimage.metrics import structural_similarity as ssim
+
 
 def extract(param, increment, root_dir, out_dir):
     img = cv2.imread(os.path.join(root_dir, "imd_data", param["img_path"]))
@@ -258,8 +264,62 @@ def extract_real(param, increment, root_dir, out_dir):
     f.close()
 
 
+def SSIM(imageA, imageB):
+    dim = (imageA.shape[0], imageA.shape[1])
+    A = cv2.resize(imageA, dim, interpolation=cv2.INTER_AREA)
+    B = cv2.resize(imageB, dim, interpolation=cv2.INTER_AREA)
+    grayA = cv2.cvtColor(A, cv2.COLOR_BGR2GRAY)
+    grayB = cv2.cvtColor(B, cv2.COLOR_BGR2GRAY)
+    ans = ssim(grayA, grayB, full=True)
+    ret = ans[0]
+    ret += 1
+    ret /= 2
+    return ret
+
+
+def extract_imd_orig(param, increment, root_dir, out_dir):
+    # Check korish shob thik thaak ache kina
+    img = cv2.imread(os.path.join(root_dir, "imd_data", param["img_path"]))
+    patches = []
+    d = img.shape
+    for i in range(0, d[0], increment):
+        for j in range(0, d[1], increment):
+            x = i + increment
+            y = j + increment
+            if x > d[0] or y > d[1]:
+                break
+            patches.append(img[i:x, j:y])
+    random.shuffle(patches)
+
+    imd_patch = []
+    vis = [0 for i in range(len(patches))]
+    for i in range(len(patches)):
+        if vis[i]:
+            continue
+        vis[i] = 1
+        imd_patch.append(patches[i])
+        for j in range(i + 1, len(patches)):
+            if vis[j]:
+                continue
+            if SSIM(patches[i], patches[j]) >= 0.67:
+                vis[j] = 1
+
+    if len(imd_patch) > 10:
+        imd_patch = random.sample(imd_patch, 10)
+    # imd_patch e final patchgula ache
+    dir = os.path.join(
+        root_dir, out_dir, param["img_path"].split("/")[-1].split(".")[0]
+    )
+    os.makedirs(dir, exist_ok=True)
+    for i, im in enumerate(imd_patch):
+        cv2.imwrite(os.path.join(dir, f"{i}.png"), im)
+
+    f = open(os.path.join(dir, "done.txt"), "w")
+    f.close()
+
+
 def main():
-    patch_size = 64
+    patch_size = 128
     ROOT_DIR = "Image_Manipulation_Dataset/IMD2020"
     OUT_DIR = f"image_patch_{patch_size}"
 
@@ -270,21 +330,21 @@ def main():
             params.append({"img_path": row["image"], "mask_path": row["mask"]})
     print(f"Total: {len(params)}")
 
-    _temp = []
-    for item in params:
-        image_id = item["img_path"].split("/")[-1].split(".")[0]
-        if os.path.exists(os.path.join(ROOT_DIR, OUT_DIR, image_id, "done.txt")):
-            continue
-        else:
-            _temp.append((item))
-    params = _temp
-    print("Remaining : {}".format(len(params)))
+    # _temp = []
+    # for item in params:
+    #     image_id = item["img_path"].split("/")[-1].split(".")[0]
+    #     if os.path.exists(os.path.join(ROOT_DIR, OUT_DIR, image_id, "done.txt")):
+    #         continue
+    #     else:
+    #         _temp.append((item))
+    # params = _temp
+    # print("Remaining : {}".format(len(params)))
 
     with Pool(processes=os.cpu_count()) as p:
         with tqdm(total=len(params)) as pbar:
             for v in p.imap_unordered(
                 partial(
-                    extract_real,
+                    extract_imd_orig,
                     increment=patch_size,
                     root_dir=ROOT_DIR,
                     out_dir=OUT_DIR,
