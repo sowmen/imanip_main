@@ -3,3 +3,7 @@ dfdc-env/
 .vscode/
 */*.png
 /home/saurav/Sowmen_DL/Image Manipulation/Image_Manipulation_Dataset
+wandb/
+weights/
+history/
+__pycache__/
