@@ -51,9 +51,10 @@ config_defaults = {
 
 VAL_FOLD = 0
 TEST_FOLD = 9
+model_name = "tf_efficientnet_b5_ns"
 
 
-def train(name, run, df, data_root):
+def train(name, run, df, data_root, patch_size):
     wandb.init(
         project="imanip",
         config=config_defaults,
@@ -64,7 +65,7 @@ def train(name, run, df, data_root):
     neptune.init("sowmen/imanip")
     neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
 
-    model = timm.create_model("tf_efficientnet_b4_ns", pretrained=True, num_classes=1)
+    model = timm.create_model(model_name, pretrained=True, num_classes=1)
     model.to(device)
     model = nn.DataParallel(model).to(device)
 
@@ -99,6 +100,7 @@ def train(name, run, df, data_root):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         root_dir=data_root,
+        patch_size=patch_size,
         equal_sample=False,
         transforms=train_aug,
     )
@@ -113,6 +115,7 @@ def train(name, run, df, data_root):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         root_dir=data_root,
+        patch_size=patch_size,
         equal_sample=False,
         transforms=valid_aug,
     )
@@ -127,6 +130,7 @@ def train(name, run, df, data_root):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         root_dir=data_root,
+        patch_size=patch_size,
         equal_sample=False,
         transforms=valid_aug,
     )
@@ -400,10 +404,13 @@ if __name__ == "__main__":
     DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
 
     run = 2
-    model_name = "tf_efficientnet_b4_ns"
     df = pd.read_csv(f"casia2.csv")
 
     train(
-        name=f"CASIA_FULL" + model_name, run=run, df=df, data_root=DATA_ROOT,
+        name=f"CASIA_FULL" + model_name,
+        run=run,
+        df=df,
+        data_root=DATA_ROOT,
+        patch_size=patch_size,
     )
 
