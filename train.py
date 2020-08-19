@@ -41,7 +41,7 @@ from casia_dataset import CASIA
 OUTPUT_DIR = "weights"
 device = torch.device("cuda")
 config_defaults = {
-    "epochs": 50,
+    "epochs": 1,
     "train_batch_size": 40,
     "valid_batch_size": 32,
     "optimizer": "radam",
@@ -57,15 +57,14 @@ TEST_FOLD = 9
 
 
 def train(name, run, df, data_root, patch_size):
+    now = datetime.now()
+    dt_string = now.strftime("%d|%m_%H|%M|%S")
+    print("Starting -->", dt_string)
+
     wandb.init(
-        project="imanip",
-        config=config_defaults,
-        name=f"{name},val_fold:{VAL_FOLD},run{run}",
+        project="imanip", config=config_defaults, name=f"{name},{dt_string}",
     )
     config = wandb.config
-
-    now = datetime.now()
-    dt_string = now.strftime("%d-%m-%Y_%H-%M-%S")
 
     # neptune.init("sowmen/imanip")
     # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
@@ -162,8 +161,8 @@ def train(name, run, df, data_root, patch_size):
             lr=config.learning_rate,
             weight_decay=config.weight_decay,
         )
-    elif config.optimizer == "sgd":
-        optimizer = optim.SGD(
+    elif config.optimizer == "adam":
+        optimizer = optim.Adam(
             model.parameters(),
             lr=config.learning_rate,
             weight_decay=config.weight_decay,
@@ -178,7 +177,7 @@ def train(name, run, df, data_root, patch_size):
     criterion = nn.BCEWithLogitsLoss()
     map_criterion = nn.L1Loss()
 
-    es = EarlyStopping(patience=10, mode="max")
+    es = EarlyStopping(patience=7, mode="max")
 
     train_history = []
     val_history = []
@@ -214,18 +213,22 @@ def train(name, run, df, data_root, patch_size):
             print("Early stopping")
             break
 
-    model.load_state_dict(torch.load(f"weights/{name}_fold_{VAL_FOLD}_{dt_string}.h5"))
+    model.load_state_dict(
+        torch.load(f"weights/{name}_fold_{VAL_FOLD}_[{dt_string}].h5")
+    )
 
     test_history = test(model, test_loader, criterion)
 
     try:
-        pkl.dump(train_history, open(f"history/train_history{name}{run}.pkl", "wb"))
-        pkl.dump(val_history, open(f"history/val_history{name}{run}.pkl", "wb"))
-        pkl.dump(test_history, open(f"history/test_history{name}{run}.pkl", "wb"))
+        pkl.dump(
+            train_history, open(f"history/train_history{name}{dt_string}.pkl", "wb")
+        )
+        pkl.dump(val_history, open(f"history/val_history{name}{dt_string}.pkl", "wb"))
+        pkl.dump(test_history, open(f"history/test_history{name}{dt_string}.pkl", "wb"))
     except:
         print("Error pickling")
 
-    wandb.save(f"weights/{name}_fold_{VAL_FOLD}_run_{run}.h5")
+    wandb.save(f"weights/{name}_fold_{VAL_FOLD}_[{dt_string}].h5")
 
 
 def train_epoch(model, train_loader, optimizer, criterion, map_criterion, epoch):
@@ -390,16 +393,16 @@ def test(model, test_loader, criterion):
         "test_log_loss": test_log_loss,
     }
     wandb.log(test_metrics)
-    wandb.log(
-        {
-            "test_roc_auc_curve": skplt.metrics.plot_roc(
-                targets, expand_prediction(correct_predictions)
-            ),
-            "test_precision_recall_curve": skplt.metrics.plot_precision_recall(
-                targets, expand_prediction(correct_predictions)
-            ),
-        }
-    )
+    # wandb.log(
+    #     {
+    #         "test_roc_auc_curve": skplt.metrics.plot_roc(
+    #             targets, expand_prediction(correct_predictions)
+    #         ),
+    #         "test_precision_recall_curve": skplt.metrics.plot_precision_recall(
+    #             targets, expand_prediction(correct_predictions)
+    #         ),
+    #     }
+    # )
 
     # y_test = targets
     # y_test_pred = expand_prediction(correct_predictions)
@@ -432,7 +435,7 @@ if __name__ == "__main__":
     df = pd.read_csv(f"casia2.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"CASIA_FULL" + config_defaults["model"],
+        name=f"SW2_CASIA_FULL" + config_defaults["model"],
         run=run,
         df=df,
         data_root=DATA_ROOT,
