@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import torch_optimizer
+from torch import optim
 
 import albumentations
 from albumentations import augmentations
@@ -28,9 +29,10 @@ cudnn.benchmark = True
 
 import wandb
 import neptune
-from neptunecontrib.monitoring.metrics import *
 
+# from neptunecontrib.monitoring.metrics import *
 
+from datetime import datetime
 from utils import EarlyStopping, AverageMeter
 
 # from effb4_attention import Efficient_Attention
@@ -40,18 +42,18 @@ OUTPUT_DIR = "weights"
 device = torch.device("cuda")
 config_defaults = {
     "epochs": 50,
-    "train_batch_size": 64,
-    "valid_batch_size": 128,
+    "train_batch_size": 40,
+    "valid_batch_size": 32,
     "optimizer": "radam",
     "learning_rate": 1e-3,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
+    "model": "tf_efficientnet_b3_ns",
 }
 
 VAL_FOLD = 0
 TEST_FOLD = 9
-model_name = "tf_efficientnet_b5_ns"
 
 
 def train(name, run, df, data_root, patch_size):
@@ -62,10 +64,13 @@ def train(name, run, df, data_root, patch_size):
     )
     config = wandb.config
 
-    neptune.init("sowmen/imanip")
-    neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
+    now = datetime.now()
+    dt_string = now.strftime("%d-%m-%Y_%H-%M-%S")
 
-    model = timm.create_model(model_name, pretrained=True, num_classes=1)
+    # neptune.init("sowmen/imanip")
+    # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
+
+    model = timm.create_model(config.model, pretrained=True, num_classes=1)
     model.to(device)
     model = nn.DataParallel(model).to(device)
 
@@ -145,6 +150,24 @@ def train(name, run, df, data_root, patch_size):
             lr=config.learning_rate,
             weight_decay=config.weight_decay,
         )
+    elif config.optimizer == "adamP":
+        optimizer = torch_optimizer.AdamP(
+            model.parameters(),
+            lr=config.learning_rate,
+            weight_decay=config.weight_decay,
+        )
+    elif config.optimizer == "qhadam":
+        optimizer = torch_optimizer.QHAdam(
+            model.parameters(),
+            lr=config.learning_rate,
+            weight_decay=config.weight_decay,
+        )
+    elif config.optimizer == "sgd":
+        optimizer = optim.SGD(
+            model.parameters(),
+            lr=config.learning_rate,
+            weight_decay=config.weight_decay,
+        )
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
@@ -183,13 +206,15 @@ def train(name, run, df, data_root, patch_size):
         es(
             valid_metrics["valid_acc_05"],
             model,
-            model_path=os.path.join(OUTPUT_DIR, f"{name}_fold_{VAL_FOLD}_run_{run}.h5"),
+            model_path=os.path.join(
+                OUTPUT_DIR, f"{name}_fold_{VAL_FOLD}_[{dt_string}].h5"
+            ),
         )
         if es.early_stop:
             print("Early stopping")
             break
 
-    model.load_state_dict(torch.load(f"weights/{name}_fold_{VAL_FOLD}_run_{run}.h5"))
+    model.load_state_dict(torch.load(f"weights/{name}_fold_{VAL_FOLD}_{dt_string}.h5"))
 
     test_history = test(model, test_loader, criterion)
 
@@ -376,19 +401,19 @@ def test(model, test_loader, criterion):
         }
     )
 
-    y_test = targets
-    y_test_pred = expand_prediction(correct_predictions)
-    log_confusion_matrix(y_test, y_test_pred[:, 1] > 0.5)
-    log_classification_report(y_test, y_test_pred[:, 1] > 0.5)
-    log_class_metrics(y_test, y_test_pred[:, 1] > 0.5)
-    log_roc_auc(y_test, y_test_pred)
-    log_precision_recall_auc(y_test, y_test_pred)
-    log_brier_loss(y_test, y_test_pred[:, 1])
-    log_log_loss(y_test, y_test_pred)
-    log_ks_statistic(y_test, y_test_pred)
-    log_cumulative_gain(y_test, y_test_pred)
-    log_lift_curve(y_test, y_test_pred)
-    log_prediction_distribution(y_test, y_test_pred[:, 1])
+    # y_test = targets
+    # y_test_pred = expand_prediction(correct_predictions)
+    # log_confusion_matrix(y_test, y_test_pred[:, 1] > 0.5)
+    # log_classification_report(y_test, y_test_pred[:, 1] > 0.5)
+    # log_class_metrics(y_test, y_test_pred[:, 1] > 0.5)
+    # log_roc_auc(y_test, y_test_pred)
+    # log_precision_recall_auc(y_test, y_test_pred)
+    # log_brier_loss(y_test, y_test_pred[:, 1])
+    # log_log_loss(y_test, y_test_pred)
+    # log_ks_statistic(y_test, y_test_pred)
+    # log_cumulative_gain(y_test, y_test_pred)
+    # log_lift_curve(y_test, y_test_pred)
+    # log_prediction_distribution(y_test, y_test_pred[:, 1])
     # log_class_metrics_by_threshold(y_test, y_test_pred[:, 1])
 
     return test_metrics
@@ -403,11 +428,11 @@ if __name__ == "__main__":
     patch_size = 224
     DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
 
-    run = 2
-    df = pd.read_csv(f"casia2.csv")
+    run = 0
+    df = pd.read_csv(f"casia2.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"CASIA_FULL" + model_name,
+        name=f"CASIA_FULL" + config_defaults["model"],
         run=run,
         df=df,
         data_root=DATA_ROOT,
