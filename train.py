@@ -41,15 +41,15 @@ from casia_dataset import CASIA
 OUTPUT_DIR = "weights"
 device = torch.device("cuda")
 config_defaults = {
-    "epochs": 1,
+    "epochs": 2,
     "train_batch_size": 40,
     "valid_batch_size": 32,
-    "optimizer": "radam",
+    "optimizer": "qhadam",
     "learning_rate": 1e-3,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
-    "model": "tf_efficientnet_b3_ns",
+    "model": "tf_efficientnet_b4_ns",
 }
 
 VAL_FOLD = 0
@@ -219,14 +219,14 @@ def train(name, run, df, data_root, patch_size):
 
     test_history = test(model, test_loader, criterion)
 
-    try:
-        pkl.dump(
-            train_history, open(f"history/train_history{name}{dt_string}.pkl", "wb")
-        )
-        pkl.dump(val_history, open(f"history/val_history{name}{dt_string}.pkl", "wb"))
-        pkl.dump(test_history, open(f"history/test_history{name}{dt_string}.pkl", "wb"))
-    except:
-        print("Error pickling")
+    # try:
+    #     pkl.dump(
+    #         train_history, open(f"history/train_history{name}{dt_string}.pkl", "wb")
+    #     )
+    #     pkl.dump(val_history, open(f"history/val_history{name}{dt_string}.pkl", "wb"))
+    #     pkl.dump(test_history, open(f"history/test_history{name}{dt_string}.pkl", "wb"))
+    # except:
+    #     print("Error pickling")
 
     wandb.save(f"weights/{name}_fold_{VAL_FOLD}_[{dt_string}].h5")
 
