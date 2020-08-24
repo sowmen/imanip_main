@@ -41,14 +41,14 @@ from casia_dataset import CASIA
 OUTPUT_DIR = "weights"
 device = torch.device("cuda")
 config_defaults = {
-    "epochs": 2,
-    "train_batch_size": 40,
-    "valid_batch_size": 32,
+    "epochs": 91,
+    "train_batch_size": 22,
+    "valid_batch_size": 233,
     "optimizer": "qhadam",
-    "learning_rate": 1e-3,
-    "weight_decay": 0.0005,
+    "learning_rate": 0.001978,
+    "weight_decay": 0.0005825,
     "schedule_patience": 3,
-    "schedule_factor": 0.25,
+    "schedule_factor": 0.324,
     "model": "tf_efficientnet_b4_ns",
 }
 
@@ -85,7 +85,7 @@ def train(name, run, df, data_root, patch_size):
             augmentations.transforms.HueSaturationValue(p=0.3),
             augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
             augmentations.transforms.Resize(
-                224, 224, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
+                299, 299, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
             ),
         ]
     )
@@ -93,7 +93,7 @@ def train(name, run, df, data_root, patch_size):
     valid_aug = albumentations.Compose(
         [
             augmentations.transforms.Resize(
-                224, 224, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
+                299, 299, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
             )
         ]
     )
@@ -428,14 +428,14 @@ def expand_prediction(arr):
 
 
 if __name__ == "__main__":
-    patch_size = 224
+    patch_size = 299
     DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
 
     run = 0
     df = pd.read_csv(f"casia2.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"SW2_CASIA_FULL" + config_defaults["model"],
+        name=f"299_CASIA_FULL" + config_defaults["model"],
         run=run,
         df=df,
         data_root=DATA_ROOT,
