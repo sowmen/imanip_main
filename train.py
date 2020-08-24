@@ -41,10 +41,10 @@ from casia_dataset import CASIA
 OUTPUT_DIR = "weights"
 device = torch.device("cuda")
 config_defaults = {
-    "epochs": 91,
+    "epochs": 50,
     "train_batch_size": 22,
-    "valid_batch_size": 233,
-    "optimizer": "qhadam",
+    "valid_batch_size": 128,
+    "optimizer": "radam",
     "learning_rate": 0.001978,
     "weight_decay": 0.0005825,
     "schedule_patience": 3,
@@ -71,7 +71,7 @@ def train(name, run, df, data_root, patch_size):
 
     model = timm.create_model(config.model, pretrained=True, num_classes=1)
     model.to(device)
-    model = nn.DataParallel(model).to(device)
+    # model = nn.DataParallel(model).to(device)
 
     # wandb.watch(model)
 
@@ -428,7 +428,7 @@ def expand_prediction(arr):
 
 
 if __name__ == "__main__":
-    patch_size = 299
+    patch_size = 224
     DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
 
     run = 0
