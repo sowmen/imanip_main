@@ -44,4 +44,4 @@ class Efficient_Attention(nn.Module):
             x = F.dropout(x, p=self.drop_rate)
         x = self.classifier(x)
 
-        return torch.sigmoid(x), mask
+        return x, mask

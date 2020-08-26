@@ -35,7 +35,7 @@ import neptune
 from datetime import datetime
 from utils import EarlyStopping, AverageMeter
 
-# from effb4_attention import Efficient_Attention
+from effb4_attention import Efficient_Attention
 from casia_dataset import CASIA
 
 OUTPUT_DIR = "weights"
@@ -43,8 +43,8 @@ device = torch.device("cuda")
 config_defaults = {
     "epochs": 50,
     "train_batch_size": 22,
-    "valid_batch_size": 128,
-    "optimizer": "radam",
+    "valid_batch_size": 64,
+    "optimizer": "adam",
     "learning_rate": 0.001978,
     "weight_decay": 0.0005825,
     "schedule_patience": 3,
@@ -71,7 +71,7 @@ def train(name, run, df, data_root, patch_size):
 
     model = timm.create_model(config.model, pretrained=True, num_classes=1)
     model.to(device)
-    # model = nn.DataParallel(model).to(device)
+    model = nn.DataParallel(model).to(device)
 
     # wandb.watch(model)
 
@@ -85,7 +85,7 @@ def train(name, run, df, data_root, patch_size):
             augmentations.transforms.HueSaturationValue(p=0.3),
             augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
             augmentations.transforms.Resize(
-                299, 299, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
+                224, 224, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
             ),
         ]
     )
@@ -93,7 +93,7 @@ def train(name, run, df, data_root, patch_size):
     valid_aug = albumentations.Compose(
         [
             augmentations.transforms.Resize(
-                299, 299, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
+                224, 224, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
             )
         ]
     )
@@ -235,6 +235,8 @@ def train_epoch(model, train_loader, optimizer, criterion, map_criterion, epoch)
     model.train()
 
     train_loss = AverageMeter()
+    binary_loss = AverageMeter()
+    map_loss = AverageMeter()
     correct_predictions = []
     targets = []
 
@@ -244,16 +246,19 @@ def train_epoch(model, train_loader, optimizer, criterion, map_criterion, epoch)
         masks = batch["mask"].to(device)
 
         optimizer.zero_grad()
-        out = model(images)
+        out, map = model(images)
 
         loss_binary = criterion(out, labels.view(-1, 1).type_as(out))
-        # loss_map = map_criterion(map, masks)
-        loss = loss_binary  # + loss_map
+        loss_map = map_criterion(map, masks)
+        loss = loss_binary + loss_map
 
         loss.backward()
         optimizer.step()
 
         train_loss.update(loss.item(), train_loader.batch_size)
+        binary_loss.update(loss_binary.item(), train_loader.batch_size)
+        map_loss.update(loss_map.item(), train_loader.batch_size)
+
         targets.append(labels.view(-1, 1).cpu())
         correct_predictions.append(torch.sigmoid(out).cpu().detach().numpy())
 
@@ -271,6 +276,8 @@ def train_epoch(model, train_loader, optimizer, criterion, map_criterion, epoch)
 
     train_metrics = {
         "train_loss": train_loss.avg,
+        "train_loss_binary": binary_loss.avg,
+        "train_loss_map": map_loss.avg,
         "train_auc": train_auc,
         "train_f1_05": train_f1_05,
         "train_acc_05": train_acc_05,
@@ -285,6 +292,8 @@ def valid_epoch(model, valid_loader, criterion, map_criterion, epoch):
     model.eval()
 
     valid_loss = AverageMeter()
+    binary_loss = AverageMeter()
+    map_loss = AverageMeter()
     correct_predictions = []
     targets = []
     example_images = []
@@ -295,13 +304,16 @@ def valid_epoch(model, valid_loader, criterion, map_criterion, epoch):
             labels = batch["label"].to(device)
             masks = batch["mask"].to(device)
 
-            out = model(images)
+            out, map = model(images)
 
             loss_binary = criterion(out, labels.view(-1, 1).type_as(out))
-            # loss_map = map_criterion(map, masks)
-            loss = loss_binary  # + loss_map
+            loss_map = map_criterion(map, masks)
+            loss = loss_binary + loss_map
 
             valid_loss.update(loss.item(), valid_loader.batch_size)
+            binary_loss.update(loss_binary.item(), valid_loader.batch_size)
+            map_loss.update(loss_map.item(), valid_loader.batch_size)
+
             batch_targets = labels.view(-1, 1).cpu()
             batch_preds = torch.sigmoid(out).cpu()
 
@@ -336,6 +348,8 @@ def valid_epoch(model, valid_loader, criterion, map_criterion, epoch):
 
     valid_metrics = {
         "valid_loss": valid_loss.avg,
+        "valid_loss_binary": binary_loss.avg,
+        "valid_loss_map": map_loss.avg,
         "valid_auc": valid_auc,
         "valid_f1_05": valid_f1_05,
         "valid_acc_05": valid_acc_05,
@@ -347,10 +361,12 @@ def valid_epoch(model, valid_loader, criterion, map_criterion, epoch):
     return valid_metrics
 
 
-def test(model, test_loader, criterion):
+def test(model, test_loader, criterion, map_criterion):
     model.eval()
 
     test_loss = AverageMeter()
+    binary_loss = AverageMeter()
+    map_loss = AverageMeter()
     correct_predictions = []
     targets = []
 
@@ -359,11 +375,17 @@ def test(model, test_loader, criterion):
             # batch_image_names = batch['image_name']
             batch_images = batch["image"].to(device).float()
             batch_labels = batch["label"].to(device).float()
+            batch_masks = batch["mask"].to(device).float()
 
-            out = model(batch_images)
-            loss = criterion(out, batch_labels.view(-1, 1).type_as(out))
+            out, map = model(batch_images)
+            loss_binary = criterion(out, batch_labels.view(-1, 1).type_as(out))
+            loss_map = map_criterion(map, batch_masks)
+            loss = loss_binary + loss_map
 
             test_loss.update(loss.item(), test_loader.batch_size)
+            binary_loss.update(loss_binary.item(), test_loader.batch_size)
+            map_loss.update(loss_map.item(), test_loader.batch_size)
+
             batch_targets = (batch_labels.view(-1, 1).cpu() >= 0.5) * 1
             batch_preds = torch.sigmoid(out).cpu()
 
@@ -385,6 +407,8 @@ def test(model, test_loader, criterion):
 
     test_metrics = {
         "test_loss": test_loss.avg,
+        "test_loss": binary_loss.avg,
+        "test_loss": map_loss.avg,
         "test_auc": test_auc,
         "test_f1_05": test_f1_05,
         "test_acc_05": test_acc_05,
@@ -435,7 +459,7 @@ if __name__ == "__main__":
     df = pd.read_csv(f"casia2.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"299_CASIA_FULL" + config_defaults["model"],
+        name=f"224_ATTN_CASIA_FULL" + config_defaults["model"],
         run=run,
         df=df,
         data_root=DATA_ROOT,
