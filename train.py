@@ -39,7 +39,7 @@ from effb4_attention import Efficient_Attention
 from casia_dataset import CASIA
 
 OUTPUT_DIR = "weights"
-device = torch.device("cuda")
+device = torch.device("cpu")
 config_defaults = {
     "epochs": 50,
     "train_batch_size": 22,
@@ -69,9 +69,10 @@ def train(name, run, df, data_root, patch_size):
     # neptune.init("sowmen/imanip")
     # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
 
-    model = timm.create_model(config.model, pretrained=True, num_classes=1)
+    # model = timm.create_model(config.model, pretrained=True, num_classes=1)
+    model = Efficient_Attention()
     model.to(device)
-    model = nn.DataParallel(model).to(device)
+    # model = nn.DataParallel(model).to(device)
 
     # wandb.watch(model)
 
