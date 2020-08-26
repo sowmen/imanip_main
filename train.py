@@ -41,7 +41,7 @@ from casia_dataset import CASIA
 OUTPUT_DIR = "weights"
 device = torch.device("cuda")
 config_defaults = {
-    "epochs": 91,
+    "epochs": 50,
     "train_batch_size": 22,
     "valid_batch_size": 233,
     "optimizer": "qhadam",
