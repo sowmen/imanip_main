@@ -17,12 +17,12 @@ class Efficient_Attention(nn.Module):
         self.drop_rate = self.base_model.drop_rate
 
         self.head = nn.Sequential(*list(self.base_model.children())[:3])
-        self.block_head = nn.Sequential(*list(self.base_model.blocks.children())[:4])
+        self.block_head = nn.Sequential(*list(self.base_model.blocks.children())[:3])
 
-        self.eca_layer = EffectiveSEModule(112)
-        self.att_conv = SeparableConv2d(112, 1)
+        self.eca_layer = EffectiveSEModule(56)
+        self.att_conv = SeparableConv2d(56, 1)
 
-        self.block_end = nn.Sequential(*list(self.base_model.blocks.children())[4:])
+        self.block_end = nn.Sequential(*list(self.base_model.blocks.children())[3:])
         self.trailer = nn.Sequential(*list(self.base_model.children())[-5:-1])
         self.classifier = self.base_model.classifier
 

@@ -39,16 +39,16 @@ from effb4_attention import Efficient_Attention
 from casia_dataset import CASIA
 
 OUTPUT_DIR = "weights"
-device = torch.device("cpu")
+device = torch.device("cuda")
 config_defaults = {
     "epochs": 50,
     "train_batch_size": 22,
-    "valid_batch_size": 64,
+    "valid_batch_size": 72,
     "optimizer": "adam",
-    "learning_rate": 0.001978,
+    "learning_rate": 0.001959,
     "weight_decay": 0.0005825,
     "schedule_patience": 3,
-    "schedule_factor": 0.324,
+    "schedule_factor": 0.2569,
     "model": "tf_efficientnet_b4_ns",
 }
 
@@ -86,7 +86,7 @@ def train(name, run, df, data_root, patch_size):
             augmentations.transforms.HueSaturationValue(p=0.3),
             augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
             augmentations.transforms.Resize(
-                224, 224, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
+                299, 299, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
             ),
         ]
     )
@@ -94,7 +94,7 @@ def train(name, run, df, data_root, patch_size):
     valid_aug = albumentations.Compose(
         [
             augmentations.transforms.Resize(
-                224, 224, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
+                299, 299, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
             )
         ]
     )
@@ -178,7 +178,7 @@ def train(name, run, df, data_root, patch_size):
     criterion = nn.BCEWithLogitsLoss()
     map_criterion = nn.L1Loss()
 
-    es = EarlyStopping(patience=7, mode="max")
+    es = EarlyStopping(patience=15, mode="max")
 
     train_history = []
     val_history = []
@@ -218,7 +218,7 @@ def train(name, run, df, data_root, patch_size):
         torch.load(f"weights/{name}_fold_{VAL_FOLD}_[{dt_string}].h5")
     )
 
-    test_history = test(model, test_loader, criterion)
+    test_history = test(model, test_loader, criterion, map_criterion)
 
     # try:
     #     pkl.dump(
@@ -460,7 +460,7 @@ if __name__ == "__main__":
     df = pd.read_csv(f"casia2.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"224_ATTN_CASIA_FULL" + config_defaults["model"],
+        name=f"299_ATTN_LAYER3_CASIA_FULL" + config_defaults["model"],
         run=run,
         df=df,
         data_root=DATA_ROOT,
