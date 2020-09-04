@@ -50,6 +50,7 @@ config_defaults = {
     "schedule_patience": 3,
     "schedule_factor": 0.2569,
     "model": "tf_efficientnet_b4_ns",
+    "map_weight": 1.5,
 }
 
 VAL_FOLD = 0
@@ -69,10 +70,10 @@ def train(name, run, df, data_root, patch_size):
     # neptune.init("sowmen/imanip")
     # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
 
-    # model = timm.create_model(config.model, pretrained=True, num_classes=1)
-    model = Efficient_Attention()
+    model = timm.create_model(config.model, pretrained=True, num_classes=1)
+    # model = Efficient_Attention()
     model.to(device)
-    # model = nn.DataParallel(model).to(device)
+    model = nn.DataParallel(model).to(device)
 
     # wandb.watch(model)
 
@@ -189,10 +190,16 @@ def train(name, run, df, data_root, patch_size):
         print("------------------")
 
         train_metrics = train_epoch(
-            model, train_loader, optimizer, criterion, map_criterion, epoch
+            model,
+            train_loader,
+            optimizer,
+            criterion,
+            map_criterion,
+            config.map_weight,
+            epoch,
         )
         valid_metrics = valid_epoch(
-            model, valid_loader, criterion, map_criterion, epoch
+            model, valid_loader, criterion, map_criterion, config.map_weight, epoch
         )
         scheduler.step(valid_metrics["valid_acc_05"])
 
@@ -218,7 +225,7 @@ def train(name, run, df, data_root, patch_size):
         torch.load(f"weights/{name}_fold_{VAL_FOLD}_[{dt_string}].h5")
     )
 
-    test_history = test(model, test_loader, criterion, map_criterion)
+    test_history = test(model, test_loader, criterion, map_criterion, config.map_weight)
 
     # try:
     #     pkl.dump(
@@ -232,7 +239,9 @@ def train(name, run, df, data_root, patch_size):
     wandb.save(f"weights/{name}_fold_{VAL_FOLD}_[{dt_string}].h5")
 
 
-def train_epoch(model, train_loader, optimizer, criterion, map_criterion, epoch):
+def train_epoch(
+    model, train_loader, optimizer, criterion, map_criterion, weight, epoch
+):
     model.train()
 
     train_loss = AverageMeter()
@@ -251,7 +260,7 @@ def train_epoch(model, train_loader, optimizer, criterion, map_criterion, epoch)
 
         loss_binary = criterion(out, labels.view(-1, 1).type_as(out))
         loss_map = map_criterion(map, masks)
-        loss = loss_binary + loss_map
+        loss = loss_binary + weight * loss_map
 
         loss.backward()
         optimizer.step()
@@ -289,7 +298,7 @@ def train_epoch(model, train_loader, optimizer, criterion, map_criterion, epoch)
     return train_metrics
 
 
-def valid_epoch(model, valid_loader, criterion, map_criterion, epoch):
+def valid_epoch(model, valid_loader, criterion, map_criterion, weight, epoch):
     model.eval()
 
     valid_loss = AverageMeter()
@@ -309,7 +318,7 @@ def valid_epoch(model, valid_loader, criterion, map_criterion, epoch):
 
             loss_binary = criterion(out, labels.view(-1, 1).type_as(out))
             loss_map = map_criterion(map, masks)
-            loss = loss_binary + loss_map
+            loss = loss_binary + weight * loss_map
 
             valid_loss.update(loss.item(), valid_loader.batch_size)
             binary_loss.update(loss_binary.item(), valid_loader.batch_size)
@@ -362,7 +371,7 @@ def valid_epoch(model, valid_loader, criterion, map_criterion, epoch):
     return valid_metrics
 
 
-def test(model, test_loader, criterion, map_criterion):
+def test(model, test_loader, criterion, map_criterion, weight):
     model.eval()
 
     test_loss = AverageMeter()
@@ -381,7 +390,7 @@ def test(model, test_loader, criterion, map_criterion):
             out, map = model(batch_images)
             loss_binary = criterion(out, batch_labels.view(-1, 1).type_as(out))
             loss_map = map_criterion(map, batch_masks)
-            loss = loss_binary + loss_map
+            loss = loss_binary + weight * loss_map
 
             test_loss.update(loss.item(), test_loader.batch_size)
             binary_loss.update(loss_binary.item(), test_loader.batch_size)
