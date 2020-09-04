@@ -24,6 +24,7 @@ import albumentations
 from albumentations import augmentations
 
 from torch.backends import cudnn
+from torchvision.models import resnet50
 
 cudnn.benchmark = True
 
@@ -63,7 +64,9 @@ def train(name, run, df, data_root, patch_size):
     print("Starting -->", dt_string)
 
     wandb.init(
-        project="imanip", config=config_defaults, name=f"{name},{dt_string}",
+        project="imanip",
+        config=config_defaults,
+        name=f"{name},{dt_string}",
     )
     config = wandb.config
 
@@ -475,4 +478,3 @@ if __name__ == "__main__":
         data_root=DATA_ROOT,
         patch_size=patch_size,
     )
-
