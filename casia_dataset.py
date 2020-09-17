@@ -45,7 +45,7 @@ class CASIA(Dataset):
         self.mask_transforms = albumentations.Compose(
             [
                 augmentations.transforms.Resize(
-                    38, 38, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
+                    28, 28, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
                 )
             ]
         )
@@ -120,7 +120,7 @@ class CASIA(Dataset):
         real = rows[rows["label"] == 0]
         fakes = rows[rows["label"] == 1]
         num_fake = fakes["image"].count()
-        num_real = fakes["image"].count()
+        num_real = real["image"].count()
         if self.mode == "train":
             if int(num_fake * 1.5) >= num_real:
                 real = real.sample(n=int(num_fake * 1.5), replace=False)
