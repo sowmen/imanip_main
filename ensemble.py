@@ -42,13 +42,6 @@ class CASIA(Dataset):
         self.equal_sample = equal_sample
         self.normalize = normalize
 
-        self.mask_transforms = albumentations.Compose(
-            [
-                augmentations.transforms.Resize(
-                    38, 38, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
-                )
-            ]
-        )
 
         if self.mode == "train":
             rows = self.dataframe[
@@ -75,18 +68,12 @@ class CASIA(Dataset):
 
     def __getitem__(self, index: int):
 
-        if self.patch_size == 224:
-            image_patch, mask_patch, label, fold = self.data[index]
-        else:
-            image_name, image_patch, mask_patch, label, fold = self.data[index]
-
+        image_patch, mask_patch, label, fold = self.data[index]
+    
         if self.label_smoothing:
             label = np.clip(label, self.label_smoothing, 1 - self.label_smoothing)
 
-        if self.patch_size == 224:
-            image_path = os.path.join(self.root_dir, image_patch)
-        else:
-            image_path = os.path.join(self.root_dir, image_name, image_patch)
+        image_path = os.path.join(self.root_dir, image_patch)
 
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         if image is None:
@@ -96,10 +83,7 @@ class CASIA(Dataset):
         if not isinstance(mask_patch, str) and np.isnan(mask_patch):
             mask_image = np.zeros((image.shape[0], image.shape[1]))
         else:
-            if self.patch_size == 224:
-                mask_path = os.path.join(self.root_dir, mask_patch)
-            else:
-                mask_path = os.path.join(self.root_dir, image_name, mask_patch)
+            mask_path = os.path.join(self.root_dir, mask_patch)
             mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
 
         if self.transforms:
