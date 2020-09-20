@@ -37,20 +37,21 @@ from datetime import datetime
 from utils import EarlyStopping, AverageMeter
 
 from effb4_attention import Efficient_Attention
+from EffUnet.timm_effnet import EfficientNet
 from casia_dataset import CASIA
 
 OUTPUT_DIR = "weights"
 device = torch.device("cuda")
 config_defaults = {
-    "epochs": 50,
-    "train_batch_size": 40,
-    "valid_batch_size": 32,
-    "optimizer": "radam",
-    "learning_rate": 0.001,
-    "weight_decay": 0.0005,
+    "epochs": 100,
+    "train_batch_size": 26,
+    "valid_batch_size": 100,
+    "optimizer": "adam",
+    "learning_rate": 0.001959,
+    "weight_decay": 0.0005938,
     "schedule_patience": 3,
-    "schedule_factor": 0.25,
-    "model": "xception",
+    "schedule_factor": 0.2569,
+    "model": "timm_effunet",
     "map_weight": 1,
 }
 
@@ -71,8 +72,9 @@ def train(name, df, data_root, patch_size):
     # neptune.init("sowmen/imanip")
     # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
 
-    model = timm.create_model(config.model, pretrained=True, num_classes=1)
+    # model = timm.create_model(config.model, pretrained=True, num_classes=1)
     # model = Efficient_Attention()
+    model = EfficientNet('tf_efficientnet_b4_ns')
     model.to(device)
     model = nn.DataParallel(model).to(device)
 
@@ -88,7 +90,7 @@ def train(name, df, data_root, patch_size):
             augmentations.transforms.HueSaturationValue(p=0.3),
             augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
             augmentations.transforms.Resize(
-                224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1
+                256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1
             ),
         ]
     )
@@ -96,7 +98,7 @@ def train(name, df, data_root, patch_size):
     valid_aug = albumentations.Compose(
         [
             augmentations.transforms.Resize(
-                224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1
+                256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1
             )
         ]
     )
@@ -180,7 +182,7 @@ def train(name, df, data_root, patch_size):
     criterion = nn.BCEWithLogitsLoss()
     map_criterion = nn.L1Loss()
 
-    es = EarlyStopping(patience=15, mode="max")
+    es = EarlyStopping(patience=20, mode="max")
 
     train_history = []
     val_history = []
@@ -233,7 +235,7 @@ def train(name, df, data_root, patch_size):
     # except:
     #     print("Error pickling")
 
-    wandb.save(f"weights/{name}_fold_{VAL_FOLD}_[{dt_string}].h5")
+    wandb.save(f"weights/{name}_[{dt_string}].h5")
 
 
 def train_epoch(
@@ -463,13 +465,13 @@ def expand_prediction(arr):
 
 
 if __name__ == "__main__":
-    patch_size = 224
+    patch_size = 256
     DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
 
     df = pd.read_csv(f"casia2.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"224_CASIA_FULL" + config_defaults["model"],
+        name=f"256_CASIA_FULL" + config_defaults["model"],
         df=df,
         data_root=DATA_ROOT,
         patch_size=patch_size,

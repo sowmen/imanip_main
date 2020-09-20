@@ -12,9 +12,7 @@ class EfficientNet(nn.Module):
     ):
         super().__init__()
         base_model_sequential = timm.create_model(
-            model_name=model_name,
-            pretrained=True,
-            num_classes=num_classes,
+            model_name=model_name, pretrained=True, num_classes=num_classes,
         ).as_sequential()
 
         self.encoder = self.Encoder(base_model_sequential[:13])
@@ -70,6 +68,6 @@ class EfficientNet(nn.Module):
         return self.encoder
 
 
-model = EfficientNet("tf_efficientnet_b4_ns", freeze_encoder=True)
-# print(model)
-summary(model, (3, 256, 256), device="cpu")
+# model = EfficientNet("tf_efficientnet_b4_ns", freeze_encoder=True)
+# # print(model)
+# summary(model, (3, 256, 256), device="cpu")

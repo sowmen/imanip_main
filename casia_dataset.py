@@ -75,7 +75,7 @@ class CASIA(Dataset):
 
     def __getitem__(self, index: int):
 
-        if self.patch_size == 224:
+        if self.patch_size == 256:
             image_patch, mask_patch, label, fold = self.data[index]
         else:
             image_name, image_patch, mask_patch, label, fold = self.data[index]
@@ -83,7 +83,7 @@ class CASIA(Dataset):
         if self.label_smoothing:
             label = np.clip(label, self.label_smoothing, 1 - self.label_smoothing)
 
-        if self.patch_size == 224:
+        if self.patch_size == 256:
             image_path = os.path.join(self.root_dir, image_patch)
         else:
             image_path = os.path.join(self.root_dir, image_name, image_patch)
@@ -96,7 +96,7 @@ class CASIA(Dataset):
         if not isinstance(mask_patch, str) and np.isnan(mask_patch):
             mask_image = np.zeros((image.shape[0], image.shape[1]))
         else:
-            if self.patch_size == 224:
+            if self.patch_size == 256:
                 mask_path = os.path.join(self.root_dir, mask_patch)
             else:
                 mask_path = os.path.join(self.root_dir, image_name, mask_patch)
