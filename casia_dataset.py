@@ -45,7 +45,7 @@ class CASIA(Dataset):
         self.mask_transforms = albumentations.Compose(
             [
                 augmentations.transforms.Resize(
-                    38, 38, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
+                    28, 28, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
                 )
             ]
         )
