@@ -50,7 +50,7 @@ config_defaults = {
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
-    "model": "tf_efficientnet_b4_ns",
+    "model": "xception",
     "map_weight": 1,
 }
 
@@ -464,7 +464,7 @@ def expand_prediction(arr):
 
 if __name__ == "__main__":
     patch_size = 224
-    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_64"
+    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
 
     df = pd.read_csv(f"casia2.csv").sample(frac=1).reset_index(drop=True)
 
