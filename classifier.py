@@ -14,12 +14,12 @@ class ClassifierBlock(nn.Module):
 
         self.conv0 = SeparableConv2d(num_channels, (num_channels // 2))
         self.bn0 = nn.BatchNorm2d((num_channels // 2))
-        self.pool0 = nn.MaxPool2d(kernel_size=3, stride=2)
+        self.pool0 = nn.MaxPool2d(kernel_size=3, stride=1)
         self.dropout = nn.Dropout2d(p=0.3)
 
         self.conv1 = SeparableConv2d((num_channels // 2), 1792)
         self.bn1 = nn.BatchNorm2d(1792)
-        self.pool1 = nn.MaxPool2d(kernel_size=3, stride=2)
+        self.pool1 = nn.MaxPool2d(kernel_size=3, stride=1)
 
         self.se0 = SEModule(1792)
         self.global_pool = SelectAdaptivePool2d(pool_type="max")
