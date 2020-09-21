@@ -1,7 +1,11 @@
 import re
 import math
 from collections import namedtuple
-from EffUnet.layers import *
+
+import sys
+sys.path.append('/CASIA_SERVER/')
+
+from segmentation.layers import *
 
 
 GlobalParams = namedtuple('GlobalParams', ['batch_norm_momentum', 'batch_norm_epsilon', 'dropout_rate', 'num_classes',

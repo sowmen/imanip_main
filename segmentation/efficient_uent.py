@@ -1,6 +1,10 @@
 from collections import OrderedDict
-from EffUnet.layers import *
-from EffUnet.EfficientNet import EfficientNet
+
+import sys
+sys.path.append('/CASIA_SERVER/')
+
+from segmentation.layers import *
+from segmentation.efficientnet import EfficientNet
 
 
 __all__ = ['EfficientUnet', 'get_efficientunet_b0', 'get_efficientunet_b1', 'get_efficientunet_b2',

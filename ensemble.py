@@ -14,16 +14,8 @@ from albumentations import augmentations
 
 class CASIA(Dataset):
     def __init__(
-        self,
-        dataframe,
-        mode,
-        val_fold,
-        test_fold,
-        root_dir,
-        patch_size,
-        transforms=None,
-        label_smoothing=None,
-        equal_sample=False,
+        self, dataframe, mode, val_fold, test_fold, root_dir, patch_size,
+        transforms=None, label_smoothing=None, equal_sample=False,
         normalize={
             "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
             "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
@@ -42,7 +34,6 @@ class CASIA(Dataset):
         self.equal_sample = equal_sample
         self.normalize = normalize
 
-
         if self.mode == "train":
             rows = self.dataframe[
                 ~self.dataframe["fold"].isin([self.val_fold, self.test_fold])
@@ -57,7 +48,8 @@ class CASIA(Dataset):
 
         print(
             "real:{}, fakes:{}, mode = {}".format(
-                len(rows[rows["label"] == 0]), len(rows[rows["label"] == 1]), self.mode
+                len(rows[rows["label"] == 0]), len(
+                    rows[rows["label"] == 1]), self.mode
             )
         )
         self.data = rows.values
@@ -69,7 +61,7 @@ class CASIA(Dataset):
     def __getitem__(self, index: int):
 
         image_patch, mask_patch, label, fold = self.data[index]
-    
+
         if self.label_smoothing:
             label = np.clip(label, self.label_smoothing, 1 - self.label_smoothing)
 
@@ -99,7 +91,7 @@ class CASIA(Dataset):
 
     def _equalize(self, rows: pd.DataFrame) -> pd.DataFrame:
         """
-            Equalizes count of fake and real samples
+        Equalizes count of fake and real samples
         """
         real = rows[rows["label"] == 0]
         fakes = rows[rows["label"] == 1]

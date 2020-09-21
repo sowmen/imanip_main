@@ -3,7 +3,6 @@ import random
 import numpy as np
 import pandas as pd
 import cv2
-import matplotlib.pyplot as plt
 import math
 
 from torch.utils.data import Dataset
@@ -13,21 +12,8 @@ from albumentations import augmentations
 
 
 class CASIA(Dataset):
-    def __init__(
-        self,
-        dataframe,
-        mode,
-        val_fold,
-        test_fold,
-        root_dir,
-        patch_size,
-        transforms=None,
-        label_smoothing=None,
-        equal_sample=False,
-        normalize={
-            "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
-            "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
-        },
+    def __init__(self, dataframe, mode, val_fold, test_fold, root_dir, patch_size, 
+                 transforms=None, label_smoothing=0.1, equal_sample=False, attention=False
     ):
 
         super().__init__()
@@ -40,9 +26,13 @@ class CASIA(Dataset):
         self.transforms = transforms
         self.label_smoothing = label_smoothing
         self.equal_sample = equal_sample
-        self.normalize = normalize
+        self.attention = attention
+        self.normalize = {
+            "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
+            "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
+        },
 
-        self.mask_transforms = albumentations.Compose(
+        self.attn_mask_transforms = albumentations.Compose(
             [
                 augmentations.transforms.Resize(
                     28, 28, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
@@ -51,9 +41,7 @@ class CASIA(Dataset):
         )
 
         if self.mode == "train":
-            rows = self.dataframe[
-                ~self.dataframe["fold"].isin([self.val_fold, self.test_fold])
-            ]
+            rows = self.dataframe[~self.dataframe["fold"].isin([self.val_fold, self.test_fold])]
         elif self.mode == "val":
             rows = self.dataframe[self.dataframe["fold"] == self.val_fold]
         else:
@@ -75,7 +63,7 @@ class CASIA(Dataset):
 
     def __getitem__(self, index: int):
 
-        if self.patch_size == 256:
+        if self.patch_size == 'FULL':
             image_patch, mask_patch, label, fold = self.data[index]
         else:
             image_name, image_patch, mask_patch, label, fold = self.data[index]
@@ -83,7 +71,7 @@ class CASIA(Dataset):
         if self.label_smoothing:
             label = np.clip(label, self.label_smoothing, 1 - self.label_smoothing)
 
-        if self.patch_size == 256:
+        if self.patch_size == 'FULL':
             image_path = os.path.join(self.root_dir, image_patch)
         else:
             image_path = os.path.join(self.root_dir, image_name, image_patch)
@@ -96,7 +84,7 @@ class CASIA(Dataset):
         if not isinstance(mask_patch, str) and np.isnan(mask_patch):
             mask_image = np.zeros((image.shape[0], image.shape[1]))
         else:
-            if self.patch_size == 256:
+            if self.patch_size == 'FULL':
                 mask_path = os.path.join(self.root_dir, mask_patch)
             else:
                 mask_path = os.path.join(self.root_dir, image_name, mask_patch)
@@ -106,12 +94,14 @@ class CASIA(Dataset):
             data = self.transforms(image=image, mask=mask_image)
             image = data["image"]
             mask_image = data["mask"]
-        mask_image = self.mask_transforms(image=mask_image)["image"]
+        if self.attention:
+            attn_mask_image = self.attn_mask_transforms(image=mask_image)["image"]
 
         image = img_to_tensor(image, self.normalize)
         mask_image = img_to_tensor(mask_image).unsqueeze(0)
+        attn_mask_image = img_to_tensor(attn_mask_image).unsqueeze(0)
 
-        return {"image": image, "label": label, "mask": mask_image}
+        return {"image": image, "label": label, "mask": mask_image, "attn_mask": attn_mask_image}
 
     def _equalize(self, rows: pd.DataFrame) -> pd.DataFrame:
         """

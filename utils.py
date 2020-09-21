@@ -1,6 +1,7 @@
 import numpy as np
 import torch
-
+import torch_optimizer
+from torch import optim
 
 class EarlyStopping:
     """
@@ -77,3 +78,30 @@ class AverageMeter:
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+def get_optimizer(model, optimizer, learning_rate, weight_decay):
+    if optimizer == "radam":
+        optimizer = torch_optimizer.RAdam(
+            model.parameters(),
+            lr=learning_rate,
+            weight_decay=weight_decay,
+        )
+    elif optimizer == "adamP":
+        optimizer = torch_optimizer.AdamP(
+            model.parameters(),
+            lr=learning_rate,
+            weight_decay=weight_decay,
+        )
+    elif optimizer == "qhadam":
+        optimizer = torch_optimizer.QHAdam(
+            model.parameters(),
+            lr=learning_rate,
+            weight_decay=weight_decay,
+        )
+    elif optimizer == "adam":
+        optimizer = optim.Adam(
+            model.parameters(),
+            lr=learning_rate,
+            weight_decay=weight_decay,
+        )
+    return optimizer

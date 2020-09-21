@@ -1,5 +1,9 @@
 from torch.hub import load_state_dict_from_url
-from EffUnet.utils import *
+
+import sys
+sys.path.append('/CASIA_SERVER/')
+
+from segmentation.utils import *
 
 
 class EfficientNet(nn.Module):
