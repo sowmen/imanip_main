@@ -35,7 +35,7 @@ from casia_dataset import CASIA
 OUTPUT_DIR = "weights"
 device =  torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 config_defaults = {
-    "epochs": 100,
+    "epochs": 50,
     "train_batch_size": 26,
     "valid_batch_size": 100,
     "optimizer": "adam",
@@ -148,7 +148,7 @@ def train(name, df, data_root, patch_size):
         train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
         
         valid_metrics = valid_epoch(model, valid_loader, criterion,  epoch)
-        scheduler.step(valid_metrics["train_dice_tot"])
+        # scheduler.step(valid_metrics["train_dice_tot"])
 
         print(
             f"TRAIN_DICE_TOT = {train_metrics['train_dice_tot']}, TRAIN_LOSS = {train_metrics['train_loss']}"
@@ -157,14 +157,14 @@ def train(name, df, data_root, patch_size):
             f"VALID_DICE_TOT = {valid_metrics['valid_dice_tot']}, VALID_LOSS = {valid_metrics['valid_loss']}"
         )
 
-        es(
-            valid_metrics["valid_dice_tot"],
-            model,
-            model_path=os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"),
-        )
-        if es.early_stop:
-            print("Early stopping")
-            break
+        # es(
+        #     valid_metrics["valid_dice_tot"],
+        #     model,
+        #     model_path=os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"),
+        # )
+        # if es.early_stop:
+        #     print("Early stopping")
+        #     break
 
     model.load_state_dict(torch.load(f"weights/{name}_[{dt_string}].h5"))
 
