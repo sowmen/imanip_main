@@ -26,16 +26,15 @@ class CASIA(Dataset):
         self.transforms = transforms
         self.label_smoothing = label_smoothing
         self.equal_sample = equal_sample
-        self.attention = attention
         self.normalize = {
             "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
             "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
-        },
+        }
 
         self.attn_mask_transforms = albumentations.Compose(
             [
                 augmentations.transforms.Resize(
-                    28, 28, interpolation=cv2.INTER_CUBIC, always_apply=True, p=1
+                    32, 32, interpolation=cv2.INTER_LANCZOS4, always_apply=True, p=1
                 )
             ]
         )
@@ -94,8 +93,7 @@ class CASIA(Dataset):
             data = self.transforms(image=image, mask=mask_image)
             image = data["image"]
             mask_image = data["mask"]
-        if self.attention:
-            attn_mask_image = self.attn_mask_transforms(image=mask_image)["image"]
+        attn_mask_image = self.attn_mask_transforms(image=mask_image)["image"]
 
         image = img_to_tensor(image, self.normalize)
         mask_image = img_to_tensor(mask_image).unsqueeze(0)

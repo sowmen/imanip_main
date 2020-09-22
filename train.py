@@ -3,13 +3,9 @@ import random
 import numpy as np
 import pandas as pd
 import cv2
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 from datetime import datetime
-
 import pickle as pkl
-
-from sklearn import model_selection
 from sklearn import metrics
 import scikitplot as skplt
 
@@ -25,21 +21,19 @@ from torch.backends import cudnn
 cudnn.benchmark = True
 
 import wandb
-
 # import neptune
 # from neptunecontrib.monitoring.metrics import *
 
+from utils import *
 from pytorch_toolbelt import losses
-from utils import EarlyStopping, AverageMeter
 import seg_metrics
 
-from effb4_attention import Efficient_Attention
 from segmentation.timm_efficientnet import EfficientNet
 from segmentation.timm_efficient_unet import get_efficientunet
 from casia_dataset import CASIA
 
 OUTPUT_DIR = "weights"
-device = torch.device("cuda")
+device =  torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 config_defaults = {
     "epochs": 100,
     "train_batch_size": 26,
@@ -50,9 +44,7 @@ config_defaults = {
     "schedule_patience": 3,
     "schedule_factor": 0.2569,
     "model": "Unet",
-    "attn_map_weight": 1,
 }
-
 VAL_FOLD = 0
 TEST_FOLD = 9
 
@@ -62,6 +54,7 @@ def train(name, df, data_root, patch_size):
     dt_string = now.strftime("%d|%m_%H|%M|%S")
     print("Starting -->", dt_string)
 
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     wandb.init(
         project="imanip", config=config_defaults, name=f"{name},{dt_string}",
     )
@@ -72,14 +65,13 @@ def train(name, df, data_root, patch_size):
 
     # model = EfficientNet('tf_efficientnet_b4_ns')
     model = get_efficientunet('tf_efficientnet_b4_ns')
-    
     model.to(device)
-    model = nn.DataParallel(model).to(device)
+    
+    if torch.cuda.is_available():
+        model = nn.DataParallel(model).to(device)
 
     # wandb.watch(model)
-
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-
+    
     train_aug = albumentations.Compose(
         [
             augmentations.transforms.Flip(p=0.5),
@@ -92,7 +84,6 @@ def train(name, df, data_root, patch_size):
             ),
         ]
     )
-
     valid_aug = albumentations.Compose(
         [
             augmentations.transforms.Resize(
@@ -101,6 +92,7 @@ def train(name, df, data_root, patch_size):
         ]
     )
 
+    # -------------------------------- CREATE DATASET and DATALOADER --------------------------
     train_dataset = CASIA(
         dataframe=df,
         mode="train",
@@ -111,10 +103,7 @@ def train(name, df, data_root, patch_size):
         equal_sample=False,
         transforms=train_aug,
     )
-
-    train_loader = DataLoader(
-        train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8
-    )
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
 
     valid_dataset = CASIA(
         dataframe=df,
@@ -126,10 +115,7 @@ def train(name, df, data_root, patch_size):
         equal_sample=False,
         transforms=valid_aug,
     )
-
-    valid_loader = DataLoader(
-        valid_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8
-    )
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
 
     test_dataset = CASIA(
         dataframe=df,
@@ -141,36 +127,10 @@ def train(name, df, data_root, patch_size):
         equal_sample=False,
         transforms=valid_aug,
     )
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
 
-    test_loader = DataLoader(
-        test_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8
-    )
 
-    if config.optimizer == "radam":
-        optimizer = torch_optimizer.RAdam(
-            model.parameters(),
-            lr=config.learning_rate,
-            weight_decay=config.weight_decay,
-        )
-    elif config.optimizer == "adamP":
-        optimizer = torch_optimizer.AdamP(
-            model.parameters(),
-            lr=config.learning_rate,
-            weight_decay=config.weight_decay,
-        )
-    elif config.optimizer == "qhadam":
-        optimizer = torch_optimizer.QHAdam(
-            model.parameters(),
-            lr=config.learning_rate,
-            weight_decay=config.weight_decay,
-        )
-    elif config.optimizer == "adam":
-        optimizer = optim.Adam(
-            model.parameters(),
-            lr=config.learning_rate,
-            weight_decay=config.weight_decay,
-        )
-
+    optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         patience=config.schedule_patience,
@@ -178,10 +138,10 @@ def train(name, df, data_root, patch_size):
         factor=config.schedule_factor,
     )
     criterion = nn.BCEWithLogitsLoss()
-    attn_map_criterion = nn.L1Loss()
 
     es = EarlyStopping(patience=20, mode="max")
 
+     # Not being used
     train_history = []
     val_history = []
     test_history = []
@@ -190,18 +150,9 @@ def train(name, df, data_root, patch_size):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        train_metrics = train_epoch(
-            model,
-            train_loader,
-            optimizer,
-            criterion,
-            attn_map_criterion,
-            config.attn_map_weight,
-            epoch,
-        )
-        valid_metrics = valid_epoch(
-            model, valid_loader, criterion, attn_map_criterion, config.attn_map_weight, epoch
-        )
+        train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
+        
+        valid_metrics = valid_epoch(model, valid_loader, criterion,  epoch)
         scheduler.step(valid_metrics["valid_acc_05"])
 
         print(

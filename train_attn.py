@@ -39,8 +39,8 @@ config_defaults = {
     "weight_decay": 0.0005938,
     "schedule_patience": 3,
     "schedule_factor": 0.2569,
-    "model": "Unet",
-    "attn_map_weight": 1,
+    "model": "ATTN",
+    "attn_map_weight": 1.75,
 }
 VAL_FOLD = 0
 TEST_FOLD = 9
@@ -97,7 +97,6 @@ def train(name, df, data_root, patch_size):
         root_dir=data_root,
         patch_size=patch_size,
         equal_sample=False,
-        attention=True,
         transforms=train_aug,
     )
     train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
@@ -110,7 +109,6 @@ def train(name, df, data_root, patch_size):
         root_dir=data_root,
         patch_size=patch_size,
         equal_sample=False,
-        attention=True,
         transforms=valid_aug,
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
@@ -123,7 +121,6 @@ def train(name, df, data_root, patch_size):
         root_dir=data_root,
         patch_size=patch_size,
         equal_sample=False,
-        attention=True,
         transforms=valid_aug,
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
@@ -140,11 +137,6 @@ def train(name, df, data_root, patch_size):
     attn_map_criterion = nn.L1Loss()
 
     es = EarlyStopping(patience=20, mode="max")
-
-    # Not being used
-    train_history = []
-    val_history = []
-    test_history = []
 
     for epoch in range(config.epochs):
         print(f"Epoch = {epoch}/{config.epochs-1}")
@@ -165,10 +157,10 @@ def train(name, df, data_root, patch_size):
         scheduler.step(valid_metrics["valid_acc_05"])
 
         print(
-            f"TRAIN_AUC = {train_metrics['train_acc_05']}, TRAIN_LOSS = {train_metrics['train_loss']}"
+            f"TRAIN_ACC = {train_metrics['train_acc_05']}, TRAIN_LOSS = {train_metrics['train_loss']}"
         )
         print(
-            f"VALID_AUC = {valid_metrics['valid_acc_05']}, VALID_LOSS = {valid_metrics['valid_loss']}"
+            f"VALID_ACC = {valid_metrics['valid_acc_05']}, VALID_LOSS = {valid_metrics['valid_loss']}"
         )
 
         es(
@@ -182,7 +174,7 @@ def train(name, df, data_root, patch_size):
 
     model.load_state_dict(torch.load(f"weights/{name}_[{dt_string}].h5"))
 
-    test_history = test(model, test_loader, criterion, attn_map_criterion, config.attn_map_weight)
+    test(model, test_loader, criterion, attn_map_criterion, config.attn_map_weight)
     wandb.save(f"weights/{name}_[{dt_string}].h5")
 
 
@@ -205,8 +197,7 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         
         out_labels, attn_map = model(images)
 
-        # loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
-        loss_classification = criterion(out_labels, target_labels.type_as(out_labels))
+        loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
         loss_attn_map = attn_map_criterion(attn_map, attn_gt)
         loss = loss_classification  + attn_map_weight * loss_attn_map
 
@@ -218,8 +209,7 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         attn_map_loss.update(loss_attn_map.item(), train_loader.batch_size)
         total_loss.update(loss.item(), train_loader.batch_size)
         
-        # targets.append((target_labels.view(-1, 1).cpu() >= 0.5) * 1.0)
-        targets.append((target_labels.cpu() >= 0.5) * 1.0)
+        targets.append((target_labels.view(-1, 1).cpu() >= 0.5) * 1.0)
         predictions.append(torch.sigmoid(out_labels).cpu().detach().numpy())
 
     # Epoch Logging
@@ -232,7 +222,6 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         train_acc_05 = metrics.accuracy_score(targets, (predictions >= 0.5) * 1)
         train_balanced_acc_05 = metrics.balanced_accuracy_score(targets, (predictions >= 0.5) * 1)
         
-
     train_metrics = {
         "train_loss_classification": classification_loss.avg,
         "train_loss_attn_map": attn_map_loss.avg,
@@ -266,7 +255,7 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
 
             out_labels, attn_map = model(images)
 
-            loss_classification = criterion(out_labels, target_labels.type_as(out_labels))
+            loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             loss_attn_map = attn_map_criterion(attn_map, attn_gt)
             loss = loss_classification  + attn_map_weight * loss_attn_map
             
@@ -339,7 +328,7 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
 
             out_labels, attn_map = model(images)
 
-            loss_classification = criterion(out_labels, target_labels.type_as(out_labels))
+            loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             loss_attn_map = attn_map_criterion(attn_map, attn_gt)
             loss = loss_classification  + attn_map_weight * loss_attn_map
             
@@ -396,8 +385,6 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
     # log_lift_curve(y_test, y_test_pred)
     # log_prediction_distribution(y_test, y_test_pred[:, 1])
     # log_class_metrics_by_threshold(y_test, y_test_pred[:, 1])
-
-    return test_metrics
 
 
 def expand_prediction(arr):
