@@ -42,3 +42,13 @@ def jaccard_coeff_single(outputs, targets):
         s = s + losses.functional.soft_jaccard_score(c[0], c[1])
 
     return s / (i + 1)
+
+def sensitivity(outputs, targets):
+    true_positives = torch.sum(torch.round(torch.clamp(targets * outputs, 0, 1)))
+    possible_positives = torch.sum(torch.round(torch.clamp(targets, 0, 1)))
+    return true_positives / (possible_positives + 1e-7)
+
+def specificity(outputs, targets):
+    true_negatives = torch.sum(torch.round(torch.clamp((1 - targets) * (1 - outputs), 0, 1)))
+    possible_negatives = torch.sum(torch.round(torch.clamp(1 - targets, 0, 1)))
+    return true_negatives / (possible_negatives + 1e-7)
