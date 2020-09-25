@@ -8,6 +8,7 @@ from datetime import datetime
 import pickle as pkl
 from sklearn import metrics
 import scikitplot as skplt
+import gc
 
 import timm
 import torch
@@ -36,8 +37,8 @@ OUTPUT_DIR = "weights"
 device =  torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 26,
-    "valid_batch_size": 100,
+    "train_batch_size": 20,
+    "valid_batch_size": 40,
     "optimizer": "adam",
     "learning_rate": 0.001959,
     "weight_decay": 0.0005938,
@@ -204,6 +205,9 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         
         jaccard_tot.update(losses.functional.soft_jaccard_score(torch.sigmoid(out_mask), gt), train_loader.batch_size)
         jaccard_ind.update(seg_metrics.jaccard_coeff_single(torch.sigmoid(out_mask), gt), train_loader.batch_size)       
+
+        gc.collect()
+        torch.cuda.empty_cache()
         
 
     train_metrics = {
@@ -330,10 +334,10 @@ def expand_prediction(arr):
 
 
 if __name__ == "__main__":
-    patch_size = 256
+    patch_size = 'FULL'
     DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
 
-    df = pd.read_csv(f"casia2.csv").sample(frac=1).reset_index(drop=True)
+    df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
 
     train(
         name=f"256_CASIA_FULL" + config_defaults["model"],
