@@ -1,7 +1,7 @@
 from torch.hub import load_state_dict_from_url
 
 import sys
-sys.path.append('/CASIA_SERVER/')
+sys.path.append('../image_manipulation/')
 
 from segmentation.utils import *
 

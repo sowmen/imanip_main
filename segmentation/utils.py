@@ -3,7 +3,7 @@ import math
 from collections import namedtuple
 
 import sys
-sys.path.append('/CASIA_SERVER/')
+sys.path.append('../image_manipulation')
 
 from segmentation.layers import *
 
