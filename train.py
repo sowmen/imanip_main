@@ -13,6 +13,7 @@ import timm
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+import gc
 
 import albumentations
 from albumentations import augmentations
@@ -33,7 +34,7 @@ from segmentation.timm_efficient_unet import get_efficientunet
 from casia_dataset import CASIA
 
 OUTPUT_DIR = "weights"
-device =  torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 config_defaults = {
     "epochs": 50,
     "train_batch_size": 26,
@@ -205,6 +206,9 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         jaccard_tot.update(losses.functional.soft_jaccard_score(torch.sigmoid(out_mask), gt), train_loader.batch_size)
         jaccard_ind.update(seg_metrics.jaccard_coeff_single(torch.sigmoid(out_mask), gt), train_loader.batch_size)       
         
+        gc.collect()
+        torch.cuda.empty_cache()
+        
 
     train_metrics = {
         "train_loss_segmentation": segmentation_loss.avg,
@@ -226,7 +230,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     dice_ind = AverageMeter() # Sum of individual dice for batch
     jaccard_tot = AverageMeter()
     jaccard_ind = AverageMeter()
-    example_images = []
+    # example_images = []
 
     with torch.no_grad():
         for batch in tqdm(valid_loader):
@@ -330,10 +334,10 @@ def expand_prediction(arr):
 
 
 if __name__ == "__main__":
-    patch_size = 256
+    patch_size = 'FULL'
     DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
 
-    df = pd.read_csv(f"casia2.csv").sample(frac=1).reset_index(drop=True)
+    df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
 
     train(
         name=f"256_CASIA_FULL" + config_defaults["model"],

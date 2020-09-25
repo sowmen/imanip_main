@@ -17,30 +17,32 @@ from torch.utils.data import DataLoader
 import albumentations
 from albumentations import augmentations
 
-from torch.backends import cudnn
-cudnn.benchmark = True
+torch.backends.cudnn.benchmark = True
 
 import wandb
 # import neptune
 # from neptunecontrib.monitoring.metrics import *
 
+from apex import amp
+
 from utils import *
 from effb4_attention import Efficient_Attention
+from segmentation.timm_efficientnet import EfficientNet
 from casia_dataset import CASIA
 
 OUTPUT_DIR = "weights"
 device =  torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 26,
+    "train_batch_size": 64,
     "valid_batch_size": 100,
     "optimizer": "adam",
     "learning_rate": 0.001959,
     "weight_decay": 0.0005938,
     "schedule_patience": 3,
     "schedule_factor": 0.2569,
-    "model": "ATTN",
-    "attn_map_weight": 1.75,
+    "model": "EFFN",
+    "attn_map_weight": 0,
 }
 VAL_FOLD = 0
 TEST_FOLD = 9
@@ -60,12 +62,10 @@ def train(name, df, data_root, patch_size):
     # neptune.init("sowmen/imanip")
     # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
 
-    model = Efficient_Attention()
-    model.to(device)
+    # model = Efficient_Attention()
+    model = EfficientNet('tf_efficientnet_b4_ns').to(device)
     
-    if torch.cuda.is_available():
-        model = nn.DataParallel(model).to(device)
-
+    
     # wandb.watch(model)
 
     train_aug = albumentations.Compose(
@@ -133,6 +133,9 @@ def train(name, df, data_root, patch_size):
         mode="max",
         factor=config.schedule_factor,
     )
+
+    model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+
     criterion = nn.BCEWithLogitsLoss()
     attn_map_criterion = nn.L1Loss()
 
@@ -195,18 +198,20 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
 
         optimizer.zero_grad()
         
-        out_labels, attn_map = model(images)
+        # out_labels, attn_map = model(images)
+        out_labels = model(images)
 
         loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
-        loss_attn_map = attn_map_criterion(attn_map, attn_gt)
-        loss = loss_classification  + attn_map_weight * loss_attn_map
+        # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
+        loss = loss_classification  #+ attn_map_weight * loss_attn_map
 
-        loss.backward()
+        with amp.scale_loss(loss, optimizer) as scaled_loss:
+            scaled_loss.backward()
         optimizer.step()
 
         #---------------------Batch Loss Update-------------------------
-        classification_loss.update(loss_classification.item(), train_loader.batch_size)
-        attn_map_loss.update(loss_attn_map.item(), train_loader.batch_size)
+        # classification_loss.update(loss_classification.item(), train_loader.batch_size)
+        # attn_map_loss.update(loss_attn_map.item(), train_loader.batch_size)
         total_loss.update(loss.item(), train_loader.batch_size)
         
         targets.append((target_labels.view(-1, 1).cpu() >= 0.5) * 1.0)
@@ -223,8 +228,8 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         train_balanced_acc_05 = metrics.balanced_accuracy_score(targets, (predictions >= 0.5) * 1)
         
     train_metrics = {
-        "train_loss_classification": classification_loss.avg,
-        "train_loss_attn_map": attn_map_loss.avg,
+        # "train_loss_classification": classification_loss.avg,
+        # "train_loss_attn_map": attn_map_loss.avg,
         "train_loss" : total_loss.avg,
         "train_auc": train_auc,
         "train_f1_05": train_f1_05,
@@ -253,15 +258,16 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
             target_labels = batch["label"].to(device)
             attn_gt = batch["attn_mask"].to(device)
 
-            out_labels, attn_map = model(images)
+            # out_labels, attn_map = model(images)
+            out_labels = model(images)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
-            loss_attn_map = attn_map_criterion(attn_map, attn_gt)
-            loss = loss_classification  + attn_map_weight * loss_attn_map
+            # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
+            loss = loss_classification  #+ attn_map_weight * loss_attn_map
             
             #---------------------Batch Loss Update-------------------------
-            classification_loss.update(loss_classification.item(), valid_loader.batch_size)
-            attn_map_loss.update(loss_attn_map.item(), valid_loader.batch_size)
+            # classification_loss.update(loss_classification.item(), valid_loader.batch_size)
+            # attn_map_loss.update(loss_attn_map.item(), valid_loader.batch_size)
             total_loss.update(loss.item(), valid_loader.batch_size)
             
             batch_targets = (target_labels.view(-1, 1).cpu() >= 0.5) * 1.0
@@ -296,13 +302,13 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
 
     valid_metrics = {
         "valid_loss": total_loss.avg,
-        "valid_loss_classification": classification_loss.avg,
-        "valid_loss_attn_map": attn_map_loss.avg,
+        # "valid_loss_classification": classification_loss.avg,
+        # "valid_loss_attn_map": attn_map_loss.avg,
         "valid_auc": valid_auc,
         "valid_f1_05": valid_f1_05,
         "valid_acc_05": valid_acc_05,
         "valid_balanced_acc_05": valid_balanced_acc_05,
-        "valid_examples": example_images[-20:],
+        "valid_examples": example_images[-10:],
     }
     wandb.log(valid_metrics)
 
@@ -318,7 +324,6 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
     
     predictions = []
     targets = []
-    example_images = []
 
     with torch.no_grad():
         for batch in tqdm(test_loader):
@@ -326,15 +331,16 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
             target_labels = batch["label"].to(device)
             attn_gt = batch["attn_mask"].to(device)
 
-            out_labels, attn_map = model(images)
+            # out_labels, attn_map = model(images)
+            out_labels = model(images)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
-            loss_attn_map = attn_map_criterion(attn_map, attn_gt)
-            loss = loss_classification  + attn_map_weight * loss_attn_map
+            # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
+            loss = loss_classification  #+ attn_map_weight * loss_attn_map
             
             #---------------------Batch Loss Update-------------------------
-            classification_loss.update(loss_classification.item(), test_loader.batch_size)
-            attn_map_loss.update(loss_attn_map.item(), test_loader.batch_size)
+            # classification_loss.update(loss_classification.item(), test_loader.batch_size)
+            # attn_map_loss.update(loss_attn_map.item(), test_loader.batch_size)
             total_loss.update(loss.item(), test_loader.batch_size)
             
             targets.append((target_labels.view(-1, 1).cpu() >= 0.5) * 1.0)
@@ -351,8 +357,8 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
 
     test_metrics = {
         "test_loss": total_loss.avg,
-        "test_loss_classification": classification_loss.avg,
-        "test_loss_attn_map": attn_map_loss.avg,
+        # "test_loss_classification": classification_loss.avg,
+        # "test_loss_attn_map": attn_map_loss.avg,
         "test_auc": test_auc,
         "test_f1_05": test_f1_05,
         "test_acc_05": test_acc_05,
@@ -393,13 +399,13 @@ def expand_prediction(arr):
 
 
 if __name__ == "__main__":
-    patch_size = 'FULL'
-    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
+    patch_size = 64
+    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_64"
 
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"256_CASIA_FULL" + config_defaults["model"],
+        name=f"256_CASIA_64" + config_defaults["model"],
         df=df,
         data_root=DATA_ROOT,
         patch_size=patch_size,
