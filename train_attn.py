@@ -24,6 +24,8 @@ import wandb
 # import neptune
 # from neptunecontrib.monitoring.metrics import *
 
+from apex import amp
+
 from utils import *
 from effb4_attention import Efficient_Attention
 from segmentation.timm_efficientnet import EfficientNet
@@ -33,7 +35,7 @@ OUTPUT_DIR = "weights"
 device =  torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 26,
+    "train_batch_size": 64,
     "valid_batch_size": 100,
     "optimizer": "adam",
     "learning_rate": 0.001959,
@@ -62,12 +64,9 @@ def train(name, df, data_root, patch_size):
     # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
 
     # model = Efficient_Attention()
-    model = EfficientNet('tf_efficientnet_b4_ns')
+    model = EfficientNet('tf_efficientnet_b4_ns').to(device)
     
-    if torch.cuda.is_available():
-        model = nn.DataParallel(model, device_ids=[0,1])
-
-    model.to(device)
+    
     # wandb.watch(model)
 
     train_aug = albumentations.Compose(
@@ -135,6 +134,9 @@ def train(name, df, data_root, patch_size):
         mode="max",
         factor=config.schedule_factor,
     )
+
+    model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+
     criterion = nn.BCEWithLogitsLoss()
     attn_map_criterion = nn.L1Loss()
 
@@ -204,7 +206,8 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
         loss = loss_classification  #+ attn_map_weight * loss_attn_map
 
-        loss.backward()
+        with amp.scale_loss(loss, optimizer) as scaled_loss:
+            scaled_loss.backward()
         optimizer.step()
 
         #---------------------Batch Loss Update-------------------------
@@ -306,7 +309,7 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
         "valid_f1_05": valid_f1_05,
         "valid_acc_05": valid_acc_05,
         "valid_balanced_acc_05": valid_balanced_acc_05,
-        "valid_examples": example_images[-20:],
+        "valid_examples": example_images[-10:],
     }
     wandb.log(valid_metrics)
 
@@ -322,7 +325,6 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
     
     predictions = []
     targets = []
-    example_images = []
 
     with torch.no_grad():
         for batch in tqdm(test_loader):
@@ -404,7 +406,7 @@ if __name__ == "__main__":
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"256_CASIA_FULL" + config_defaults["model"],
+        name=f"256_CASIA_64" + config_defaults["model"],
         df=df,
         data_root=DATA_ROOT,
         patch_size=patch_size,

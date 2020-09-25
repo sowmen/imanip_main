@@ -14,6 +14,7 @@ import timm
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+import gc
 
 import albumentations
 from albumentations import augmentations
@@ -34,7 +35,7 @@ from segmentation.timm_efficient_unet import get_efficientunet
 from casia_dataset import CASIA
 
 OUTPUT_DIR = "weights"
-device =  torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 config_defaults = {
     "epochs": 100,
     "train_batch_size": 20,
@@ -149,7 +150,7 @@ def train(name, df, data_root, patch_size):
         train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
         
         valid_metrics = valid_epoch(model, valid_loader, criterion,  epoch)
-        scheduler.step(valid_metrics["train_dice_tot"])
+        # scheduler.step(valid_metrics["train_dice_tot"])
 
         print(
             f"TRAIN_DICE_TOT = {train_metrics['train_dice_tot']}, TRAIN_LOSS = {train_metrics['train_loss']}"
@@ -158,14 +159,14 @@ def train(name, df, data_root, patch_size):
             f"VALID_DICE_TOT = {valid_metrics['valid_dice_tot']}, VALID_LOSS = {valid_metrics['valid_loss']}"
         )
 
-        es(
-            valid_metrics["valid_dice_tot"],
-            model,
-            model_path=os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"),
-        )
-        if es.early_stop:
-            print("Early stopping")
-            break
+        # es(
+        #     valid_metrics["valid_dice_tot"],
+        #     model,
+        #     model_path=os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"),
+        # )
+        # if es.early_stop:
+        #     print("Early stopping")
+        #     break
 
     model.load_state_dict(torch.load(f"weights/{name}_[{dt_string}].h5"))
 
@@ -209,6 +210,9 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         gc.collect()
         torch.cuda.empty_cache()
         
+        gc.collect()
+        torch.cuda.empty_cache()
+        
 
     train_metrics = {
         "train_loss_segmentation": segmentation_loss.avg,
@@ -230,7 +234,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     dice_ind = AverageMeter() # Sum of individual dice for batch
     jaccard_tot = AverageMeter()
     jaccard_ind = AverageMeter()
-    example_images = []
+    # example_images = []
 
     with torch.no_grad():
         for batch in tqdm(valid_loader):
