@@ -71,7 +71,7 @@ def train(name, df, data_root, patch_size):
     if torch.cuda.is_available():
         model = nn.DataParallel(model).to(device)
 
-    # wandb.watch(model)
+    
     
     train_aug = albumentations.Compose(
         [
@@ -142,6 +142,7 @@ def train(name, df, data_root, patch_size):
 
     es = EarlyStopping(patience=20, mode="max")
 
+    wandb.watch(model, criterion=criterion, log='all')
     for epoch in range(config.epochs):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")

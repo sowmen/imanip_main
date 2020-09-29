@@ -7,3 +7,4 @@ wandb/
 weights/
 history/
 __pycache__/
+*.h5

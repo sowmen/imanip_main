@@ -1,12 +1,13 @@
 import timm
 import torch
 import torch.nn as nn
+import gc
 
 from collections import OrderedDict
 
 class EfficientNet(nn.Module):
     def __init__(
-        self, model_name, num_classes=1, encoder_checkpoint="", freeze_encoder=False
+        self, model_name='tf_efficientnet_b4_ns', num_classes=1, encoder_checkpoint="", freeze_encoder=False
     ):
         super().__init__()
         base_model_sequential = timm.create_model(
@@ -19,10 +20,10 @@ class EfficientNet(nn.Module):
         self.classifier = base_model_sequential[13:]
 
         del base_model_sequential
+        gc.collect()
 
         if encoder_checkpoint:
-            checkpoint = torch.load(encoder_checkpoint)
-            self.encoder.load_state_dict(checkpoint)
+            self.encoder.load_weights(encoder_checkpoint)
 
         if freeze_encoder:
             for param in self.encoder.parameters():
@@ -64,6 +65,14 @@ class EfficientNet(nn.Module):
             x = self.head(x)
 
             return x, (start_outputs, end_outputs)
+        
+        def load_weights(self, checkpoint=""):
+            checkpoint = torch.load(checkpoint)
+            encoder_dict = OrderedDict()
+            for item in checkpoint.items():
+                if('encoder' in item[0]):
+                    encoder_dict[item[0].split('.',2)[-1]] = item[1]
+            super().load_state_dict(encoder_dict) 
 
     def get_encoder(self):
         return self.encoder
