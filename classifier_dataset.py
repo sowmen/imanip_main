@@ -5,6 +5,7 @@ import pandas as pd
 import cv2
 import math
 
+import torch
 from torch.utils.data import Dataset
 from albumentations.pytorch.functional import img_to_tensor
 import albumentations
@@ -82,8 +83,9 @@ class Classifier_Dataset(Dataset):
             image = data["image"]
 
         tensor = ensemble(self.encoder, image)
-
-        return {"tensor": tensor, "label": label}
+        tensor = torch.nn.functional.adaptive_avg_pool2d(tensor, 1).squeeze()
+        
+        return {"tensor": tensor.cpu(), "label": label}
 
     def _equalize(self, rows: pd.DataFrame) -> pd.DataFrame:
         """

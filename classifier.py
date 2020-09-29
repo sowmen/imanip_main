@@ -65,13 +65,13 @@ class Classifier2(nn.Module):
         self.fc = nn.Linear(in_channels, 1)
         
     def forward(self, x):
-        y = x.T.unsqueeze(0)
+        y = x.permute((0,2,1))
         y = self.gap1D(y).squeeze(-1)
-        y = self.mlp(y)
+        y = self.mlp(y).unsqueeze(1)
         x =  x * y
         
         x = F.dropout(x, p=0.3)
-        x = x.T.unsqueeze(0)
+        x = x.permute((0,2,1))
         x = self.gap1D(x).squeeze(-1)
         
         x = self.fc(x)
