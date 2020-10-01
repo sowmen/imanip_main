@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import cv2
 import math
+import copy
 
 from torch.utils.data import Dataset
 from albumentations.pytorch.functional import img_to_tensor
@@ -31,13 +32,13 @@ class CASIA(Dataset):
             "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
         }
 
-        self.attn_mask_transforms = albumentations.Compose(
-            [
-                augmentations.transforms.Resize(
-                    32, 32, interpolation=cv2.INTER_LANCZOS4, always_apply=True, p=1
-                )
-            ]
-        )
+        # self.attn_mask_transforms = albumentations.Compose([
+        #     augmentations.transforms.Resize(
+        #         32, 32, interpolation=cv2.INTER_LANCZOS4, always_apply=True, p=1
+        #     ),
+        #     albumentations.Normalize(mean=self.normalize['mean'], std=self.normalize['std'], p=1, always_apply=True),
+        #     albumentations.pytorch.ToTensor()
+        # ])
 
         if self.mode == "train":
             rows = self.dataframe[~self.dataframe["fold"].isin([self.val_fold, self.test_fold])]
@@ -88,18 +89,24 @@ class CASIA(Dataset):
             else:
                 mask_path = os.path.join(self.root_dir, image_name, mask_patch)
             mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-
+        # attn_mask_image = copy.deepcopy(mask_image)
+            
         if self.transforms:
             data = self.transforms(image=image, mask=mask_image)
             image = data["image"]
             mask_image = data["mask"]
-        attn_mask_image = self.attn_mask_transforms(image=mask_image)["image"]
+        # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
-        image = img_to_tensor(image, self.normalize)
-        mask_image = img_to_tensor(mask_image).unsqueeze(0)
-        attn_mask_image = img_to_tensor(attn_mask_image).unsqueeze(0)
+        # image = img_to_tensor(image, self.normalize)
+        # mask_image = img_to_tensor(mask_image).unsqueeze(0)
+        # attn_mask_image = img_to_tensor(attn_mask_image).unsqueeze(0)
 
-        return {"image": image, "label": label, "mask": mask_image, "attn_mask": attn_mask_image}
+        return {
+            "image": image, 
+            "label": label, 
+            "mask": mask_image, 
+            # "attn_mask": attn_mask_image
+        }
 
     def _equalize(self, rows: pd.DataFrame) -> pd.DataFrame:
         """
