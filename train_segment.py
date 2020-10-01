@@ -1,11 +1,3 @@
-from casia_dataset import CASIA
-from segmentation.timm_efficient_unet import get_efficientunet
-from segmentation.timm_efficientnet import EfficientNet
-import seg_metrics
-from pytorch_toolbelt import losses
-from utils import *
-from apex import amp
-import wandb
 import os
 import random
 import numpy as np
@@ -28,9 +20,18 @@ from albumentations import augmentations
 
 torch.backends.cudnn.benchmark = True
 
+from apex import amp
+import wandb
 # import neptune
 # from neptunecontrib.monitoring.metrics import *
 
+from casia_dataset import CASIA
+from segmentation.timm_efficient_unet import get_efficientunet
+from segmentation.timm_efficientnet import EfficientNet
+import seg_metrics
+from pytorch_toolbelt import losses
+from utils import *
+import segmentation_models_pytorch as smp
 
 OUTPUT_DIR = "weights"
 device = 'cuda'
@@ -64,11 +65,12 @@ def train(name, df, data_root, patch_size):
     # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
 
     # model = EfficientNet('tf_efficientnet_b4_ns')
-    model = get_efficientunet(
-        'tf_efficientnet_b4_ns',
-        # encoder_checkpoint='weights/256_CASIA_FULLtimm_effunet_[20_09_08_11_47].h5',
-        # freeze_encoder=True
-    )
+    # model = get_efficientunet(
+    #     'tf_efficientnet_b4_ns',
+    #     # encoder_checkpoint='weights/256_CASIA_FULLtimm_effunet_[20_09_08_11_47].h5',
+    #     # freeze_encoder=True
+    # )
+    model = smp.Unet('timm-efficientnet-b4', classes=1, encoder_weights='imagenet')
     model.to(device)
 
     normalize = {
@@ -136,7 +138,7 @@ def train(name, df, data_root, patch_size):
         factor=config.schedule_factor,
     )
 
-    # model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+    model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
 
     criterion = nn.BCEWithLogitsLoss()
 
@@ -201,22 +203,17 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         optimizer.step()
 
         # ---------------------Batch Loss Update-------------------------
-        segmentation_loss.update(
-            loss_segmentation.item(), train_loader.batch_size)
+        segmentation_loss.update(loss_segmentation.item(), train_loader.batch_size)
 
         with torch.no_grad():
             out_mask = out_mask.cpu()
             gt = gt.cpu()
             # ---------------------Batch Metrics Update------------------------
-            dice_tot.update(losses.functional.soft_dice_score(
-                torch.sigmoid(out_mask), gt), train_loader.batch_size)
-            dice_ind.update(seg_metrics.dice_coeff_single(
-                torch.sigmoid(out_mask), gt), train_loader.batch_size)
+            dice_tot.update(losses.functional.soft_dice_score(torch.sigmoid(out_mask), gt), train_loader.batch_size)
+            dice_ind.update(seg_metrics.dice_coeff_single(torch.sigmoid(out_mask), gt), train_loader.batch_size)
 
-            jaccard_tot.update(losses.functional.soft_jaccard_score(
-                torch.sigmoid(out_mask), gt), train_loader.batch_size)
-            jaccard_ind.update(seg_metrics.jaccard_coeff_single(
-                torch.sigmoid(out_mask), gt), train_loader.batch_size)
+            jaccard_tot.update(losses.functional.soft_jaccard_score(torch.sigmoid(out_mask), gt), train_loader.batch_size)
+            jaccard_ind.update(seg_metrics.jaccard_coeff_single(torch.sigmoid(out_mask), gt), train_loader.batch_size)
 
         # gc.collect()
         # torch.cuda.empty_cache()
@@ -253,21 +250,16 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             loss_segmentation = criterion(out_mask, gt)
 
             # ---------------------Batch Loss Update-------------------------
-            segmentation_loss.update(
-                loss_segmentation.item(), valid_loader.batch_size)
+            segmentation_loss.update(loss_segmentation.item(), valid_loader.batch_size)
 
             out_mask = out_mask.cpu()
             gt = gt.cpu()
             # ---------------------Batch Metrics Update------------------------
-            dice_tot.update(losses.functional.soft_dice_score(
-                torch.sigmoid(out_mask), gt), valid_loader.batch_size)
-            dice_ind.update(seg_metrics.dice_coeff_single(
-                torch.sigmoid(out_mask), gt), valid_loader.batch_size)
+            dice_tot.update(losses.functional.soft_dice_score(torch.sigmoid(out_mask), gt), valid_loader.batch_size)
+            dice_ind.update(seg_metrics.dice_coeff_single(torch.sigmoid(out_mask), gt), valid_loader.batch_size)
 
-            jaccard_tot.update(losses.functional.soft_jaccard_score(
-                torch.sigmoid(out_mask), gt), valid_loader.batch_size)
-            jaccard_ind.update(seg_metrics.jaccard_coeff_single(
-                torch.sigmoid(out_mask), gt), valid_loader.batch_size)
+            jaccard_tot.update(losses.functional.soft_jaccard_score(torch.sigmoid(out_mask), gt), valid_loader.batch_size)
+            jaccard_ind.update(seg_metrics.jaccard_coeff_single(torch.sigmoid(out_mask), gt), valid_loader.batch_size)
 
     valid_metrics = {
         "valid_loss_segmentation": segmentation_loss.avg,
@@ -300,21 +292,16 @@ def test(model, test_loader, criterion):
             loss_segmentation = criterion(out_mask, gt)
 
             # ---------------------Batch Loss Update-------------------------
-            segmentation_loss.update(
-                loss_segmentation.item(), test_loader.batch_size)
+            segmentation_loss.update(loss_segmentation.item(), test_loader.batch_size)
 
             out_mask = out_mask.cpu()
             gt = gt.cpu()
             # ---------------------Batch Metrics Update------------------------
-            dice_tot.update(losses.functional.soft_dice_score(
-                torch.sigmoid(out_mask), gt), test_loader.batch_size)
-            dice_ind.update(seg_metrics.dice_coeff_single(
-                torch.sigmoid(out_mask), gt), test_loader.batch_size)
+            dice_tot.update(losses.functional.soft_dice_score(torch.sigmoid(out_mask), gt), test_loader.batch_size)
+            dice_ind.update(seg_metrics.dice_coeff_single(torch.sigmoid(out_mask), gt), test_loader.batch_size)
 
-            jaccard_tot.update(losses.functional.soft_jaccard_score(
-                torch.sigmoid(out_mask), gt), test_loader.batch_size)
-            jaccard_ind.update(seg_metrics.jaccard_coeff_single(
-                torch.sigmoid(out_mask), gt), test_loader.batch_size)
+            jaccard_tot.update(losses.functional.soft_jaccard_score(torch.sigmoid(out_mask), gt), test_loader.batch_size)
+            jaccard_ind.update(seg_metrics.jaccard_coeff_single(torch.sigmoid(out_mask), gt), test_loader.batch_size)
 
     test_metrics = {
         "test_loss_segmentation": segmentation_loss.avg,
@@ -360,8 +347,7 @@ if __name__ == "__main__":
     patch_size = 'FULL'
     DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
 
-    df = pd.read_csv(f"casia_{patch_size}.csv").sample(
-        frac=1).reset_index(drop=True)
+    df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
 
     train(
         name=f"256_CASIA_FULL" + config_defaults["model"],
