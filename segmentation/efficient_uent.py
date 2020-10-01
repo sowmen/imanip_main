@@ -1,7 +1,7 @@
 from collections import OrderedDict
 
 import sys
-sys.path.append('/CASIA_SERVER/')
+sys.path.append('../image_manipulation/')
 
 from segmentation.layers import *
 from segmentation.efficientnet import EfficientNet

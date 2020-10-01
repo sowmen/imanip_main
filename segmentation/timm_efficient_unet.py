@@ -1,7 +1,7 @@
 from collections import OrderedDict
 
 import sys
-sys.path.append('/IMANIP_SERVER/')
+sys.path.append('../image_manipulation/')
 
 from segmentation.timm_efficientnet import EfficientNet
 from segmentation.layers import *
@@ -66,7 +66,7 @@ class EfficientUnet(nn.Module):
         input_ = x
 
         x, (start, end) = self.encoder(x)
-        del(end)
+
         # print(x.size())
         x = self.up_conv1(x)
         # print(x.size())
