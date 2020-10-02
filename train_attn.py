@@ -19,12 +19,14 @@ from albumentations import augmentations
 
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
+os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
+# os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 import wandb
 # import neptune
 # from neptunecontrib.monitoring.metrics import *
 
-from apex import amp
+# from apex import amp
 
 from utils import *
 from effb4_attention import Efficient_Attention
@@ -32,14 +34,14 @@ from segmentation.timm_efficientnet import EfficientNet
 from casia_dataset import CASIA
 
 OUTPUT_DIR = "weights"
-device =  torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device =  'cuda'
 config_defaults = {
     "epochs": 100,
     "train_batch_size": 64,
     "valid_batch_size": 100,
-    "optimizer": "adam",
-    "learning_rate": 0.001959,
-    "weight_decay": 0.0005938,
+    "optimizer": "radam",
+    "learning_rate": 0.001459,
+    "weight_decay": 0.0005438,
     "schedule_patience": 3,
     "schedule_factor": 0.2569,
     "model": "EFFN",
@@ -65,7 +67,6 @@ def train(name, df, data_root, patch_size):
 
     # model = Efficient_Attention()
     model = EfficientNet('tf_efficientnet_b4_ns').to(device)
-    
     
     # wandb.watch(model)
 
@@ -135,10 +136,12 @@ def train(name, df, data_root, patch_size):
         factor=config.schedule_factor,
     )
 
-    model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+    # model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+    model = nn.DataParallel(model).to(device)
 
     criterion = nn.BCEWithLogitsLoss()
     attn_map_criterion = nn.L1Loss()
+
 
     es = EarlyStopping(patience=20, mode="max")
 
@@ -206,9 +209,10 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
         loss = loss_classification  #+ attn_map_weight * loss_attn_map
 
-        with amp.scale_loss(loss, optimizer) as scaled_loss:
-            scaled_loss.backward()
-        optimizer.step()
+        # with amp.scale_loss(loss, optimizer) as scaled_loss:
+        #     scaled_loss.backward()
+        # optimizer.step()
+        loss.backward()
 
         #---------------------Batch Loss Update-------------------------
         # classification_loss.update(loss_classification.item(), train_loader.batch_size)
@@ -406,7 +410,7 @@ if __name__ == "__main__":
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"256_CASIA_64" + config_defaults["model"],
+        name=f"256_CASIA_{patch_size}" + config_defaults["model"],
         df=df,
         data_root=DATA_ROOT,
         patch_size=patch_size,
