@@ -19,24 +19,24 @@ def dice_score(
     
     return dice #single float
 
-def dice_coeff_single(outputs, targets):
+def dice_coeff(outputs : list, targets : list): 
     """Dice coeff for batches"""
-    if outputs.is_cuda:
-        s = torch.FloatTensor(1).cuda().zero_()
-    else:
-        s = torch.FloatTensor(1).zero_()
+    # if outputs.is_cuda:
+    #     s = torch.FloatTensor(1).cuda().zero_()
+    # else:
+    s = torch.FloatTensor(1).zero_()
 
     for i, c in enumerate(zip(outputs, targets)):
         s = s + losses.functional.soft_dice_score(c[0], c[1])
 
     return s / (i + 1)
 
-def jaccard_coeff_single(outputs, targets):
+def jaccard_coeff(outputs, targets):
     """jaccard coeff for batches"""
-    if outputs.is_cuda:
-        s = torch.FloatTensor(1).cuda().zero_()
-    else:
-        s = torch.FloatTensor(1).zero_()
+    # if outputs.is_cuda:
+    #     s = torch.FloatTensor(1).cuda().zero_()
+    # else:
+    s = torch.FloatTensor(1).zero_()
 
     for i, c in enumerate(zip(outputs, targets)):
         s = s + losses.functional.soft_jaccard_score(c[0], c[1])
