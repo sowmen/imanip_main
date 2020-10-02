@@ -27,18 +27,17 @@ def dice_coeff(outputs : list, targets : list):
     assert len(outputs) == len(targets)
     assert outputs[0].size() == targets[0].size()
 
-    print(f"Len : {len(outputs)}, Size : {outputs[0].size()}")
-
     s = torch.FloatTensor(1).zero_()
     mx_dice = -1
     best_idx = 0
 
     for i, c in enumerate(zip(outputs, targets)):
         d = losses.functional.soft_dice_score(c[0], c[1])
-        if d.item() > mx_dice:
+        if torch.sum(c[1]).item() > 0 and d.item() > mx_dice:
             mx_dice = d.item()
             best_idx = i 
         s = s + d
+        
     print(f"Best : {mx_dice}")
     return s / (i + 1)
 
