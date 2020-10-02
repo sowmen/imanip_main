@@ -80,6 +80,7 @@ class AverageMeter:
         self.count += n
         self.avg = self.sum / self.count
 
+
 def get_optimizer(model, optimizer, learning_rate, weight_decay):
     if optimizer == "radam":
         optimizer = torch_optimizer.RAdam(
@@ -99,8 +100,16 @@ def get_optimizer(model, optimizer, learning_rate, weight_decay):
             lr=learning_rate,
             weight_decay=weight_decay,
         )
+    elif optimizer == "adam_amp":
+        optimizer = apex.optimizers.FusedAdam(
+            model.parameters(), 
+            lr=learning_rate,
+            weight_decay=weight_decay,
+        )
     elif optimizer == "adam":
-        # optimizer = apex.optimizers.FusedAdam(
-        optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-
+        optimizer = optim.Adam(
+            model.parameters(), 
+            lr=learning_rate,
+            weight_decay=weight_decay,
+        )
     return optimizer
