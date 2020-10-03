@@ -45,11 +45,17 @@ class EfficientNet(nn.Module):
             self.head = layers[10:13]
 
         def forward(self, x):
-            x = self.stem(x)
+            
 
             start_outputs = OrderedDict()
             end_outputs = OrderedDict()
-
+            smp_outputs = []
+            
+            smp_outputs.append(x) # input
+            
+            x = self.stem(x)
+            smp_outputs.append(x) # conv_stem
+            
             idx = 0
             for (i, block) in enumerate(self.blocks):
                 for inner_block in block:
@@ -57,14 +63,15 @@ class EfficientNet(nn.Module):
 
                     if idx in [0, 2, 6, 10]:
                         start_outputs[f"block_{i}_layer_{idx}"] = x
-                    elif idx in [1, 5, 9, 21]:
+                    if idx in [1, 5, 9, 21]:
                         end_outputs[f"block_{i}_layer_{idx}"] = x
-
+                    if idx in [5, 9, 21, 31]:
+                        smp_outputs.append(x)
                     idx += 1
 
             x = self.head(x)
 
-            return x, (start_outputs, end_outputs)
+            return x, (start_outputs, end_outputs), smp_outputs 
         
         def load_weights(self, checkpoint=""):
             checkpoint = torch.load(checkpoint)

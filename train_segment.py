@@ -34,13 +34,13 @@ import seg_metrics
 from pytorch_toolbelt import losses
 from utils import *
 import segmentation_models_pytorch as smp
-
+from segmentation.smp_effb4 import SMP_DIY 
 from sim_dataset import SimDataset
 
 OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
-    "epochs": 100,
+    "epochs": 20,
     "train_batch_size": 25,
     "valid_batch_size": 64,
     "optimizer": "adam",
@@ -74,7 +74,8 @@ def train(name, df, data_root, patch_size):
     #     # encoder_checkpoint='weights/256_CASIA_FULLtimm_effunet_[20_09_08_11_47].h5',
     #     # freeze_encoder=True
     # )
-    model = smp.Unet('timm-efficientnet-b4', classes=6, encoder_weights='imagenet')
+    # model = smp.Unet('timm-efficientnet-b4', classes=6, encoder_weights='imagenet')
+    model = SMP_DIY()
     model.to(device)
 
     # normalize = {
