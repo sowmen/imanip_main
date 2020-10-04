@@ -36,7 +36,7 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 128,
+    "train_batch_size": 40,
     "valid_batch_size": 80,
     "optimizer": "adam",
     "learning_rate": 0.001959,
@@ -65,12 +65,16 @@ def train(name, df, data_root, patch_size):
     # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
 
     # model = Efficient_Attention()
-    # model = EfficientNet('tf_efficientnet_b4_ns').to(device)
-    model = Classifier2(1792).to(device)
+    model = EfficientNet().to(device)
+    # model = Classifier2(1792).to(device)
     
     
     # wandb.watch(model)
 
+    normalize = {
+        "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
+        "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
+    }
     train_aug = albumentations.Compose(
         [
             augmentations.transforms.Flip(p=0.5),
@@ -78,21 +82,21 @@ def train(name, df, data_root, patch_size):
             augmentations.transforms.ShiftScaleRotate(p=0.5),
             augmentations.transforms.HueSaturationValue(p=0.3),
             augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
-            augmentations.transforms.Resize(
-                256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1
-            ),
+            augmentations.transforms.Resize(128, 128, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+            albumentations.pytorch.ToTensor()
         ]
     )
     valid_aug = albumentations.Compose(
         [
-            augmentations.transforms.Resize(
-                256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1
-            )
+            augmentations.transforms.Resize(128, 128, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+            albumentations.pytorch.ToTensor()
         ]
     )
 
     # -------------------------------- CREATE DATASET and DATALOADER --------------------------
-    train_dataset = Classifier_Dataset(
+    train_dataset = CASIA(
         dataframe=df,
         mode="train",
         val_fold=VAL_FOLD,
@@ -104,7 +108,7 @@ def train(name, df, data_root, patch_size):
     )
     train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=False, num_workers=4)
 
-    valid_dataset = Classifier_Dataset(
+    valid_dataset = CASIA(
         dataframe=df,
         mode="val",
         val_fold=VAL_FOLD,
@@ -116,7 +120,7 @@ def train(name, df, data_root, patch_size):
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=4)
 
-    test_dataset = Classifier_Dataset(
+    test_dataset = CASIA(
         dataframe=df,
         mode="test",
         val_fold=VAL_FOLD,
@@ -130,15 +134,15 @@ def train(name, df, data_root, patch_size):
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
+
+    model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         patience=config.schedule_patience,
         mode="max",
         factor=config.schedule_factor,
     )
-
-    model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
-
     criterion = nn.BCEWithLogitsLoss()
     attn_map_criterion = nn.L1Loss()
 
@@ -371,6 +375,7 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
     }
     wandb.log(test_metrics)
 
+    #region TEST LOG
     # wandb.log(
     #     {
     #         "test_roc_auc_curve": skplt.metrics.plot_roc(
@@ -396,7 +401,7 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
     # log_lift_curve(y_test, y_test_pred)
     # log_prediction_distribution(y_test, y_test_pred[:, 1])
     # log_class_metrics_by_threshold(y_test, y_test_pred[:, 1])
-
+    #endregion
 
 def expand_prediction(arr):
     arr_reshaped = arr.reshape(-1, 1)
@@ -405,13 +410,13 @@ def expand_prediction(arr):
 
 if __name__ == "__main__":
     # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
-    patch_size = "FULL"
-    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
+    patch_size = 128
+    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_{patch_size}"
 
-    df = pd.read_csv(f"casia_tensor_FULL.csv").sample(frac=1).reset_index(drop=True)
+    df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"Classifier_CASIA_{patch_size}" + config_defaults["model"],
+        name=f"NO Resize CASIA_{patch_size}" + config_defaults["model"],
         df=df,
         data_root=DATA_ROOT,
         patch_size=patch_size,

@@ -30,7 +30,7 @@ class EfficientNet(nn.Module):
             self.encoder.freeze()
 
     def forward(self, x):
-        x, _ = self.encoder(x)
+        x, _, _ = self.encoder(x)
         x = self.classifier(x)
 
         return x

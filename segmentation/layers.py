@@ -195,9 +195,6 @@ def upsize2(x, sampling='nearest'):
     x = F.interpolate(x, scale_factor=2, mode=sampling)
     return x
 
-class Swish(nn.Module):
-    def forward(self, x):
-        return x * torch.sigmoid(x)
     
 class Decode(nn.Module):
     def __init__(self, in_channel, out_channel):

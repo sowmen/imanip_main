@@ -4,7 +4,7 @@ import sys
 sys.path.append('../image_manipulation/')
 
 from segmentation.layers import *
-from segmentation.efficientnet import EfficientNet
+from segmentation.failed_efficientnet import EfficientNet
 
 
 __all__ = ['EfficientUnet', 'get_efficientunet_b0', 'get_efficientunet_b1', 'get_efficientunet_b2',

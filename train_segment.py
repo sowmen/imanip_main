@@ -76,6 +76,7 @@ def train(name, df, data_root, patch_size):
     # )
     # model = smp.Unet('timm-efficientnet-b4', classes=6, encoder_weights='imagenet')
     # model = SMP_DIY(num_classes=6)
+    
     encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
     model = UnetB4(encoder, out_channels=1)
     model.to(device)

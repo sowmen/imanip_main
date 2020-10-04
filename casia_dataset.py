@@ -27,10 +27,10 @@ class CASIA(Dataset):
         self.transforms = transforms
         self.label_smoothing = label_smoothing
         self.equal_sample = equal_sample
-        self.normalize = {
-            "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
-            "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
-        }
+        # self.normalize = {
+        #     "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
+        #     "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
+        # }
 
         # self.attn_mask_transforms = albumentations.Compose([
         #     augmentations.transforms.Resize(
