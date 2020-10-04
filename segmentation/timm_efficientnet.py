@@ -82,14 +82,17 @@ class EfficientNet(nn.Module):
                     s = item[0]
                     encoder_dict[s[s.find('encoder')+len('encoder')+1:]] = item[1]
             super().load_state_dict(encoder_dict) 
+            print(f'--------- Loaded Checkpoint: {checkpoint} ----------')
         
         def freeze(self):
             for param in super().parameters():
                 param.requires_grad = False
+            print('--------- Encoder Frozen -----------')
                 
         def unfreeze(self):
             for param in super().parameters():
                 param.requires_grad = True
+            print('--------- Encoder Opened -----------')
 
     def get_encoder(self):
         return self.encoder
