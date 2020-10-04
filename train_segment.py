@@ -338,14 +338,14 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         # gc.collect()
         # torch.cuda.empty_cache()
 
-    dice = seg_metrics.dice_coeff(outputs, targets).item() 
-    jaccard = seg_metrics.jaccard_coeff(outputs, targets).item()  
+    dice, _ = seg_metrics.dice_coeff(outputs, targets) 
+    jaccard, _ = seg_metrics.jaccard_coeff(outputs, targets)  
         
 
     train_metrics = {
         "train_loss_segmentation": segmentation_loss.avg,
-        "train_dice": dice,
-        "train_jaccard": jaccard,
+        "train_dice": dice.item(),
+        "train_jaccard": jaccard.item(),
     }
     wandb.log(train_metrics)
 
@@ -359,13 +359,14 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     targets = []
     outputs = []
 
-    # example_images = []
-
+    example_images = []
+    image_names = []
+    
     with torch.no_grad():
         for batch in tqdm(valid_loader):
             images = batch["image"].to(device)
             gt = batch["mask"].to(device)
-
+            
             out_mask = model(images)
 
             loss_segmentation = criterion(out_mask, gt)
@@ -378,14 +379,33 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             
             targets.extend(list(gt))
             outputs.extend(list(out_mask))
+            example_images.extend(list(images.cpu()))
+            image_names.extend(list(batch['image_path']))
+            
+    dice, best_dice = seg_metrics.dice_coeff(outputs, targets)  
+    jaccard, best_iou = seg_metrics.jaccard_coeff(outputs, targets) 
 
-    dice = seg_metrics.dice_coeff(outputs, targets).item()  
-    jaccard = seg_metrics.jaccard_coeff(outputs, targets).item() 
-
+    examples = []
+    for (i, val) in best_dice:
+        examples.append(wb_mask(
+            example_images[i], 
+            outputs[i], 
+            targets[i],
+            f"Dice : {val}, Path : {image_names[i]}"
+        ))
+    for (i, val) in best_iou:
+        examples.append(wb_mask(
+            example_images[i], 
+            outputs[i], 
+            targets[i],
+            f"IOU : {val}, Path : {image_names[i]}"
+        ))
+        
     valid_metrics = {
         "valid_loss_segmentation": segmentation_loss.avg,
-        "valid_dice": dice,
-        "valid_jaccard": jaccard,
+        "valid_dice": dice.item(),
+        "valid_jaccard": jaccard.item(),
+        "examples": examples,
     }
     wandb.log(valid_metrics)
 
@@ -417,13 +437,13 @@ def test(model, test_loader, criterion):
             targets.extend(list(gt))
             outputs.extend(list(out_mask))
 
-    dice = seg_metrics.dice_coeff(outputs, targets).item()  
-    jaccard = seg_metrics.jaccard_coeff(outputs, targets).item() 
+    dice, _ = seg_metrics.dice_coeff(outputs, targets)  
+    jaccard, _ = seg_metrics.jaccard_coeff(outputs, targets) 
 
     test_metrics = {
         "test_loss_segmentation": segmentation_loss.avg,
-        "test_dice": dice,
-        "test_jaccard": jaccard,
+        "test_dice": dice.item(),
+        "test_jaccard": jaccard.item(),
     }
     wandb.log(test_metrics)
     # wandb.log(

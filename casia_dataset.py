@@ -102,7 +102,8 @@ class CASIA(Dataset):
         # attn_mask_image = img_to_tensor(attn_mask_image).unsqueeze(0)
 
         return {
-            "image": image, 
+            "image": image,
+            "image_path" : image_path, 
             "label": label, 
             "mask": mask_image, 
             # "attn_mask": attn_mask_image
