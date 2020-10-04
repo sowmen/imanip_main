@@ -40,14 +40,15 @@ from sim_dataset import SimDataset
 OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
-    "epochs": 5,
-    "train_batch_size": 30,
+    "epochs": 100,
+    "train_batch_size": 64,
     "valid_batch_size": 128,
     "optimizer": "adam",
     "learning_rate": 0.001959,
     "weight_decay": 0.0005938,
     "schedule_patience": 3,
     "schedule_factor": 0.2569,
+    'sampling':'bilinear',
     "model": "Self Unet_end (decoder)",
 }
 VAL_FOLD = 0
@@ -78,7 +79,7 @@ def train(name, df, data_root, patch_size):
     # model = SMP_DIY(num_classes=6)
     
     encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
-    model = UnetB4(encoder, out_channels=1)
+    model = UnetB4(encoder, out_channels=1, sampling=config.sampling)
     model.to(device)
 
     normalize = {
@@ -172,6 +173,9 @@ def train(name, df, data_root, patch_size):
     for epoch in range(config.epochs):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
+
+        if epoch == 10:
+            model.encoder.unfreeze()
 
         train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
 
@@ -482,10 +486,10 @@ if __name__ == "__main__":
     patch_size = 64
     DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_64"
 
-    df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=0.3).reset_index(drop=True)
+    df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"Logging test_{patch_size}" + config_defaults["model"],
+        name=f"224_CASIA_{patch_size}" + config_defaults["model"],
         df=df,
         data_root=DATA_ROOT,
         patch_size=patch_size,
