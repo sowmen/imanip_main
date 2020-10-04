@@ -8,11 +8,11 @@ from segmentation.timm_efficientnet import EfficientNet
 
 class SMP_DIY(nn.Module):
     
-    def __init__(self):
+    def __init__(self, num_classes, encoder_checkpoint="", freeze_encoder=False):
         super(SMP_DIY, self).__init__()
         
-        self.encoder = EfficientNet().get_encoder()
-        self.model = smp.Unet('timm-efficientnet-b4', classes=1, encoder_weights='noisy-student') 
+        self.encoder = EfficientNet(encoder_checkpoint=encoder_checkpoint, freeze_encoder=freeze_encoder).get_encoder()
+        self.model = smp.Unet('timm-efficientnet-b4', classes=num_classes, encoder_weights='noisy-student') 
         self.decoder = self.model.decoder 
         self.segmentation_head = self.model.segmentation_head
         

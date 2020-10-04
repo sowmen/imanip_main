@@ -38,7 +38,7 @@ def dice_coeff(outputs : list, targets : list):
             best_idx = i 
         s = s + d
         
-    print(f"Best : {mx_dice}")
+    print(f"Best : {mx_dice}, Count = {torch.sum(targets[best_idx]).item()}")
     return s / (i + 1)
 
 def jaccard_coeff(outputs, targets):

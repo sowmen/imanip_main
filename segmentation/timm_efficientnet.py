@@ -1,3 +1,4 @@
+from pandas.core.arrays import boolean
 import timm
 import torch
 import torch.nn as nn
@@ -81,6 +82,14 @@ class EfficientNet(nn.Module):
                     s = item[0]
                     encoder_dict[s[s.find('encoder')+len('encoder')+1:]] = item[1]
             super().load_state_dict(encoder_dict) 
+        
+        def freeze(self):
+            for param in super().parameters():
+                param.requires_grad = False
+                
+        def unfreeze(self):
+            for param in super().parameters():
+                param.requires_grad = True
 
     def get_encoder(self):
         return self.encoder
