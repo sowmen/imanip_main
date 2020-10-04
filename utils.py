@@ -122,15 +122,3 @@ def image2np(image: torch.Tensor) -> np.ndarray:
     "Convert from torch style `image` to numpy/matplotlib style."
     res = image.cpu().permute(1, 2, 0).numpy()
     return res[..., 0] if res.shape[2] == 1 else res
-
-
-def wb_mask(bg_img, pred_mask, true_mask, caption):
-    labels = {0: "real", 1: "fake"}
-    return wandb.Image(
-        bg_img,
-        masks={
-            "prediction": {"mask_data": image2np(pred_mask), "class_labels": labels},
-            "ground truth": {"mask_data": image2np(true_mask), "class_labels": labels},
-        },
-        caption=caption,
-    )

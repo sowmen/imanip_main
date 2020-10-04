@@ -38,8 +38,8 @@ def dice_coeff(outputs : list, targets : list):
             best_idx = i 
         s = s + d
         
-    print(f"Best Dice: {mx_dice}, Count = {torch.sum(targets[best_idx]).item()}")
-    return s / (i + 1), [(best_idx, mx_dice)]
+    print(f"Best Dice: {mx_dice}, Count = {torch.sum(targets[best_idx]).item()}, IDX : {best_idx}")
+    return s / (i + 1), (best_idx, mx_dice)
 
 def jaccard_coeff(outputs, targets):
     """jaccard coeff for batches"""
@@ -60,8 +60,8 @@ def jaccard_coeff(outputs, targets):
             best_idx = i 
         s = s + d
         
-    print(f"Best IOU: {mx_iou}, Count = {torch.sum(targets[best_idx]).item()}")
-    return s / (i + 1), [(best_idx, mx_iou)]
+    print(f"Best IOU: {mx_iou}, Count = {torch.sum(targets[best_idx]).item()}, IDX : {best_idx}")
+    return s / (i + 1), (best_idx, mx_iou)
 
 def sensitivity(outputs, targets):
     true_positives = torch.sum(torch.round(torch.clamp(targets * outputs, 0, 1)))

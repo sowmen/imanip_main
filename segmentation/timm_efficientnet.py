@@ -27,8 +27,7 @@ class EfficientNet(nn.Module):
             self.encoder.load_weights(encoder_checkpoint)
 
         if freeze_encoder:
-            for param in self.encoder.parameters():
-                param.requires_grad = False
+            self.encoder.freeze()
 
     def forward(self, x):
         x, _ = self.encoder(x)
@@ -75,6 +74,7 @@ class EfficientNet(nn.Module):
             return x, (start_outputs, end_outputs), smp_outputs 
         
         def load_weights(self, checkpoint=""):
+            print(f'--------- Loaded Checkpoint: {checkpoint} ----------')
             checkpoint = torch.load(checkpoint)
             encoder_dict = OrderedDict()
             for item in checkpoint.items():
@@ -82,7 +82,7 @@ class EfficientNet(nn.Module):
                     s = item[0]
                     encoder_dict[s[s.find('encoder')+len('encoder')+1:]] = item[1]
             super().load_state_dict(encoder_dict) 
-            print(f'--------- Loaded Checkpoint: {checkpoint} ----------')
+            
         
         def freeze(self):
             for param in super().parameters():

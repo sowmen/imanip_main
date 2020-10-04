@@ -28,27 +28,27 @@ import wandb
 # from neptunecontrib.monitoring.metrics import *
 
 from casia_dataset import CASIA
-from segmentation.timm_efficient_unet import get_efficientunet
 from segmentation.timm_efficientnet import EfficientNet
 import seg_metrics
 from pytorch_toolbelt import losses
 from utils import *
 import segmentation_models_pytorch as smp
-from segmentation.smp_effb4 import SMP_DIY 
+from segmentation.smp_effb4 import SMP_DIY
+from segmentation.timm_unetb4 import UnetB4 
 from sim_dataset import SimDataset
 
 OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
-    "epochs": 100,
-    "train_batch_size": 35,
-    "valid_batch_size": 64,
+    "epochs": 10,
+    "train_batch_size": 30,
+    "valid_batch_size": 128,
     "optimizer": "adam",
     "learning_rate": 0.001959,
     "weight_decay": 0.0005938,
     "schedule_patience": 3,
     "schedule_factor": 0.2569,
-    "model": "smp decoder",
+    "model": "Self Unet_end (decoder)",
 }
 VAL_FOLD = 0
 TEST_FOLD = 9
@@ -75,7 +75,9 @@ def train(name, df, data_root, patch_size):
     #     # freeze_encoder=True
     # )
     # model = smp.Unet('timm-efficientnet-b4', classes=6, encoder_weights='imagenet')
-    model = SMP_DIY(num_classes=1, encoder_checkpoint='64_encoder.h5', freeze_encoder=True)
+    # model = SMP_DIY(num_classes=6)
+    encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
+    model = UnetB4(encoder, out_channels=1)
     model.to(device)
 
     normalize = {
@@ -98,16 +100,17 @@ def train(name, df, data_root, patch_size):
         albumentations.pytorch.ToTensor()
     ])
 
-    # trans = transforms.Compose([
-    #     transforms.ToTensor(),
-    #     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) # imagenet
-    # ])
+    #region SIMULATION
+    trans = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) # imagenet
+    ])
 
-    # train_set = SimDataset(2000, transform = trans)
-    # train_loader = DataLoader(train_set, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
-    # val_set = SimDataset(200, transform = trans)
-    # valid_loader = DataLoader(val_set, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
-
+    train_set = SimDataset(2000, transform = trans)
+    train_loader = DataLoader(train_set, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
+    val_set = SimDataset(500, transform = trans)
+    valid_loader = DataLoader(val_set, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
+    #endregion
 
     # -------------------------------- CREATE DATASET and DATALOADER --------------------------
     train_dataset = CASIA(
@@ -337,9 +340,10 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         # gc.collect()
         # torch.cuda.empty_cache()
 
+    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~")
     dice, _ = seg_metrics.dice_coeff(outputs, targets) 
     jaccard, _ = seg_metrics.jaccard_coeff(outputs, targets)  
-        
+    print("~~~~~~~~~~~~~~~~~~~~~~~~~")
 
     train_metrics = {
         "train_loss_segmentation": segmentation_loss.avg,
@@ -379,26 +383,18 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             targets.extend(list(gt))
             outputs.extend(list(out_mask))
             example_images.extend(list(images.cpu()))
-            image_names.extend(list(batch['image_path']))
-            
+            image_names.extend(batch["image_path"])
+
+    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~")       
     dice, best_dice = seg_metrics.dice_coeff(outputs, targets)  
     jaccard, best_iou = seg_metrics.jaccard_coeff(outputs, targets) 
+    print("~~~~~~~~~~~~~~~~~~~~~~~~~")
 
     examples = []
-    for (i, val) in best_dice:
-        examples.append(wb_mask(
-            example_images[i], 
-            outputs[i], 
-            targets[i],
-            f"Dice : {val}, Path : {image_names[i]}"
-        ))
-    for (i, val) in best_iou:
-        examples.append(wb_mask(
-            example_images[i], 
-            outputs[i], 
-            targets[i],
-            f"IOU : {val}, Path : {image_names[i]}"
-        ))
+    caption = f"Dice:{best_dice[1]}, IOU:{best_iou[1]} Path : {image_names[best_dice[0]]}"
+    examples.append(wandb.Image(example_images[best_dice[0]],caption=caption))
+    examples.append(wandb.Image(image2np(outputs[best_dice[0]]),caption='PRED'))
+    examples.append(wandb.Image(image2np(targets[best_dice[0]]),caption='GT'))
         
     valid_metrics = {
         "valid_loss_segmentation": segmentation_loss.avg,
@@ -483,10 +479,10 @@ if __name__ == "__main__":
     patch_size = 64
     DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_64"
 
-    df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
+    df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=0.3).reset_index(drop=True)
 
     train(
-        name=f"Simulation_{patch_size}" + config_defaults["model"],
+        name=f"Logging test_{patch_size}" + config_defaults["model"],
         df=df,
         data_root=DATA_ROOT,
         patch_size=patch_size,
