@@ -199,6 +199,7 @@ def train(name, df, data_root, patch_size):
     test(model, test_loader, criterion)
     wandb.save(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))
 
+#region DICE TEST
 ####################################################################################
 # def predict(X, threshold):
 #     X_p = np.copy(X)
@@ -299,7 +300,7 @@ def train(name, df, data_root, patch_size):
 #     print("Loss: %0.4f | dice: %0.4f | dice_neg: %0.4f | dice_pos: %0.4f | IoU: %0.4f" % (epoch_loss, dice, dice_neg, dice_pos, iou))
 #     return dice, iou
 #######################################################################################
-
+#endregion
     
 def train_epoch(model, train_loader, optimizer, criterion, epoch):
     model.train()
@@ -444,6 +445,8 @@ def test(model, test_loader, criterion):
         "test_jaccard": jaccard.item(),
     }
     wandb.log(test_metrics)
+    
+    #region TEST LOGGING
     # wandb.log(
     #     {
     #         "test_roc_auc_curve": skplt.metrics.plot_roc(
@@ -469,7 +472,7 @@ def test(model, test_loader, criterion):
     # log_lift_curve(y_test, y_test_pred)
     # log_prediction_distribution(y_test, y_test_pred[:, 1])
     # log_class_metrics_by_threshold(y_test, y_test_pred[:, 1])
-
+    #endregion
 
 def expand_prediction(arr):
     arr_reshaped = arr.reshape(-1, 1)
@@ -483,7 +486,7 @@ if __name__ == "__main__":
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"224_CASIA_{patch_size}" + config_defaults["model"],
+        name=f"Simulation_{patch_size}" + config_defaults["model"],
         df=df,
         data_root=DATA_ROOT,
         patch_size=patch_size,
