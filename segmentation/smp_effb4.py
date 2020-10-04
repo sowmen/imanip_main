@@ -24,6 +24,7 @@ class SMP_DIY(nn.Module):
     def forward(self, x):
         _, _, features = self.encoder(x)
         x = self.decoder(*features)
+        print(x.size())
         x = self.segmentation_head(x)
-        
+        print(x.size())
         return x

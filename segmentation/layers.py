@@ -189,3 +189,36 @@ def custom_head(in_channels, out_channels):
         nn.Dropout(),
         nn.Linear(512, out_channels)
     )
+
+def upsize2(x, sampling='nearest'):
+    #x = F.interpolate(x, size=e.shape[2:], mode='nearest')
+    x = F.interpolate(x, scale_factor=2, mode=sampling)
+    return x
+
+class Swish(nn.Module):
+    def forward(self, x):
+        return x * torch.sigmoid(x)
+    
+class Decode(nn.Module):
+    def __init__(self, in_channel, out_channel):
+        super(Decode, self).__init__()
+
+        self.top = nn.Sequential(
+            nn.Conv2d(in_channel, out_channel//2, kernel_size=3, stride=1, padding=1, bias=False),
+            BatchNorm2d( out_channel//2),
+            Swish(), #nn.ReLU(inplace=True),
+            #nn.Dropout(0.1),
+
+            nn.Conv2d(out_channel//2, out_channel//2, kernel_size=3, stride=1, padding=1, bias=False),
+            BatchNorm2d(out_channel//2),
+            Swish(), #nn.ReLU(inplace=True),
+            #nn.Dropout(0.1),
+
+            nn.Conv2d(out_channel//2, out_channel, kernel_size=1, stride=1, padding=0, bias=False),
+            BatchNorm2d(out_channel),
+            Swish(), #nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x):
+        x = self.top(torch.cat(x, 1))
+        return x
