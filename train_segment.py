@@ -28,27 +28,27 @@ import wandb
 # from neptunecontrib.monitoring.metrics import *
 
 from casia_dataset import CASIA
-from segmentation.timm_efficient_unet import get_efficientunet
 from segmentation.timm_efficientnet import EfficientNet
 import seg_metrics
 from pytorch_toolbelt import losses
 from utils import *
 import segmentation_models_pytorch as smp
-from segmentation.smp_effb4 import SMP_DIY 
+from segmentation.smp_effb4 import SMP_DIY
+from segmentation.timm_unetb4 import UnetB4 
 from sim_dataset import SimDataset
 
 OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
-    "epochs": 20,
-    "train_batch_size": 25,
-    "valid_batch_size": 64,
+    "epochs": 100,
+    "train_batch_size": 64,
+    "valid_batch_size": 128,
     "optimizer": "adam",
     "learning_rate": 0.001959,
     "weight_decay": 0.0005938,
     "schedule_patience": 3,
     "schedule_factor": 0.2569,
-    "model": "Unet(end-end)",
+    "model": "Self Unet_end (decoder)",
 }
 VAL_FOLD = 0
 TEST_FOLD = 9
@@ -75,76 +75,78 @@ def train(name, df, data_root, patch_size):
     #     # freeze_encoder=True
     # )
     # model = smp.Unet('timm-efficientnet-b4', classes=6, encoder_weights='imagenet')
-    model = SMP_DIY(num_classes=6)
+    # model = SMP_DIY(num_classes=6)
+    encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
+    model = UnetB4(encoder, out_channels=1)
     model.to(device)
 
-    # normalize = {
-    #     "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
-    #     "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
-    # }
-    # train_aug = albumentations.Compose([
-    #     augmentations.transforms.Flip(p=0.5),
-    #     augmentations.transforms.Rotate((-45, 45), p=0.4),
-    #     augmentations.transforms.ShiftScaleRotate(p=0.3),
-    #     augmentations.transforms.HueSaturationValue(p=0.3),
-    #     augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
-    #     augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
-    #     albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-    #     albumentations.pytorch.ToTensor()
-    # ])
-    # valid_aug = albumentations.Compose([
-    #     augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
-    #     albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-    #     albumentations.pytorch.ToTensor()
-    # ])
-
-    trans = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) # imagenet
+    normalize = {
+        "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
+        "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
+    }
+    train_aug = albumentations.Compose([
+        augmentations.transforms.Flip(p=0.5),
+        augmentations.transforms.Rotate((-45, 45), p=0.4),
+        augmentations.transforms.ShiftScaleRotate(p=0.3),
+        augmentations.transforms.HueSaturationValue(p=0.3),
+        augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
+        augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+        albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+        albumentations.pytorch.ToTensor()
+    ])
+    valid_aug = albumentations.Compose([
+        augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+        albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+        albumentations.pytorch.ToTensor()
     ])
 
-    train_set = SimDataset(2000, transform = trans)
-    train_loader = DataLoader(train_set, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
-    val_set = SimDataset(200, transform = trans)
-    valid_loader = DataLoader(val_set, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
+    # trans = transforms.Compose([
+    #     transforms.ToTensor(),
+    #     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) # imagenet
+    # ])
+
+    # train_set = SimDataset(2000, transform = trans)
+    # train_loader = DataLoader(train_set, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
+    # val_set = SimDataset(500, transform = trans)
+    # valid_loader = DataLoader(val_set, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
 
 
     # -------------------------------- CREATE DATASET and DATALOADER --------------------------
-    # train_dataset = CASIA(
-    #     dataframe=df,
-    #     mode="train",
-    #     val_fold=VAL_FOLD,
-    #     test_fold=TEST_FOLD,
-    #     root_dir=data_root,
-    #     patch_size=patch_size,
-    #     equal_sample=False,
-    #     transforms=train_aug,
-    # )
-    # train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
+    train_dataset = CASIA(
+        dataframe=df,
+        mode="train",
+        val_fold=VAL_FOLD,
+        test_fold=TEST_FOLD,
+        root_dir=data_root,
+        patch_size=patch_size,
+        equal_sample=False,
+        transforms=train_aug,
+    )
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
 
-    # valid_dataset = CASIA(
-    #     dataframe=df,
-    #     mode="val",
-    #     val_fold=VAL_FOLD,
-    #     test_fold=TEST_FOLD,
-    #     root_dir=data_root,
-    #     patch_size=patch_size,
-    #     equal_sample=False,
-    #     transforms=valid_aug,
-    # )
-    # valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
+    valid_dataset = CASIA(
+        dataframe=df,
+        mode="val",
+        val_fold=VAL_FOLD,
+        test_fold=TEST_FOLD,
+        root_dir=data_root,
+        patch_size=patch_size,
+        equal_sample=False,
+        transforms=valid_aug,
+    )
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
 
-    # test_dataset = CASIA(
-    #     dataframe=df,
-    #     mode="test",
-    #     val_fold=VAL_FOLD,
-    #     test_fold=TEST_FOLD,
-    #     root_dir=data_root,
-    #     patch_size=patch_size,
-    #     equal_sample=False,
-    #     transforms=valid_aug,
-    # )
-    # test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
+    test_dataset = CASIA(
+        dataframe=df,
+        mode="test",
+        val_fold=VAL_FOLD,
+        test_fold=TEST_FOLD,
+        root_dir=data_root,
+        patch_size=patch_size,
+        equal_sample=False,
+        transforms=valid_aug,
+    )
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
 
     optimizer = get_optimizer(model, config.optimizer,config.learning_rate, config.weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -196,7 +198,7 @@ def train(name, df, data_root, patch_size):
 
     model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")))
 
-    # test(model, test_loader, criterion)
+    test(model, test_loader, criterion)
     wandb.save(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))
 
 ####################################################################################
@@ -463,7 +465,7 @@ if __name__ == "__main__":
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"Simulation_{patch_size}" + config_defaults["model"],
+        name=f"CASIA_224_{patch_size}" + config_defaults["model"],
         df=df,
         data_root=DATA_ROOT,
         patch_size=patch_size,

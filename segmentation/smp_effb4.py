@@ -12,11 +12,11 @@ class SMP_DIY(nn.Module):
         super(SMP_DIY, self).__init__()
         
         self.encoder = EfficientNet(encoder_checkpoint=encoder_checkpoint, freeze_encoder=freeze_encoder).get_encoder()
-        self.model = smp.Unet('timm-efficientnet-b4', classes=num_classes, encoder_weights='noisy-student') 
-        self.decoder = self.model.decoder 
-        self.segmentation_head = self.model.segmentation_head
+        model = smp.Unet('timm-efficientnet-b4', classes=num_classes, encoder_weights='noisy-student') 
+        self.decoder = model.decoder 
+        self.segmentation_head = model.segmentation_head
         
-        del self.model 
+        del model 
         gc.collect() 
         
         
@@ -24,7 +24,5 @@ class SMP_DIY(nn.Module):
     def forward(self, x):
         _, _, features = self.encoder(x)
         x = self.decoder(*features)
-        print(x.size())
         x = self.segmentation_head(x)
-        print(x.size())
         return x
