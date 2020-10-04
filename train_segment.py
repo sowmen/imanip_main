@@ -40,7 +40,7 @@ from sim_dataset import SimDataset
 OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
-    "epochs": 10,
+    "epochs": 5,
     "train_batch_size": 30,
     "valid_batch_size": 128,
     "optimizer": "adam",
@@ -340,7 +340,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         # gc.collect()
         # torch.cuda.empty_cache()
 
-    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~")
+    print("~~~~~~~~~~~~~~~~~~~~~~~~~")
     dice, _ = seg_metrics.dice_coeff(outputs, targets) 
     jaccard, _ = seg_metrics.jaccard_coeff(outputs, targets)  
     print("~~~~~~~~~~~~~~~~~~~~~~~~~")
@@ -349,6 +349,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         "train_loss_segmentation": segmentation_loss.avg,
         "train_dice": dice.item(),
         "train_jaccard": jaccard.item(),
+        "epoch" : epoch
     }
     wandb.log(train_metrics)
 
@@ -385,22 +386,23 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             example_images.extend(list(images.cpu()))
             image_names.extend(batch["image_path"])
 
-    print("\n~~~~~~~~~~~~~~~~~~~~~~~~~")       
+    print("~~~~~~~~~~~~~~~~~~~~~~~~~")       
     dice, best_dice = seg_metrics.dice_coeff(outputs, targets)  
     jaccard, best_iou = seg_metrics.jaccard_coeff(outputs, targets) 
     print("~~~~~~~~~~~~~~~~~~~~~~~~~")
 
     examples = []
-    caption = f"Dice:{best_dice[1]}, IOU:{best_iou[1]} Path : {image_names[best_dice[0]]}"
+    caption = f"{epoch}Dice:{best_dice[1]}, IOU:{best_iou[1]} Path : {image_names[best_dice[0]]}"
     examples.append(wandb.Image(example_images[best_dice[0]],caption=caption))
-    examples.append(wandb.Image(image2np(outputs[best_dice[0]]),caption='PRED'))
-    examples.append(wandb.Image(image2np(targets[best_dice[0]]),caption='GT'))
+    examples.append(wandb.Image(outputs[best_dice[0]],caption=f'{epoch}PRED'))
+    examples.append(wandb.Image(targets[best_dice[0]],caption=f'{epoch}GT'))
         
     valid_metrics = {
         "valid_loss_segmentation": segmentation_loss.avg,
         "valid_dice": dice.item(),
         "valid_jaccard": jaccard.item(),
         "examples": examples,
+        "epoch" : epoch
     }
     wandb.log(valid_metrics)
 
