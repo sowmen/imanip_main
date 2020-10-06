@@ -32,24 +32,25 @@ from segmentation.timm_efficientnet import EfficientNet
 import seg_metrics
 from pytorch_toolbelt import losses
 from utils import *
-import segmentation_models_pytorch as smp
-from segmentation.smp_effb4 import SMP_DIY
-from segmentation.timm_unetb4 import UnetB4 
+# import segmentation_models_pytorch as smp
+# from segmentation.smp_effb4 import SMP_DIY
+from segmentation.timm_unetb4 import UnetB4
+from segmentation.timm_unetpp import UnetPP 
 from sim_dataset import SimDataset
 
 OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
-    "epochs": 60,
-    "train_batch_size": 45,
-    "valid_batch_size": 100,
+    "epochs": 5,
+    "train_batch_size": 10,
+    "valid_batch_size": 25,
     "optimizer": "adam",
     "learning_rate": 0.001959,
     "weight_decay": 0.0005938,
     "schedule_patience": 3,
     "schedule_factor": 0.2569,
-    'sampling':'bilinear',
-    "model": "Self Unet-unfreeze-encoder(start layer)",
+    'sampling':'nearest',
+    "model": "Unet++ unfreeze-encoder",
 }
 VAL_FOLD = 0
 TEST_FOLD = 9
@@ -78,29 +79,30 @@ def train(name, df, data_root, patch_size):
     # model = smp.Unet('timm-efficientnet-b4', classes=6, encoder_weights='imagenet')
     # model = SMP_DIY(num_classes=6)
     
-    encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
-    model = UnetB4(encoder, num_classes=1, sampling=config.sampling, layer='start')
+    encoder = EfficientNet(encoder_checkpoint='', freeze_encoder=False).get_encoder()
+    # model = UnetB4(encoder, num_classes=1, sampling=config.sampling, layer='start')
+    model = UnetPP(encoder, num_classes=6, sampling=config.sampling)
     model.to(device)
 
-    normalize = {
-        "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
-        "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
-    }
-    train_aug = albumentations.Compose([
-        augmentations.transforms.Flip(p=0.5),
-        augmentations.transforms.Rotate((-45, 45), p=0.4),
-        augmentations.transforms.ShiftScaleRotate(p=0.3),
-        augmentations.transforms.HueSaturationValue(p=0.3),
-        augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
-        augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
-        albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-        albumentations.pytorch.ToTensor()
-    ])
-    valid_aug = albumentations.Compose([
-        augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
-        albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-        albumentations.pytorch.ToTensor()
-    ])
+    # normalize = {
+    #     "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
+    #     "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
+    # }
+    # train_aug = albumentations.Compose([
+    #     augmentations.transforms.Flip(p=0.5),
+    #     augmentations.transforms.Rotate((-45, 45), p=0.4),
+    #     augmentations.transforms.ShiftScaleRotate(p=0.3),
+    #     augmentations.transforms.HueSaturationValue(p=0.3),
+    #     augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
+    #     augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+    #     albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+    #     albumentations.pytorch.ToTensor()
+    # ])
+    # valid_aug = albumentations.Compose([
+    #     augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+    #     albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+    #     albumentations.pytorch.ToTensor()
+    # ])
 
     #region SIMULATION
     trans = transforms.Compose([
@@ -115,41 +117,41 @@ def train(name, df, data_root, patch_size):
     #endregion
 
     # -------------------------------- CREATE DATASET and DATALOADER --------------------------
-    train_dataset = CASIA(
-        dataframe=df,
-        mode="train",
-        val_fold=VAL_FOLD,
-        test_fold=TEST_FOLD,
-        root_dir=data_root,
-        patch_size=patch_size,
-        equal_sample=False,
-        transforms=train_aug,
-    )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
+    # train_dataset = CASIA(
+    #     dataframe=df,
+    #     mode="train",
+    #     val_fold=VAL_FOLD,
+    #     test_fold=TEST_FOLD,
+    #     root_dir=data_root,
+    #     patch_size=patch_size,
+    #     equal_sample=False,
+    #     transforms=train_aug,
+    # )
+    # train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
 
-    valid_dataset = CASIA(
-        dataframe=df,
-        mode="val",
-        val_fold=VAL_FOLD,
-        test_fold=TEST_FOLD,
-        root_dir=data_root,
-        patch_size=patch_size,
-        equal_sample=False,
-        transforms=valid_aug,
-    )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
+    # valid_dataset = CASIA(
+    #     dataframe=df,
+    #     mode="val",
+    #     val_fold=VAL_FOLD,
+    #     test_fold=TEST_FOLD,
+    #     root_dir=data_root,
+    #     patch_size=patch_size,
+    #     equal_sample=False,
+    #     transforms=valid_aug,
+    # )
+    # valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
 
-    test_dataset = CASIA(
-        dataframe=df,
-        mode="test",
-        val_fold=VAL_FOLD,
-        test_fold=TEST_FOLD,
-        root_dir=data_root,
-        patch_size=patch_size,
-        equal_sample=False,
-        transforms=valid_aug,
-    )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
+    # test_dataset = CASIA(
+    #     dataframe=df,
+    #     mode="test",
+    #     val_fold=VAL_FOLD,
+    #     test_fold=TEST_FOLD,
+    #     root_dir=data_root,
+    #     patch_size=patch_size,
+    #     equal_sample=False,
+    #     transforms=valid_aug,
+    # )
+    # test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
 
     optimizer = get_optimizer(model, config.optimizer,config.learning_rate, config.weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -204,7 +206,7 @@ def train(name, df, data_root, patch_size):
 
     model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")))
 
-    test(model, test_loader, criterion)
+    # test(model, test_loader, criterion)
     wandb.save(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))
 
 #region DICE TEST
@@ -388,25 +390,25 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             
             targets.extend(list(gt))
             outputs.extend(list(out_mask))
-            example_images.extend(list(images.cpu()))
-            image_names.extend(batch["image_path"])
+            # example_images.extend(list(images.cpu()))
+            # image_names.extend(batch["image_path"])
 
     print("~~~~~~~~~~~~~~~~~~~~~~~~~")       
     dice, best_dice = seg_metrics.dice_coeff(outputs, targets)  
     jaccard, best_iou = seg_metrics.jaccard_coeff(outputs, targets) 
     print("~~~~~~~~~~~~~~~~~~~~~~~~~")
 
-    examples = []
-    caption = f"{epoch}Dice:{best_dice[1]}, IOU:{best_iou[1]} Path : {image_names[best_dice[0]]}"
-    examples.append(wandb.Image(example_images[best_dice[0]],caption=caption))
-    examples.append(wandb.Image(outputs[best_dice[0]],caption=f'{epoch}PRED'))
-    examples.append(wandb.Image(targets[best_dice[0]],caption=f'{epoch}GT'))
+    # examples = []
+    # caption = f"{epoch}Dice:{best_dice[1]}, IOU:{best_iou[1]} Path : {image_names[best_dice[0]]}"
+    # examples.append(wandb.Image(example_images[best_dice[0]],caption=caption))
+    # examples.append(wandb.Image(outputs[best_dice[0]],caption=f'{epoch}PRED'))
+    # examples.append(wandb.Image(targets[best_dice[0]],caption=f'{epoch}GT'))
         
     valid_metrics = {
         "valid_loss_segmentation": segmentation_loss.avg,
         "valid_dice": dice.item(),
         "valid_jaccard": jaccard.item(),
-        "examples": examples,
+        # "examples": examples,
         "epoch" : epoch
     }
     wandb.log(valid_metrics)
@@ -489,7 +491,7 @@ if __name__ == "__main__":
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
 
     train(
-        name=f"224_CASIA_{patch_size}" + config_defaults["model"],
+        name=f"Simulation_{patch_size}" + config_defaults["model"],
         df=df,
         data_root=DATA_ROOT,
         patch_size=patch_size,
