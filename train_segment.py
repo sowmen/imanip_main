@@ -79,7 +79,7 @@ def train(name, df, data_root, patch_size):
     # model = SMP_DIY(num_classes=6)
     
     encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
-    model = UnetB4(encoder, out_channels=1, sampling=config.sampling, layer='start')
+    model = UnetB4(encoder, num_classes=1, sampling=config.sampling, layer='start')
     model.to(device)
 
     normalize = {

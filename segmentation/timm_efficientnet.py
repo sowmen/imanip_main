@@ -1,4 +1,3 @@
-from pandas.core.arrays import boolean
 import timm
 import torch
 import torch.nn as nn

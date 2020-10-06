@@ -7,16 +7,16 @@ from segmentation.layers import Decode, upsize2
 import copy
 
 class UnetB4(nn.Module):
-    def __init__(self, encoder, in_channels=3, out_channels=1, layer='end', sampling='nearest'):
+    def __init__(self, encoder, in_channels=3, num_classes=1, layer='end', sampling='nearest'):
         super(UnetB4, self).__init__()
         
         self.encoder = encoder
         self.in_channels = in_channels
-        self.out_channels = out_channels
+        self.num_classes = num_classes
         self.layer = layer
         self.sampling = sampling
         
-        
+        # BOTTOM UP -> LOWEST DECODER IS 0
         if self.layer == 'start':
             self.size = [1792,112,56,32,24]
         elif self.layer == 'end':
@@ -28,8 +28,8 @@ class UnetB4(nn.Module):
         self.decode3 = Decode(128 + self.size[4], 64)
         self.decode_input = Decode(64 + self.in_channels, 32)
         
-        self.final_conv = nn.Conv2d(32, self.out_channels, kernel_size=1)
-        # self.final_conv = nn.Conv2d(32, self.out_channels, kernel_size=3, padding=1)
+        self.final_conv = nn.Conv2d(32, self.num_classes, kernel_size=1)
+        # self.final_conv = nn.Conv2d(32, self.num_classes, kernel_size=3, padding=1)
         
     def forward(self, x):
         _input = copy.deepcopy(x)
