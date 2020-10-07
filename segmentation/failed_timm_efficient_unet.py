@@ -65,7 +65,7 @@ class EfficientUnet(nn.Module):
     def forward(self, x):
         input_ = x
 
-        x, (start, end) = self.encoder(x)
+        x, (start, end), _ = self.encoder(x)
 
         # print(x.size())
         x = self.up_conv1(x)

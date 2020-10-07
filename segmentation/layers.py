@@ -191,7 +191,6 @@ def custom_head(in_channels, out_channels):
     )
 
 def upsize2(x, sampling='nearest'):
-    #x = F.interpolate(x, size=e.shape[2:], mode='nearest')
     x = F.interpolate(x, scale_factor=2, mode=sampling)
     return x
 
@@ -218,4 +217,32 @@ class Decode(nn.Module):
 
     def forward(self, x):
         x = self.top(torch.cat(x, 1))
+        return x
+    
+class BnInception(nn.Module):
+    def __init__(self,  in_channels, out_channels, kernel_size=[1,3,5], padding =[0,1,2]):
+        super(BnInception, self).__init__()
+        
+        self.conv_c0 = nn.Conv2d(in_channels, out_channels, kernel_size[0], padding=padding[0])
+        self.conv_c1 = nn.Conv2d(in_channels, out_channels, kernel_size[1], padding=padding[1])
+        self.conv_c2 = nn.Conv2d(in_channels, out_channels, kernel_size[2], padding=padding[2])
+        self.batchNorm1 = nn.BatchNorm2d(int(out_channels*3))
+        self.relu = nn.ReLU(inplace=True)
+
+        self.final_conv = nn.Conv2d(3*out_channels, out_channels, kernel_size=1)
+        self.batchNorm2 = nn.BatchNorm2d(out_channels)
+        
+    def forward(self, x):
+        x = torch.cat(x, dim=1)
+        x0 = self.conv_c0(x)
+        x1 = self.conv_c1(x)
+        x2 = self.conv_c2(x)
+        x = torch.cat([x0,x1,x2], dim=1)
+        x = self.batchNorm1(x)
+        x = self.relu(x)
+        
+        x = self.final_conv(x)
+        x = self.batchNorm2(x)
+        x = self.relu(x)
+        # print(x.size())
         return x
