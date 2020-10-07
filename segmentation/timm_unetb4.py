@@ -3,7 +3,7 @@ sys.path.append('../image_manipulation/')
 
 import torch
 import torch.nn as nn
-from segmentation.layers import Decode, upsize2
+from segmentation.layers import Decode, upsize2, BnInception
 import copy
 
 class UnetB4(nn.Module):
@@ -29,6 +29,50 @@ class UnetB4(nn.Module):
         self.decode_input = Decode(64 + self.in_channels, 32)
         
         self.final_conv = nn.Conv2d(32, self.num_classes, kernel_size=1)
+        # self.final_conv = nn.Conv2d(32, self.num_classes, kernel_size=3, padding=1)
+        
+    def forward(self, x):
+        _input = copy.deepcopy(x)
+        
+        out, (start, end), _ = self.encoder(x)
+        if self.layer == 'start':
+            layer = start
+        else:
+            layer = end
+            
+        x = self.decode0([upsize2(out, self.sampling), layer.popitem()[1]]) # 1792x8x8 -> 1792x16x16 + 112x16x16 => 512x16x16
+        x = self.decode1([upsize2(x, self.sampling), layer.popitem()[1]])   # 512x16x16 -> 512x32x32 + 56x32x32 => 256x32x32
+        x = self.decode2([upsize2(x, self.sampling), layer.popitem()[1]])   # 256x32x32 -> 256x64x64 + 32x64x64 => 128x64x64
+        x = self.decode3([upsize2(x, self.sampling), layer.popitem()[1]])   # 128x64x64 -> 128x128x128 + 24x128x128 => 64x128x128
+        x = self.decode_input([upsize2(x, self.sampling), _input]) # 64x128x128 -> 64x256x256 + 3x256x256 => 32x256x256
+        
+        x = self.final_conv(x) # 32x256x256 => 1x256x256
+        
+        return x
+    
+class UnetB4_Inception(nn.Module):
+    def __init__(self, encoder, in_channels=3, num_classes=1, layer='end', sampling='nearest'):
+        super(UnetB4_Inception, self).__init__()
+        
+        self.encoder = encoder
+        self.in_channels = in_channels
+        self.num_classes = num_classes
+        self.layer = layer
+        self.sampling = sampling
+        
+        # BOTTOM UP -> LOWEST DECODER IS 0
+        if self.layer == 'start':
+            self.size = [1792,112,56,32,24]
+        elif self.layer == 'end':
+            self.size = [1792,160,56,32,24]
+        
+        self.decode0 = BnInception(self.size[0] + self.size[1], 256)
+        self.decode1 = BnInception(256 + self.size[2], 128)
+        self.decode2 = BnInception(128 + self.size[3], 64)
+        self.decode3 = BnInception(64 + self.size[4], 32)
+        self.decode_input = BnInception(32 + self.in_channels, 16)
+        
+        self.final_conv = nn.Conv2d(16, self.num_classes, kernel_size=1)
         # self.final_conv = nn.Conv2d(32, self.num_classes, kernel_size=3, padding=1)
         
     def forward(self, x):
