@@ -9,23 +9,28 @@ from timm.models.layers.separable_conv import SeparableConv2d
 
 
 class ClassifierBlock(nn.Module):
-    def __init__(self, num_channels):
+    def __init__(self, in_channels):
         super(ClassifierBlock, self).__init__()
 
-        self.conv0 = SeparableConv2d(num_channels, (num_channels // 2))
-        self.bn0 = nn.BatchNorm2d((num_channels // 2))
+        self.conv0 = SeparableConv2d(in_channels, (in_channels // 16))
+        self.bn0 = nn.BatchNorm2d((in_channels // 16))
         self.pool0 = nn.MaxPool2d(kernel_size=3, stride=1)
-        self.dropout = nn.Dropout2d(p=0.3)
+        self.dropout = nn.Dropout2d(p=0.4)
 
-        self.conv1 = SeparableConv2d((num_channels // 2), 1792)
-        self.bn1 = nn.BatchNorm2d(1792)
+        self.conv1 = SeparableConv2d((in_channels // 16), (in_channels // 32))
+        self.bn1 = nn.BatchNorm2d((in_channels // 32))
         self.pool1 = nn.MaxPool2d(kernel_size=3, stride=1)
 
-        self.se0 = SEModule(1792)
-        self.global_pool = SelectAdaptivePool2d(pool_type="max")
-
+        self.se0 = SEModule((in_channels // 32))
+        
+        self.conv2 = SeparableConv2d((in_channels // 32), (in_channels // 64))
+        self.bn2 = nn.BatchNorm2d((in_channels // 64))
+        self.pool2 = nn.MaxPool2d(kernel_size=3, stride=1)
+        
+        self.global_pool = SelectAdaptivePool2d(pool_type="avg")
+        
         self.relu = nn.ReLU(inplace=True)
-        self.linear = nn.Linear(1792, 1)
+        self.linear = nn.Linear((in_channels // 64), 1)
 
     def forward(self, x):
         x = self.conv0(x)
@@ -41,7 +46,13 @@ class ClassifierBlock(nn.Module):
         x = self.dropout(x)
 
         x = self.se0(x)
+        
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.relu(x)
+        x = self.pool2(x)
         x = self.dropout(x)
+        
         x = self.global_pool(x)
 
         x = x.flatten(1)

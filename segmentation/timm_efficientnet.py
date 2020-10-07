@@ -1,4 +1,6 @@
+from segmentation.layers import Swish
 import timm
+from timm.models.layers.classifier import create_classifier
 import torch
 import torch.nn as nn
 import gc
@@ -10,26 +12,41 @@ class EfficientNet(nn.Module):
         self, model_name='tf_efficientnet_b4_ns', num_classes=1, encoder_checkpoint="", freeze_encoder=False
     ):
         super().__init__()
+        
+        self.model_name = model_name
+        self.num_classes = num_classes
+        
         base_model_sequential = timm.create_model(
-            model_name=model_name,
+            model_name=self.model_name,
             pretrained=True,
-            num_classes=num_classes,
+            num_classes=self.num_classes,
         ).as_sequential()
 
-        self.encoder = self.Encoder(model_name, base_model_sequential[:13])
-        self.classifier = base_model_sequential[13:]
+        self.encoder = self.Encoder(self.model_name, base_model_sequential[:13])
+        if encoder_checkpoint:
+            self.encoder.load_weights(encoder_checkpoint)
+        if freeze_encoder:
+            self.encoder.freeze()
+            
+        # self.classifier = base_model_sequential[13:]
 
         del base_model_sequential
         gc.collect()
 
-        if encoder_checkpoint:
-            self.encoder.load_weights(encoder_checkpoint)
-
-        if freeze_encoder:
-            self.encoder.freeze()
+        self.reduce_channels = nn.Sequential(
+            nn.Conv2d(1792, 1792//4, kernel_size=3, padding=1),
+            nn.BatchNorm2d(1792//4),
+            Swish(),
+        )
+        
+        self.global_pool, self.classifier = create_classifier(
+            1792//4, self.num_classes, pool_type='avg')
+        
 
     def forward(self, x):
         x, _, _ = self.encoder(x)
+        x = self.reduce_channels(x)
+        x = self.global_pool(x)
         x = self.classifier(x)
 
         return x
