@@ -34,7 +34,7 @@ class EfficientNet(nn.Module):
         gc.collect()
 
         self.reduce_channels = nn.Sequential(
-            nn.Conv2d(1792, 1792//4, kernel_size=3, padding=1),
+            nn.Conv2d(1792, 1792//4, kernel_size=1),
             nn.BatchNorm2d(1792//4),
             Swish(),
         )
