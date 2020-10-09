@@ -1,6 +1,8 @@
-from segmentation.layers import Swish
+# from segmentation.layers import Swish
 import timm
 from timm.models.layers.classifier import create_classifier
+from timm.models.layers.separable_conv import SeparableConvBnAct
+from timm.models.layers.activations import Swish
 import torch
 import torch.nn as nn
 import gc
@@ -34,9 +36,10 @@ class EfficientNet(nn.Module):
         gc.collect()
 
         self.reduce_channels = nn.Sequential(
-            nn.Conv2d(1792, 1792//4, kernel_size=3, padding=1),
-            nn.BatchNorm2d(1792//4),
-            Swish(),
+            SeparableConvBnAct(1792, 1792//4, act_layer=Swish)
+            # nn.Conv2d(1792, 1792//4, kernel_size=1),
+            # nn.BatchNorm2d(1792//4),
+            # Swish(),
         )
         
         self.global_pool, self.classifier = create_classifier(
@@ -90,7 +93,7 @@ class EfficientNet(nn.Module):
             return x, (start_outputs, end_outputs), smp_outputs 
         
         def load_weights(self, checkpoint=""):
-            print(f'--------- Loaded Checkpoint: {checkpoint} ----------')
+            # print(f'--------- Loaded Checkpoint: {checkpoint} ----------')
             checkpoint = torch.load(checkpoint)
             encoder_dict = OrderedDict()
             for item in checkpoint.items():
