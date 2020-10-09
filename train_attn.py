@@ -23,7 +23,7 @@ import wandb
 # import neptune
 # from neptunecontrib.monitoring.metrics import *
 
-from apex import amp
+# from apex import amp
 
 from utils import *
 from effb4_attention import Efficient_Attention
@@ -36,21 +36,21 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 30,
-    "valid_batch_size": 64,
+    "train_batch_size": 70,
+    "valid_batch_size": 128,
     "optimizer": "adam",
     "learning_rate": 0.001959,
     "weight_decay": 0.0005938,
     "schedule_patience": 3,
     "schedule_factor": 0.2569,
-    "model": "REDUCED EFFNET",
+    "model": "REDUCED EFFNET(Seperable)",
     "attn_map_weight": 0,
 }
 
 TEST_FOLD = 9
 
 
-def train(name, df, data_root, patch_size, VAL_FOLD = 0):
+def train(name, df, data_root, patch_size, VAL_FOLD):
     now = datetime.now()
     dt_string = now.strftime("%d|%m_%H|%M|%S")
     print("Starting -->", dt_string)
@@ -137,6 +137,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD = 0):
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
 
     # model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+    model = nn.DataParallel(model)
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
@@ -147,7 +148,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD = 0):
     criterion = nn.BCEWithLogitsLoss()
     attn_map_criterion = nn.L1Loss()
 
-    es = EarlyStopping(patience=16, mode="max")
+    es = EarlyStopping(patience=15, mode="max")
 
     for epoch in range(config.epochs):
         print(f"Epoch = {epoch}/{config.epochs-1}")
@@ -414,30 +415,30 @@ def expand_prediction(arr):
 
 if __name__ == "__main__":
     # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
-    patch_size = 128
-    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_{patch_size}"
+    patch_size = 'FULL'
+    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
 
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
     acc = 0
     f1 = 0
     loss = 0
     auc = 0
-    # for i in range(0,9):
-    #     print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
-    test_metrics = train(
-        name=f"224CASIA_{patch_size}" + config_defaults["model"],
-        df=df,
-        data_root=DATA_ROOT,
-        patch_size=patch_size,
-        VAL_FOLD=0
-    )
-    acc += test_metrics['test_acc_05']
-    f1 += test_metrics['test_f1_05']
-    loss += test_metrics['test_loss']
-    auc += test_metrics['test_auc']
+    for i in range(0,9):
+        print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
+        test_metrics = train(
+            name=f"(CV)224CASIA_{patch_size}" + config_defaults["model"],
+            df=df,
+            data_root=DATA_ROOT,
+            patch_size=patch_size,
+            VAL_FOLD=i
+        )
+        acc += test_metrics['test_acc_05']
+        f1 += test_metrics['test_f1_05']
+        loss += test_metrics['test_loss']
+        auc += test_metrics['test_auc']
     
-    print(f'ACCURACY : {acc}')
-    print(f'F1 : {f1}')
-    print(f'LOSS : {loss}')
-    print(f'AUC : {auc}')
+    print(f'ACCURACY : {acc/9}')
+    print(f'F1 : {f1/9}')
+    print(f'LOSS : {loss/9}')
+    print(f'AUC : {auc/9}')
 

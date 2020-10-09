@@ -1,4 +1,6 @@
-from segmentation.layers import Swish
+from timm.models.layers.separable_conv import SeparableConvBnAct
+from timm.models.layers.activations import Swish
+# from segmentation.layers import Swish
 import timm
 from timm.models.layers.classifier import create_classifier
 import torch
@@ -34,9 +36,10 @@ class EfficientNet(nn.Module):
         gc.collect()
 
         self.reduce_channels = nn.Sequential(
-            nn.Conv2d(1792, 1792//4, kernel_size=1),
-            nn.BatchNorm2d(1792//4),
-            Swish(),
+            # nn.Conv2d(1792, 1792//4, kernel_size=1),
+            SeparableConvBnAct(1792, 1792//4, act_layer=Swish),
+            # nn.BatchNorm2d(1792//4),
+            # Swish(),
         )
         
         self.global_pool, self.classifier = create_classifier(
