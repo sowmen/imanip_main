@@ -115,6 +115,12 @@ def get_optimizer(model, optimizer, learning_rate, weight_decay):
             lr=learning_rate,
             weight_decay=weight_decay,
         )
+    elif optimizer == "sgd":
+        optimizer = optim.SGD(
+            model.parameters(),
+            lr=learning_rate,
+            weight_decay=weight_decay,
+        )
     return optimizer
 
 

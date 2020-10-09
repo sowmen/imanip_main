@@ -26,31 +26,27 @@ import wandb
 from apex import amp
 
 from utils import *
-from effb4_attention import Efficient_Attention
-from segmentation.timm_efficientnet import EfficientNet
-from casia_dataset import CASIA
 from classifier_dataset import Classifier_Dataset
-from classifier import Classifier2
+from classifier import ClassifierConv, Classifier3
 
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
-    "epochs": 100,
-    "train_batch_size": 32,
-    "valid_batch_size": 64,
+    "epochs": 50,
+    "train_batch_size": 64,
+    "valid_batch_size": 100,
     "optimizer": "adam",
-    "learning_rate": 0.001959,
-    "weight_decay": 0.0005938,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0005,
     "schedule_patience": 3,
-    "schedule_factor": 0.2569,
-    "model": "REDUCED EFFNET (sep)",
-    "attn_map_weight": 0,
+    "schedule_factor": 0.25,
+    "model": "CLASSIFIER CONV",
 }
 
 TEST_FOLD = 9
 
 
-def train(name, df, data_root, patch_size, VAL_FOLD = 0):
+def train(name, df, data_root, VAL_FOLD=0):
     now = datetime.now()
     dt_string = now.strftime("%d|%m_%H|%M|%S")
     print("Starting -->", dt_string)
@@ -64,72 +60,40 @@ def train(name, df, data_root, patch_size, VAL_FOLD = 0):
     # neptune.init("sowmen/imanip")
     # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
 
-    # model = Efficient_Attention()
-    model = EfficientNet().to(device)
+    model = Classifier3(21*448).to(device)
     print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))
     # model = Classifier2(1792).to(device)
     
-    
     # wandb.watch(model)
 
-    normalize = {
-        "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
-        "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
-    }
-    train_aug = albumentations.Compose(
-        [
-            augmentations.transforms.Flip(p=0.5),
-            augmentations.transforms.Rotate((-45, 45), p=0.4),
-            augmentations.transforms.ShiftScaleRotate(p=0.5),
-            augmentations.transforms.HueSaturationValue(p=0.3),
-            augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
-            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
-            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.ToTensor()
-        ]
-    )
-    valid_aug = albumentations.Compose(
-        [
-            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
-            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.ToTensor()
-        ]
-    )
-
     # -------------------------------- CREATE DATASET and DATALOADER --------------------------
-    train_dataset = CASIA(
+    train_dataset = Classifier_Dataset(
         dataframe=df,
         mode="train",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         root_dir=data_root,
-        patch_size=patch_size,
         equal_sample=False,
-        transforms=train_aug,
     )
     train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
 
-    valid_dataset = CASIA(
+    valid_dataset = Classifier_Dataset(
         dataframe=df,
         mode="val",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         root_dir=data_root,
-        patch_size=patch_size,
         equal_sample=False,
-        transforms=valid_aug,
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
 
-    test_dataset = CASIA(
+    test_dataset = Classifier_Dataset(
         dataframe=df,
         mode="test",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         root_dir=data_root,
-        patch_size=patch_size,
         equal_sample=False,
-        transforms=valid_aug,
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
 
@@ -145,26 +109,14 @@ def train(name, df, data_root, patch_size, VAL_FOLD = 0):
         factor=config.schedule_factor,
     )
     criterion = nn.BCEWithLogitsLoss()
-    attn_map_criterion = nn.L1Loss()
-
     es = EarlyStopping(patience=16, mode="max")
 
     for epoch in range(config.epochs):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        train_metrics = train_epoch(
-            model,
-            train_loader,
-            optimizer,
-            criterion,
-            attn_map_criterion,
-            config.attn_map_weight,
-            epoch,
-        )
-        valid_metrics = valid_epoch(
-            model, valid_loader, criterion, attn_map_criterion, config.attn_map_weight, epoch
-        )
+        train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
+        valid_metrics = valid_epoch(model, valid_loader, criterion, epoch)
         scheduler.step(valid_metrics["valid_acc_05"])
 
         print(
@@ -185,17 +137,15 @@ def train(name, df, data_root, patch_size, VAL_FOLD = 0):
 
     model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")))
 
-    test_metrics = test(model, test_loader, criterion, attn_map_criterion, config.attn_map_weight)
+    test_metrics = test(model, test_loader, criterion)
     wandb.save(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))
 
     return test_metrics
 
 
-def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, attn_map_weight, epoch):
+def train_epoch(model, train_loader, optimizer, criterion, epoch):
     model.train()
 
-    classification_loss = AverageMeter()
-    attn_map_loss = AverageMeter()
     total_loss = AverageMeter()
     
     predictions = []
@@ -204,30 +154,21 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
     for batch in tqdm(train_loader):
         images = batch["image"].to(device)
         target_labels = batch["label"].to(device)
-        # attn_gt = batch["attn_mask"].to(device)
-
-        optimizer.zero_grad()
         
-        # out_labels, attn_map = model(images)
+        optimizer.zero_grad()
         out_labels = model(images)
 
-        loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
-        # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
-        loss = loss_classification  #+ attn_map_weight * loss_attn_map
+        loss = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
         loss.backward()
         # with amp.scale_loss(loss, optimizer) as scaled_loss:
         #     scaled_loss.backward()
         optimizer.step()
 
-        #---------------------Batch Loss Update-------------------------
-        # classification_loss.update(loss_classification.item(), train_loader.batch_size)
-        # attn_map_loss.update(loss_attn_map.item(), train_loader.batch_size)
+        #---------------------Batch Loss Update-------------------------)
         total_loss.update(loss.item(), train_loader.batch_size)
         
         targets.append((target_labels.view(-1, 1).cpu() >= 0.5) * 1.0)
         predictions.append(torch.sigmoid(out_labels).cpu().detach().numpy())
-
-        gc.collect()
 
     # Epoch Logging
     with torch.no_grad():
@@ -240,8 +181,6 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         train_balanced_acc_05 = metrics.balanced_accuracy_score(targets, (predictions >= 0.5) * 1)
         
     train_metrics = {
-        # "train_loss_classification": classification_loss.avg,
-        # "train_loss_attn_map": attn_map_loss.avg,
         "train_loss" : total_loss.avg,
         "train_auc": train_auc,
         "train_f1_05": train_f1_05,
@@ -253,33 +192,24 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
     return train_metrics
 
 
-def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_weight, epoch):
+def valid_epoch(model, valid_loader, criterion, epoch):
     model.eval()
 
-    classification_loss = AverageMeter()
-    attn_map_loss = AverageMeter()
     total_loss = AverageMeter()
-    
     predictions = []
     targets = []
-    example_images = []
+    # example_images = []
 
     with torch.no_grad():
         for batch in tqdm(valid_loader):
             images = batch["image"].to(device)
             target_labels = batch["label"].to(device)
-            # attn_gt = batch["attn_mask"].to(device)
 
-            # out_labels, attn_map = model(images)
             out_labels = model(images)
 
-            loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
-            # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
-            loss = loss_classification  #+ attn_map_weight * loss_attn_map
+            loss = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             
             #---------------------Batch Loss Update-------------------------
-            # classification_loss.update(loss_classification.item(), valid_loader.batch_size)
-            # attn_map_loss.update(loss_attn_map.item(), valid_loader.batch_size)
             total_loss.update(loss.item(), valid_loader.batch_size)
             
             batch_targets = (target_labels.view(-1, 1).cpu() >= 0.5) * 1.0
@@ -290,18 +220,18 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
 
             best_batch_pred_idx = np.argmin(abs(batch_targets - batch_preds))
             worst_batch_pred_idx = np.argmax(abs(batch_targets - batch_preds))
-            example_images.append(
-                wandb.Image(
-                    images[best_batch_pred_idx],
-                    caption=f"Pred : {batch_preds[best_batch_pred_idx].item()} Label: {batch_targets[best_batch_pred_idx].item()}",
-                )
-            )
-            example_images.append(
-                wandb.Image(
-                    images[worst_batch_pred_idx],
-                    caption=f"Pred : {batch_preds[worst_batch_pred_idx].item()} Label: {batch_targets[worst_batch_pred_idx].item()}",
-                )
-            )
+            # example_images.append(
+            #     wandb.Image(
+            #         images[best_batch_pred_idx],
+            #         caption=f"Pred : {batch_preds[best_batch_pred_idx].item()} Label: {batch_targets[best_batch_pred_idx].item()}",
+            #     )
+            # )
+            # example_images.append(
+            #     wandb.Image(
+            #         images[worst_batch_pred_idx],
+            #         caption=f"Pred : {batch_preds[worst_batch_pred_idx].item()} Label: {batch_targets[worst_batch_pred_idx].item()}",
+            #     )
+            # )
 
     # Logging
     targets = np.vstack((targets)).ravel()
@@ -314,24 +244,20 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
 
     valid_metrics = {
         "valid_loss": total_loss.avg,
-        # "valid_loss_classification": classification_loss.avg,
-        # "valid_loss_attn_map": attn_map_loss.avg,
         "valid_auc": valid_auc,
         "valid_f1_05": valid_f1_05,
         "valid_acc_05": valid_acc_05,
         "valid_balanced_acc_05": valid_balanced_acc_05,
-        "valid_examples": example_images[-10:],
+        # "valid_examples": example_images[-10:],
     }
     wandb.log(valid_metrics)
 
     return valid_metrics
 
 
-def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
+def test(model, test_loader, criterion):
     model.eval()
 
-    classification_loss = AverageMeter()
-    attn_map_loss = AverageMeter()
     total_loss = AverageMeter()
     
     predictions = []
@@ -341,18 +267,12 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
         for batch in tqdm(test_loader):
             images = batch["image"].to(device)
             target_labels = batch["label"].to(device)
-            # attn_gt = batch["attn_mask"].to(device)
 
-            # out_labels, attn_map = model(images)
             out_labels = model(images)
 
-            loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
-            # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
-            loss = loss_classification  #+ attn_map_weight * loss_attn_map
+            loss = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             
             #---------------------Batch Loss Update-------------------------
-            # classification_loss.update(loss_classification.item(), test_loader.batch_size)
-            # attn_map_loss.update(loss_attn_map.item(), test_loader.batch_size)
             total_loss.update(loss.item(), test_loader.batch_size)
             
             targets.append((target_labels.view(-1, 1).cpu() >= 0.5) * 1.0)
@@ -369,8 +289,6 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
 
     test_metrics = {
         "test_loss": total_loss.avg,
-        # "test_loss_classification": classification_loss.avg,
-        # "test_loss_attn_map": attn_map_loss.avg,
         "test_auc": test_auc,
         "test_f1_05": test_f1_05,
         "test_acc_05": test_acc_05,
@@ -414,10 +332,9 @@ def expand_prediction(arr):
 
 if __name__ == "__main__":
     # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
-    patch_size = 64
-    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_{patch_size}"
+    DATA_ROOT = 'Image_Manipulation_Dataset/CASIA_2.0/448_tensors'
 
-    df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
+    df = pd.read_csv('casia_tensor_448.csv').sample(frac=1).reset_index(drop=True)
     acc = 0
     f1 = 0
     loss = 0
@@ -425,10 +342,9 @@ if __name__ == "__main__":
     # for i in range(0,9):
     #     print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
     test_metrics = train(
-        name=f"224CASIA_{patch_size}" + config_defaults["model"],
+        name=f"Classification" + config_defaults["model"],
         df=df,
         data_root=DATA_ROOT,
-        patch_size=patch_size,
         VAL_FOLD=0
     )
     acc += test_metrics['test_acc_05']

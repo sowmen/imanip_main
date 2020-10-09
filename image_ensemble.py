@@ -28,7 +28,9 @@ def ensemble(model, image):
     model.load_weights('256_encoder.h5')
     image_full = img_to_tensor(image, normalize).unsqueeze(0).cuda()
     with torch.no_grad():
-        tensor1, _ = model(image_full)
+        _, _, smp = model(image_full)
+        tensor1 = smp[-1]
+        # print(tensor1.shape)
         del(image_full)
 
     # print("=====>2 ", next(model.parameters()).device)
@@ -37,7 +39,9 @@ def ensemble(model, image):
     image_128_norm = [img_to_tensor(x, normalize) for x in image_128]
     image_128_norm = torch.from_numpy(np.stack(image_128_norm)).cuda()
     with torch.no_grad():
-        tensor2, _ = model(image_128_norm)
+        _, _, smp = model(image_128_norm)
+        tensor2 = smp[-1]
+        # print(tensor2.shape)
         del(image_128_norm)
     
     # print("=====>3 ", next(model.parameters()).device)
@@ -46,7 +50,9 @@ def ensemble(model, image):
     image_64_norm = [img_to_tensor(x, normalize) for x in image_64]
     image_64_norm = torch.from_numpy(np.stack(image_64_norm)).cuda()
     with torch.no_grad():
-        tensor3, _ = model(image_64_norm)
+        _, _, smp = model(image_64_norm)
+        tensor3 = smp[-1]
+        # print(tensor3.shape)
         del(image_64_norm)
 
     del(model)
