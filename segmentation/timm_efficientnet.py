@@ -32,26 +32,26 @@ class EfficientNet(nn.Module):
         if freeze_encoder:
             self.encoder.freeze()
             
-        # self.classifier = base_model_sequential[13:]
+        self.classifier = base_model_sequential[13:]
 
         del base_model_sequential
         gc.collect()
 
-        self.reduce_channels = nn.Sequential(
-            # SeparableConvBnAct(1792, 1792//4, act_layer=Swish)
-            nn.Conv2d(448, 448//4, kernel_size=1, stride=1, bias=False),
-            nn.BatchNorm2d(448//4),
-            Swish(),
-        )
+        # self.reduce_channels = nn.Sequential(
+        #     # SeparableConvBnAct(1792, 1792//4, act_layer=Swish)
+        #     nn.Conv2d(448, 448//4, kernel_size=1, stride=1, bias=False),
+        #     nn.BatchNorm2d(448//4),
+        #     Swish(),
+        # )
         
-        self.global_pool, self.classifier = create_classifier(
-            448//4, self.num_classes, pool_type='avg')
+        # self.global_pool, self.classifier = create_classifier(
+        #     448//4, self.num_classes, pool_type='avg')
         
 
     def forward(self, x):
-        _, _, smp = self.encoder(x)
-        x = self.reduce_channels(smp[-1])
-        x = self.global_pool(x)
+        x, _, _ = self.encoder(x)
+        # x = self.reduce_channels(smp[-1])
+        # x = self.global_pool(x)
         x = self.classifier(x)
 
         return x
