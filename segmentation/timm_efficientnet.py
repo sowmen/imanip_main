@@ -36,17 +36,6 @@ class EfficientNet(nn.Module):
         del base_model_sequential
         gc.collect()
 
-<<<<<<< HEAD
-        self.reduce_channels = nn.Sequential(
-            # nn.Conv2d(1792, 1792//4, kernel_size=1),
-            SeparableConvBnAct(1792, 1792//16, act_layer=Swish),
-            # nn.BatchNorm2d(1792//4),
-            # Swish(),
-        )
-        
-        self.global_pool, self.classifier = create_classifier(
-            1792//16, self.num_classes, pool_type='avg')
-=======
         # self.reduce_channels = nn.Sequential(
         #     # SeparableConvBnAct(1792, 1792//4, act_layer=Swish)
         #     nn.Conv2d(448, 448//4, kernel_size=1, stride=1, bias=False),
@@ -56,7 +45,6 @@ class EfficientNet(nn.Module):
         
         # self.global_pool, self.classifier = create_classifier(
         #     448//4, self.num_classes, pool_type='avg')
->>>>>>> 46430f971204b302041d24ba922b6a0a2ccd8284
         
 
     def forward(self, x):
