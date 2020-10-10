@@ -35,7 +35,7 @@ from classifier import Classifier2
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
-    "epochs": 100,
+    "epochs": 50,
     "train_batch_size": 32,
     "valid_batch_size": 64,
     "optimizer": "adam",
@@ -43,7 +43,7 @@ config_defaults = {
     "weight_decay": 0.0005938,
     "schedule_patience": 3,
     "schedule_factor": 0.2569,
-    "model": "REDUCED EFFNET (sep)",
+    "model": "REDUCED EFFNET",
     "attn_map_weight": 0,
 }
 
