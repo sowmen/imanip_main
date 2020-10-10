@@ -415,15 +415,16 @@ def expand_prediction(arr):
 
 if __name__ == "__main__":
     # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
-    patch_size = 'FULL'
-    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
+    patch_size = 64
+    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_{patch_size}"
 
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
-    acc = 0
-    f1 = 0
-    loss = 0
-    auc = 0
-    for i in range(0,9):
+    acc = AverageMeter()
+    f1 = AverageMeter()
+    loss = AverageMeter()
+    auc = AverageMeter()
+
+    for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
             name=f"(CV)224CASIA_{patch_size}" + config_defaults["model"],
@@ -432,13 +433,13 @@ if __name__ == "__main__":
             patch_size=patch_size,
             VAL_FOLD=i
         )
-        acc += test_metrics['test_acc_05']
-        f1 += test_metrics['test_f1_05']
-        loss += test_metrics['test_loss']
-        auc += test_metrics['test_auc']
+        acc.update(test_metrics['test_acc_05'])
+        f1.update(test_metrics['test_f1_05'])
+        loss.update(test_metrics['test_loss'])
+        auc.update(test_metrics['test_auc'])
     
-    print(f'ACCURACY : {acc/9}')
-    print(f'F1 : {f1/9}')
-    print(f'LOSS : {loss/9}')
-    print(f'AUC : {auc/9}')
+    print(f'ACCURACY : {acc.avg}')
+    print(f'F1 : {f1.avg}')
+    print(f'LOSS : {loss.avg}')
+    print(f'AUC : {auc.avg}')
 

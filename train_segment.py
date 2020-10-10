@@ -50,7 +50,7 @@ config_defaults = {
     "schedule_patience": 3,
     "schedule_factor": 0.2569,
     'sampling':'nearest',
-    "model": "Unet-Inception",
+    "model": "UnetB4",
 }
 VAL_FOLD = 0
 TEST_FOLD = 9
@@ -79,12 +79,14 @@ def train(name, df, data_root, patch_size):
     # model = smp.Unet('timm-efficientnet-b4', classes=6, encoder_weights='imagenet')
     # model = SMP_DIY(num_classes=6)
     
-    encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=False).get_encoder()
-    # model = UnetB4(encoder, num_classes=1, sampling=config.sampling, layer='start')
-    model = UnetB4_Inception(encoder, num_classes=1, sampling=config.sampling)
+    encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
+    model = UnetB4(encoder, num_classes=1, sampling=config.sampling, layer='end')
+    # model = UnetB4_Inception(encoder, num_classes=1, sampling=config.sampling)
     # model = UnetPP(encoder, num_classes=1, sampling=config.sampling)
     model.to(device)
 
+    print(sum(p.numel() for p in model.parameters() if p.requires_grad))
+    
     normalize = {
         "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
         "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
@@ -93,8 +95,8 @@ def train(name, df, data_root, patch_size):
         augmentations.transforms.Flip(p=0.5),
         augmentations.transforms.Rotate((-45, 45), p=0.4),
         augmentations.transforms.ShiftScaleRotate(p=0.3),
-        augmentations.transforms.HueSaturationValue(p=0.3),
-        augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
+        # augmentations.transforms.HueSaturationValue(p=0.3),
+        # augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
         augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
         albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
         albumentations.pytorch.ToTensor()

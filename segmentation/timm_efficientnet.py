@@ -36,13 +36,13 @@ class EfficientNet(nn.Module):
 
         self.reduce_channels = nn.Sequential(
             # nn.Conv2d(1792, 1792//4, kernel_size=1),
-            SeparableConvBnAct(1792, 1792//4, act_layer=Swish),
+            SeparableConvBnAct(1792, 1792//16, act_layer=Swish),
             # nn.BatchNorm2d(1792//4),
             # Swish(),
         )
         
         self.global_pool, self.classifier = create_classifier(
-            1792//4, self.num_classes, pool_type='avg')
+            1792//16, self.num_classes, pool_type='avg')
         
 
     def forward(self, x):
@@ -81,7 +81,7 @@ class EfficientNet(nn.Module):
 
                     if idx in [0, 2, 6, 10]:
                         start_outputs[f"block_{i}_layer_{idx}"] = x
-                    if idx in [1, 5, 9, 21]:
+                    if idx in [1, 5, 9, 21, 31]:
                         end_outputs[f"block_{i}_layer_{idx}"] = x
                     if idx in [5, 9, 21, 31]:
                         smp_outputs.append(x)
