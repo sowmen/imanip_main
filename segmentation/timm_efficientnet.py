@@ -11,16 +11,18 @@ from collections import OrderedDict
 
 class EfficientNet(nn.Module):
     def __init__(
-        self, model_name='tf_efficientnet_b4_ns', num_classes=1, encoder_checkpoint="", freeze_encoder=False
+        self, model_name='tf_efficientnet_b4_ns', in_channels=3, num_classes=1, encoder_checkpoint="", freeze_encoder=False
     ):
         super().__init__()
         
         self.model_name = model_name
         self.num_classes = num_classes
+        self.in_channels = in_channels
         
         base_model_sequential = timm.create_model(
             model_name=self.model_name,
             pretrained=True,
+            in_chans=self.in_channels,
             num_classes=self.num_classes,
         ).as_sequential()
 
