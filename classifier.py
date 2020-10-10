@@ -14,18 +14,23 @@ class ClassifierConv(nn.Module):
     def __init__(self, in_channels):
         super(ClassifierConv, self).__init__()
 
-        self.sconv0 = SeparableConvBnAct(in_channels, in_channels//8, act_layer=nn.ReLU)
+        self.sconv0 = SeparableConvBnAct(in_channels, in_channels//4, act_layer=nn.ReLU)
         self.pool0 = nn.MaxPool2d(kernel_size=3, stride=1)
         self.dropout = nn.Dropout2d(p=0.4)
 
-        self.sconv1 = SeparableConvBnAct(in_channels//8, in_channels//16, act_layer=nn.ReLU)
+        self.sconv1 = SeparableConvBnAct(in_channels//4, in_channels//6, act_layer=nn.ReLU)
         self.pool1 = nn.MaxPool2d(kernel_size=3, stride=1)
 
-        self.se0 = SEModule((in_channels // 16))
+        self.se0 = SEModule((in_channels // 6))
         
-        self.sconv2 = SeparableConvBnAct(in_channels//16, in_channels//32, act_layer=nn.ReLU)
+        self.sconv2 = SeparableConvBnAct(in_channels//6, in_channels//8, act_layer=nn.ReLU)
         # self.pool2 = nn.MaxPool2d(kernel_size=3, stride=1)
         
+        self.sconv3 = SeparableConvBnAct(in_channels//8, in_channels//8, act_layer=nn.ReLU)
+        self.sconv4 = SeparableConvBnAct(in_channels//8, in_channels//16, act_layer=nn.ReLU)
+        self.se1 = SEModule((in_channels // 16))
+        self.sconv5 = SeparableConvBnAct(in_channels//16, in_channels//32, act_layer=nn.ReLU)
+
         self.global_pool = SelectAdaptivePool2d(pool_type="avg")
         
         self.relu = nn.ReLU(inplace=True)
@@ -33,11 +38,11 @@ class ClassifierConv(nn.Module):
 
     def forward(self, x):
         x = self.sconv0(x)
-        # x = self.pool0(x)
+        x = self.pool0(x)
         x = self.dropout(x)
 
         x = self.sconv1(x)
-        # x = self.pool1(x)
+        x = self.pool1(x)
         x = self.dropout(x)
 
         x = self.se0(x)
@@ -46,6 +51,13 @@ class ClassifierConv(nn.Module):
         # x = self.pool2(x)
         x = self.dropout(x)
         
+        x = self.sconv3(x)
+        x = self.dropout(x)
+        
+        x = self.sconv4(x)
+        x = self.se1(x)
+        x = self.sconv5(x)
+
         x = self.global_pool(x)
 
         x = x.flatten(1)

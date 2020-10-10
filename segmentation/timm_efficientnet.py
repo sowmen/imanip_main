@@ -10,16 +10,18 @@ from collections import OrderedDict
 
 class EfficientNet(nn.Module):
     def __init__(
-        self, model_name='tf_efficientnet_b4_ns', num_classes=1, encoder_checkpoint="", freeze_encoder=False
+        self, model_name='tf_efficientnet_b4_ns', in_channels=3, num_classes=1, encoder_checkpoint="", freeze_encoder=False
     ):
         super().__init__()
         
         self.model_name = model_name
         self.num_classes = num_classes
+        self.in_channels = in_channels
         
         base_model_sequential = timm.create_model(
             model_name=self.model_name,
             pretrained=True,
+            in_chans=self.in_channels,
             num_classes=self.num_classes,
         ).as_sequential()
 
@@ -29,11 +31,12 @@ class EfficientNet(nn.Module):
         if freeze_encoder:
             self.encoder.freeze()
             
-        # self.classifier = base_model_sequential[13:]
+        self.classifier = base_model_sequential[13:]
 
         del base_model_sequential
         gc.collect()
 
+<<<<<<< HEAD
         self.reduce_channels = nn.Sequential(
             # nn.Conv2d(1792, 1792//4, kernel_size=1),
             SeparableConvBnAct(1792, 1792//16, act_layer=Swish),
@@ -43,12 +46,23 @@ class EfficientNet(nn.Module):
         
         self.global_pool, self.classifier = create_classifier(
             1792//16, self.num_classes, pool_type='avg')
+=======
+        # self.reduce_channels = nn.Sequential(
+        #     # SeparableConvBnAct(1792, 1792//4, act_layer=Swish)
+        #     nn.Conv2d(448, 448//4, kernel_size=1, stride=1, bias=False),
+        #     nn.BatchNorm2d(448//4),
+        #     Swish(),
+        # )
+        
+        # self.global_pool, self.classifier = create_classifier(
+        #     448//4, self.num_classes, pool_type='avg')
+>>>>>>> 46430f971204b302041d24ba922b6a0a2ccd8284
         
 
     def forward(self, x):
         x, _, _ = self.encoder(x)
-        x = self.reduce_channels(x)
-        x = self.global_pool(x)
+        # x = self.reduce_channels(smp[-1])
+        # x = self.global_pool(x)
         x = self.classifier(x)
 
         return x

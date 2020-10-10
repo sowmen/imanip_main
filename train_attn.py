@@ -29,28 +29,26 @@ from utils import *
 from effb4_attention import Efficient_Attention
 from segmentation.timm_efficientnet import EfficientNet
 from casia_dataset import CASIA
-from classifier_dataset import Classifier_Dataset
-from classifier import Classifier2
+from segmentation.merged_net import SRM_Classifer
 
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
-    "epochs": 100,
-    "train_batch_size": 70,
-    "valid_batch_size": 128,
+    "epochs": 50,
+    "train_batch_size": 32,
+    "valid_batch_size": 64,
     "optimizer": "adam",
     "learning_rate": 0.001959,
     "weight_decay": 0.0005938,
     "schedule_patience": 3,
     "schedule_factor": 0.2569,
-    "model": "REDUCED EFFNET(Seperable)",
+    "model": "SRM NET",
     "attn_map_weight": 0,
 }
 
 TEST_FOLD = 9
 
-
-def train(name, df, data_root, patch_size, VAL_FOLD):
+def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
     now = datetime.now()
     dt_string = now.strftime("%d|%m_%H|%M|%S")
     print("Starting -->", dt_string)
@@ -65,7 +63,9 @@ def train(name, df, data_root, patch_size, VAL_FOLD):
     # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
 
     # model = Efficient_Attention()
-    model = EfficientNet().to(device)
+    # model = EfficientNet().to(device)
+    model = SRM_Classifer().to(device)
+
     print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))
     # model = Classifier2(1792).to(device)
     
@@ -162,6 +162,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD):
             attn_map_criterion,
             config.attn_map_weight,
             epoch,
+            SRM_FLAG
         )
         valid_metrics = valid_epoch(
             model, valid_loader, criterion, attn_map_criterion, config.attn_map_weight, epoch
@@ -192,7 +193,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD):
     return test_metrics
 
 
-def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, attn_map_weight, epoch):
+def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, attn_map_weight, epoch, SRM_FLAG):
     model.train()
 
     classification_loss = AverageMeter()
@@ -219,6 +220,14 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         # with amp.scale_loss(loss, optimizer) as scaled_loss:
         #     scaled_loss.backward()
         optimizer.step()
+
+        if SRM_FLAG == 1:
+            bayer_mask = torch.zeros(3,3,5,5).cuda()
+            bayer_mask[:,:,5//2, 5//2] = 1
+            bayer_weight = model.bayer_conv.weight * (1-bayer_mask)
+            bayer_weight = (bayer_weight / torch.sum(bayer_weight, dim=(2,3), keepdim=True)) + 1e-7
+            bayer_weight -= bayer_mask
+            model.bayer_conv.weight = nn.Parameter(bayer_weight)
 
         #---------------------Batch Loss Update-------------------------
         # classification_loss.update(loss_classification.item(), train_loader.batch_size)
@@ -248,6 +257,7 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         "train_f1_05": train_f1_05,
         "train_acc_05": train_acc_05,
         "train_balanced_acc_05": train_balanced_acc_05,
+        "epoch" : epoch
     }
     wandb.log(train_metrics)
 
@@ -322,6 +332,7 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
         "valid_acc_05": valid_acc_05,
         "valid_balanced_acc_05": valid_balanced_acc_05,
         "valid_examples": example_images[-10:],
+        "epoch": epoch
     }
     wandb.log(valid_metrics)
 
@@ -415,23 +426,23 @@ def expand_prediction(arr):
 
 if __name__ == "__main__":
     # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
-    patch_size = 64
-    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_{patch_size}"
+    patch_size = 'FULL'
+    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
 
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
     acc = AverageMeter()
     f1 = AverageMeter()
     loss = AverageMeter()
     auc = AverageMeter()
-
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(CV)224CASIA_{patch_size}" + config_defaults["model"],
+            name=f"224CASIA_{patch_size}" + config_defaults["model"],
             df=df,
             data_root=DATA_ROOT,
             patch_size=patch_size,
-            VAL_FOLD=i
+            VAL_FOLD=i,
+            SRM_FLAG=1
         )
         acc.update(test_metrics['test_acc_05'])
         f1.update(test_metrics['test_f1_05'])
