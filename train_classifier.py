@@ -60,7 +60,7 @@ def train(name, df, data_root, VAL_FOLD=0):
     # neptune.init("sowmen/imanip")
     # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
 
-    model = Classifier3(21*448).to(device)
+    model = ClassifierConv(21*448).to(device)
     print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))
     # model = Classifier2(1792).to(device)
     

@@ -36,19 +36,19 @@ class EfficientNet(nn.Module):
         gc.collect()
 
         self.reduce_channels = nn.Sequential(
-            SeparableConvBnAct(1792, 1792//4, act_layer=Swish)
-            # nn.Conv2d(1792, 1792//4, kernel_size=1),
-            # nn.BatchNorm2d(1792//4),
-            # Swish(),
+            # SeparableConvBnAct(1792, 1792//4, act_layer=Swish)
+            nn.Conv2d(448, 448//4, kernel_size=1, stride=1, bias=False),
+            nn.BatchNorm2d(448//4),
+            Swish(),
         )
         
         self.global_pool, self.classifier = create_classifier(
-            1792//4, self.num_classes, pool_type='avg')
+            448//4, self.num_classes, pool_type='avg')
         
 
     def forward(self, x):
-        x, _, _ = self.encoder(x)
-        x = self.reduce_channels(x)
+        _, _, smp = self.encoder(x)
+        x = self.reduce_channels(smp[-1])
         x = self.global_pool(x)
         x = self.classifier(x)
 
