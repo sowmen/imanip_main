@@ -1,4 +1,3 @@
-# from segmentation.layers import Swish
 import timm
 from timm.models.layers.classifier import create_classifier
 from timm.models.layers.separable_conv import SeparableConvBnAct
@@ -84,7 +83,7 @@ class EfficientNet(nn.Module):
 
                     if idx in [0, 2, 6, 10]:
                         start_outputs[f"block_{i}_layer_{idx}"] = x
-                    if idx in [1, 5, 9, 21]:
+                    if idx in [1, 5, 9, 21, 31]:
                         end_outputs[f"block_{i}_layer_{idx}"] = x
                     if idx in [5, 9, 21, 31]:
                         smp_outputs.append(x)
