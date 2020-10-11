@@ -19,6 +19,7 @@ class SRM_Classifer(nn.Module):
         self.rgb_conv = nn.Conv2d(in_channels, out_channels=10, kernel_size=5, padding=2, bias=False)
         nn.init.xavier_uniform_(self.rgb_conv.weight)
         
+        self.relu = nn.ReLU(inplace=True)
         self.base_model = EfficientNet(in_channels=16)
         
     def forward(self, input):
@@ -26,6 +27,7 @@ class SRM_Classifer(nn.Module):
         x2 = self.bayer_conv(input)
         x3 = self.rgb_conv(input)
         x = torch.cat([x1, x2, x3], dim=1)
+        x = self.relu(x)
         
         x = self.base_model(x)
         return x

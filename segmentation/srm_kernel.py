@@ -2,6 +2,7 @@ import timm
 import torch
 import torch.nn as nn 
 import numpy as np
+import PIL
 
 def setup_srm_weights(input_channels: int = 3) -> torch.Tensor:
     """Creates the SRM kernels for noise analysis."""

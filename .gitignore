@@ -8,3 +8,4 @@ weights/
 history/
 __pycache__/
 *.h5
+phase2 (SRM+Fake,ELA+Unet).ipynb
