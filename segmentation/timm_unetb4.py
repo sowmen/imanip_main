@@ -20,7 +20,7 @@ class UnetB4(nn.Module):
         if self.layer == 'start':
             self.size = [1792,112,56,32,24]
         elif self.layer == 'end':
-            self.size = [1792,160,56,32,24]
+            self.size = [448,160,56,32,24]
         
         self.decode0 = Decode(self.size[0] + self.size[1], 512)
         self.decode1 = Decode(512 + self.size[2], 256)
@@ -40,7 +40,7 @@ class UnetB4(nn.Module):
         else:
             layer = end
             
-        x = self.decode0([upsize2(out, self.sampling), layer.popitem()[1]]) # 1792x8x8 -> 1792x16x16 + 112x16x16 => 512x16x16
+        x = self.decode0([upsize2(layer.popitem()[1], self.sampling), layer.popitem()[1]]) # 1792x8x8 -> 1792x16x16 + 112x16x16 => 512x16x16
         x = self.decode1([upsize2(x, self.sampling), layer.popitem()[1]])   # 512x16x16 -> 512x32x32 + 56x32x32 => 256x32x32
         x = self.decode2([upsize2(x, self.sampling), layer.popitem()[1]])   # 256x32x32 -> 256x64x64 + 32x64x64 => 128x64x64
         x = self.decode3([upsize2(x, self.sampling), layer.popitem()[1]])   # 128x64x64 -> 128x128x128 + 24x128x128 => 64x128x128
