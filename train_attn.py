@@ -34,8 +34,8 @@ from segmentation.merged_net import SRM_Classifer
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
-    "epochs": 50,
-    "train_batch_size": 32,
+    "epochs": 60,
+    "train_batch_size": 35,
     "valid_batch_size": 64,
     "optimizer": "adam",
     "learning_rate": 0.001959,
@@ -104,7 +104,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
         test_fold=TEST_FOLD,
         root_dir=data_root,
         patch_size=patch_size,
-        equal_sample=False,
+        equal_sample=True,
         transforms=train_aug,
     )
     train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
@@ -116,7 +116,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
         test_fold=TEST_FOLD,
         root_dir=data_root,
         patch_size=patch_size,
-        equal_sample=False,
+        equal_sample=True,
         transforms=valid_aug,
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
@@ -128,7 +128,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
         test_fold=TEST_FOLD,
         root_dir=data_root,
         patch_size=patch_size,
-        equal_sample=False,
+        equal_sample=True,
         transforms=valid_aug,
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
@@ -425,8 +425,8 @@ def expand_prediction(arr):
 
 if __name__ == "__main__":
     # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
-    patch_size = 'FULL'
-    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0"
+    patch_size = 128
+    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_{patch_size}"
 
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
     acc = AverageMeter()

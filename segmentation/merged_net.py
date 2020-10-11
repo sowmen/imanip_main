@@ -6,6 +6,7 @@ from torch import nn
 import timm
 from segmentation.srm_kernel import setup_srm_layer
 from segmentation.timm_efficientnet import EfficientNet
+from timm.models.layers.activations import Swish
 
 class SRM_Classifer(nn.Module):
     def __init__(self, in_channels=3):
@@ -19,6 +20,7 @@ class SRM_Classifer(nn.Module):
         self.rgb_conv = nn.Conv2d(in_channels, out_channels=10, kernel_size=5, padding=2, bias=False)
         nn.init.xavier_uniform_(self.rgb_conv.weight)
         
+        # self.swish = Swish(inplace=True)
         self.base_model = EfficientNet(in_channels=16)
         
     def forward(self, input):
@@ -26,6 +28,8 @@ class SRM_Classifer(nn.Module):
         x2 = self.bayer_conv(input)
         x3 = self.rgb_conv(input)
         x = torch.cat([x1, x2, x3], dim=1)
+        # x = torch.cat([x3, x2, x1], dim=1)
         
+        # x = self.swish(x)
         x = self.base_model(x)
         return x

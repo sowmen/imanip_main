@@ -117,9 +117,9 @@ class CASIA(Dataset):
         fakes = rows[rows["label"] == 1]
         num_fake = fakes["image"].count()
         num_real = real["image"].count()
-        if self.mode == "train":
-            if int(num_fake * 1.5) <= num_real:
-                real = real.sample(n=int(num_fake * 1.5), replace=False)
-            else:
-                real = real.sample(n=num_fake, replace=False)
+        
+        if int(num_fake * 1.5) <= num_real:
+            real = real.sample(n=int(num_fake * 1.5), replace=False)
+        else:
+            real = real.sample(n=num_fake, replace=False)
         return pd.concat([real, fakes])
