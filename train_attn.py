@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader
 
 import albumentations
 from albumentations import augmentations
+from albumentations import *
 
 torch.backends.cudnn.benchmark = True
 
@@ -34,15 +35,15 @@ from segmentation.merged_net import SRM_Classifer
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
-    "epochs": 50,
-    "train_batch_size": 32,
-    "valid_batch_size": 64,
+    "epochs": 60,
+    "train_batch_size": 36,
+    "valid_batch_size": 128,
     "optimizer": "adam",
-    "learning_rate": 0.001959,
-    "weight_decay": 0.0005938,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0005,
     "schedule_patience": 3,
-    "schedule_factor": 0.2569,
-    "model": "SRM NET",
+    "schedule_factor": 0.25,
+    "model": "EFFNET",
     "attn_map_weight": 0,
 }
 
@@ -76,24 +77,46 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
         "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
         "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
     }
+    # train_aug = albumentations.Compose(
+    #     [
+    #         augmentations.transforms.Flip(p=0.6),
+    #         augmentations.transforms.Rotate((-45, 45), p=0.4),
+    #         augmentations.transforms.ShiftScaleRotate(p=0.5),
+    #         augmentations.transforms.HueSaturationValue(p=0.3),
+    #         augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
+    #         augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+    #         albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+    #         albumentations.pytorch.ToTensor()
+    #     ],
+    #     additional_targets={'ela':'image'}
+    # )
     train_aug = albumentations.Compose(
         [
-            augmentations.transforms.Flip(p=0.5),
-            augmentations.transforms.Rotate((-45, 45), p=0.4),
-            augmentations.transforms.ShiftScaleRotate(p=0.5),
-            augmentations.transforms.HueSaturationValue(p=0.3),
-            augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
+            HorizontalFlip(p=0.5),
+            VerticalFlip(p=0.5),
+            RandomRotate90(p=0.1),
+            ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=45, p=0.25),
+            RandomBrightnessContrast(p=0.5),
+            IAAEmboss(p=0.25),
+            Blur(p=0.1, blur_limit = 3),
+            OneOf([
+                ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
+                GridDistortion(p=0.5),
+                OpticalDistortion(p=1, distort_limit=2, shift_limit=0.5)                  
+            ], p=0.8),
             augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.ToTensor()
-        ]
+        ],
+        additional_targets={'ela':'image'}
     )
     valid_aug = albumentations.Compose(
         [
             augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.ToTensor()
-        ]
+        ],
+        additional_targets={'ela':'image'}
     )
 
     # -------------------------------- CREATE DATASET and DATALOADER --------------------------
@@ -104,7 +127,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
         test_fold=TEST_FOLD,
         root_dir=data_root,
         patch_size=patch_size,
-        equal_sample=False,
+        equal_sample=True,
         transforms=train_aug,
     )
     train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
@@ -116,7 +139,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
         test_fold=TEST_FOLD,
         root_dir=data_root,
         patch_size=patch_size,
-        equal_sample=False,
+        equal_sample=True,
         transforms=valid_aug,
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
@@ -128,7 +151,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
         test_fold=TEST_FOLD,
         root_dir=data_root,
         patch_size=patch_size,
-        equal_sample=False,
+        equal_sample=True,
         transforms=valid_aug,
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
@@ -205,13 +228,14 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
 
     for batch in tqdm(train_loader):
         images = batch["image"].to(device)
+        elas = batch["ela"].to(device)
         target_labels = batch["label"].to(device)
         # attn_gt = batch["attn_mask"].to(device)
 
         optimizer.zero_grad()
         
         # out_labels, attn_map = model(images)
-        out_labels = model(images)
+        out_labels = model(images, elas)
 
         loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
         # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -224,10 +248,10 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         if SRM_FLAG == 1:
             bayer_mask = torch.zeros(3,3,5,5).cuda()
             bayer_mask[:,:,5//2, 5//2] = 1
-            bayer_weight = model.bayer_conv.weight * (1-bayer_mask)
+            bayer_weight = model.module.bayer_conv.weight * (1-bayer_mask)
             bayer_weight = (bayer_weight / torch.sum(bayer_weight, dim=(2,3), keepdim=True)) + 1e-7
             bayer_weight -= bayer_mask
-            model.bayer_conv.weight = nn.Parameter(bayer_weight)
+            model.module.bayer_conv.weight = nn.Parameter(bayer_weight)
 
         #---------------------Batch Loss Update-------------------------
         # classification_loss.update(loss_classification.item(), train_loader.batch_size)
@@ -278,11 +302,12 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
     with torch.no_grad():
         for batch in tqdm(valid_loader):
             images = batch["image"].to(device)
+            elas = batch["ela"].to(device)
             target_labels = batch["label"].to(device)
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels = model(images)
+            out_labels = model(images, elas)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -352,11 +377,12 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
     with torch.no_grad():
         for batch in tqdm(test_loader):
             images = batch["image"].to(device)
+            elas = batch["ela"].to(device)
             target_labels = batch["label"].to(device)
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels = model(images)
+            out_labels = model(images, elas)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)

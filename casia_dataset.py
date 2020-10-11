@@ -64,22 +64,26 @@ class CASIA(Dataset):
     def __getitem__(self, index: int):
 
         if self.patch_size == 'FULL':
-            image_patch, mask_patch, label, fold = self.data[index]
+            image_patch, mask_patch, label, fold, ela = self.data[index]
         else:
-            image_name, image_patch, mask_patch, label, fold = self.data[index]
+            image_name, image_patch, mask_patch, label, fold, ela = self.data[index]
 
         if self.label_smoothing:
             label = np.clip(label, self.label_smoothing, 1 - self.label_smoothing)
 
         if self.patch_size == 'FULL':
             image_path = os.path.join(self.root_dir, image_patch)
+            ela_path = os.path.join(self.root_dir, ela)
         else:
             image_path = os.path.join(self.root_dir, image_name, image_patch)
+            ela_path = os.path.join(self.root_dir, image_name, ela)
 
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        ela_image = cv2.imread(ela_path, cv2.IMREAD_COLOR)
         if image is None:
             print(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        ela_image = cv2.cvtColor(ela_image, cv2.COLOR_BGR2RGB)
 
         if not isinstance(mask_patch, str) and np.isnan(mask_patch):
             mask_image = np.zeros((image.shape[0], image.shape[1]))
@@ -92,9 +96,10 @@ class CASIA(Dataset):
         # attn_mask_image = copy.deepcopy(mask_image)
             
         if self.transforms:
-            data = self.transforms(image=image, mask=mask_image)
+            data = self.transforms(image=image, mask=mask_image, ela=ela_image)
             image = data["image"]
             mask_image = data["mask"]
+            ela_image = data["ela"]
         # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
         # image = img_to_tensor(image, self.normalize)
@@ -105,7 +110,8 @@ class CASIA(Dataset):
             "image": image,
             "image_path" : image_path, 
             "label": label, 
-            "mask": mask_image, 
+            "mask": mask_image,
+            "ela" : ela_image 
             # "attn_mask": attn_mask_image
         }
 
@@ -115,11 +121,12 @@ class CASIA(Dataset):
         """
         real = rows[rows["label"] == 0]
         fakes = rows[rows["label"] == 1]
-        num_fake = fakes["image"].count()
-        num_real = real["image"].count()
-        if self.mode == "train":
-            if int(num_fake * 1.5) <= num_real:
-                real = real.sample(n=int(num_fake * 1.5), replace=False)
-            else:
-                real = real.sample(n=num_fake, replace=False)
+
+        num_fake = fakes["label"].count()
+        num_real = real["label"].count()
+
+        if int(num_fake * 1.5) <= num_real:
+            real = real.sample(n=int(num_fake * 1.5), replace=False)
+        else:
+            real = real.sample(n=num_fake, replace=False)
         return pd.concat([real, fakes])
