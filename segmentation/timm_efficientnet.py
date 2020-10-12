@@ -67,8 +67,8 @@ class EfficientNet(nn.Module):
         def forward(self, x):
             
 
-            start_outputs = OrderedDict()
-            end_outputs = OrderedDict()
+            start_outputs = []
+            end_outputs = []
             smp_outputs = []
             
             smp_outputs.append(x) # input
@@ -81,10 +81,10 @@ class EfficientNet(nn.Module):
                 for inner_block in block:
                     x = inner_block(x)
 
-                    if idx in [0, 2, 6, 10]:
-                        start_outputs[f"block_{i}_layer_{idx}"] = x
+                    if idx in [0, 2, 6, 10, 22]:
+                        start_outputs.append(x)
                     if idx in [1, 5, 9, 21, 31]:
-                        end_outputs[f"block_{i}_layer_{idx}"] = x
+                        end_outputs.append(x)
                     if idx in [5, 9, 21, 31]:
                         smp_outputs.append(x)
                     idx += 1

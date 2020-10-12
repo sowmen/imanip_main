@@ -40,10 +40,10 @@ class UnetB4(nn.Module):
         else:
             layer = end
             
-        x = self.decode0([upsize2(layer.popitem()[1], self.sampling), layer.popitem()[1]]) # 1792x8x8 -> 1792x16x16 + 112x16x16 => 512x16x16
-        x = self.decode1([upsize2(x, self.sampling), layer.popitem()[1]])   # 512x16x16 -> 512x32x32 + 56x32x32 => 256x32x32
-        x = self.decode2([upsize2(x, self.sampling), layer.popitem()[1]])   # 256x32x32 -> 256x64x64 + 32x64x64 => 128x64x64
-        x = self.decode3([upsize2(x, self.sampling), layer.popitem()[1]])   # 128x64x64 -> 128x128x128 + 24x128x128 => 64x128x128
+        x = self.decode0([upsize2(layer[-1], self.sampling), layer[-2]]) # 1792x8x8 -> 1792x16x16 + 112x16x16 => 512x16x16
+        x = self.decode1([upsize2(x, self.sampling), layer[-3]])   # 512x16x16 -> 512x32x32 + 56x32x32 => 256x32x32
+        x = self.decode2([upsize2(x, self.sampling), layer[-4]])   # 256x32x32 -> 256x64x64 + 32x64x64 => 128x64x64
+        x = self.decode3([upsize2(x, self.sampling), layer[-5]])   # 128x64x64 -> 128x128x128 + 24x128x128 => 64x128x128
         x = self.decode_input([upsize2(x, self.sampling), _input]) # 64x128x128 -> 64x256x256 + 3x256x256 => 32x256x256
         
         x = self.final_conv(x) # 32x256x256 => 1x256x256
