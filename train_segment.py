@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-
+from collections import OrderedDict
 
 import albumentations
 from albumentations import *
@@ -43,16 +43,16 @@ from sim_dataset import SimDataset
 OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
-    "epochs": 50,
-    "train_batch_size": 50,
+    "epochs": 60,
+    "train_batch_size": 32,
     "valid_batch_size": 64,
-    "optimizer": "adam",
-    "learning_rate": 0.001959,
-    "weight_decay": 0.0005938,
+    "optimizer": "radam",
+    "learning_rate": 0.001,
+    "weight_decay": 0.0005,
     "schedule_patience": 3,
-    "schedule_factor": 0.2569,
+    "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "UnetB4",
+    "model": "UnetB4(ELA)",
 }
 TEST_FOLD = 9
 
@@ -81,10 +81,12 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
     # model = SMP_DIY(num_classes=6)
     
     # encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
-    model = UnetB4(SRM_Classifer(), num_classes=54, sampling=config.sampling, layer='end')
+    encoder = SRM_Classifer(encoder_checkpoint='64_ELA.h5', freeze_encoder=True)
+    model = UnetB4(encoder, in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
     # model = UnetB4_Inception(encoder, num_classes=1, sampling=config.sampling)
     # model = UnetPP(encoder, num_classes=1, sampling=config.sampling)
     model.to(device)
+    # model = nn.DataParallel(model)
 
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     
@@ -206,7 +208,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        if epoch == 9:
+        if epoch == 5:
             model.module.encoder.unfreeze()
 
         train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG)
@@ -355,7 +357,6 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
         gt = batch["mask"].to(device)
 
         optimizer.zero_grad()
-
         out_mask = model(images, elas)
 
         loss_segmentation = criterion(out_mask, gt)

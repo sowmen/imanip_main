@@ -19,9 +19,9 @@ class UnetPP(nn.Module):
         
         # TOP DOWN -> TOP DECODER IS 0
         if self.layer == 'start':
-            self.size = [24,32,56,112,1792]
+            self.size = [24,32,56,112,272]
         elif self.layer == 'end':
-            self.size = [24,32,56,160,1792]
+            self.size = [24,32,56,160,448]
         
         self.mix = nn.Parameter(torch.FloatTensor(5))
         self.mix.data.fill_(1)
@@ -42,28 +42,30 @@ class UnetPP(nn.Module):
         
         # self.logit0 = nn.Conv2d(self.size[0], self.num_classes, kernel_size=1)
         self.logit1 = nn.Conv2d(32, self.num_classes, kernel_size=1)
+        nn.init.xavier_uniform_(self.logit1.weight)
         self.logit2 = nn.Conv2d(64, self.num_classes, kernel_size=1)
+        nn.init.xavier_uniform_(self.logit2.weight)
         self.logit3 = nn.Conv2d(128, self.num_classes, kernel_size=1)
+        nn.init.xavier_uniform_(self.logit3.weight)
         self.logit4 = nn.Conv2d(512, self.num_classes, kernel_size=1)
+        nn.init.xavier_uniform_(self.logit4.weight)
         
         
-    def forward(self, x):
-        batch_size, C, H, W = x.shape
-        _input = copy.deepcopy(x)
+    def forward(self, inp, ela):
+        batch_size, C, H, W = inp.shape
         
-        out, (start, end), _ = self.encoder(x)
+        _, (_merged_input, _, start, end) = self.encoder(inp, ela)
         if self.layer == 'start':
             layer = start
         else:
             layer = end
-        keys = list(layer.keys())
             
-        x0_0 = layer[keys[0]]
-        x1_0 = layer[keys[1]]
-        x2_0 = layer[keys[2]]
-        x3_0 = layer[keys[3]]
-        x4_0 = out
-        
+        x0_0 = layer[0]
+        x1_0 = layer[1]
+        x2_0 = layer[2]
+        x3_0 = layer[3]
+        x4_0 = layer[4]
+
         x0_1 = self.decode0_1([x0_0, upsize2(x1_0, self.sampling)])
         x1_1 = self.decode1_1([x1_0, upsize2(x2_0, self.sampling)])
         x2_1 = self.decode2_1([x2_0, upsize2(x3_0, self.sampling)])
