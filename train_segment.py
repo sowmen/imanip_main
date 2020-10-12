@@ -43,16 +43,16 @@ from sim_dataset import SimDataset
 OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
-    "epochs": 50,
-    "train_batch_size": 50,
+    "epochs": 60,
+    "train_batch_size": 40,
     "valid_batch_size": 64,
-    "optimizer": "adam",
+    "optimizer": "radam",
     "learning_rate": 0.001,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "UnetB4",
+    "model": "UnetB4(ELA)",
 }
 TEST_FOLD = 9
 
@@ -81,7 +81,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
     # model = SMP_DIY(num_classes=6)
     
     # encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
-    model = UnetB4(SRM_Classifer(), num_classes=54, sampling=config.sampling, layer='end')
+    model = UnetB4(SRM_Classifer(), in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
     # model = UnetB4_Inception(encoder, num_classes=1, sampling=config.sampling)
     # model = UnetPP(encoder, num_classes=1, sampling=config.sampling)
     model.to(device)
