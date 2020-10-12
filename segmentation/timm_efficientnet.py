@@ -71,10 +71,15 @@ class EfficientNet(nn.Module):
             end_outputs = []
             smp_outputs = []
             
+            ##################################
             smp_outputs.append(x) # input
+            ##################################
             
             x = self.stem(x)
+            
+            ##################################
             smp_outputs.append(x) # conv_stem
+            ##################################
             
             idx = 0
             for (i, block) in enumerate(self.blocks):
@@ -89,9 +94,9 @@ class EfficientNet(nn.Module):
                         smp_outputs.append(x)
                     idx += 1
 
-            x = self.head(x)
+            feat = self.head(x)
 
-            return x, (start_outputs, end_outputs), smp_outputs 
+            return feat, (start_outputs, end_outputs), smp_outputs 
         
         def load_weights(self, checkpoint=""):
             # print(f'--------- Loaded Checkpoint: {checkpoint} ----------')
