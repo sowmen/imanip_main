@@ -8,15 +8,16 @@ from datetime import datetime
 import pickle as pkl
 from sklearn import metrics
 import scikitplot as skplt
-
+import gc
 import timm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-import gc
+
 
 import albumentations
+from albumentations import *
 from albumentations import augmentations
 from torchvision import transforms
 
@@ -35,7 +36,8 @@ from utils import *
 # import segmentation_models_pytorch as smp
 # from segmentation.smp_effb4 import SMP_DIY
 from segmentation.timm_unetb4 import UnetB4, UnetB4_Inception
-from segmentation.timm_unetpp import UnetPP 
+from segmentation.timm_unetpp import UnetPP
+from segmentation.merged_net import SRM_Classifer 
 from sim_dataset import SimDataset
 
 OUTPUT_DIR = "weights"
@@ -52,11 +54,10 @@ config_defaults = {
     'sampling':'nearest',
     "model": "UnetB4",
 }
-VAL_FOLD = 0
 TEST_FOLD = 9
 
 
-def train(name, df, data_root, patch_size):
+def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
     now = datetime.now()
     dt_string = now.strftime("%d|%m_%H|%M|%S")
     print("Starting -->", dt_string)
@@ -79,8 +80,8 @@ def train(name, df, data_root, patch_size):
     # model = smp.Unet('timm-efficientnet-b4', classes=6, encoder_weights='imagenet')
     # model = SMP_DIY(num_classes=6)
     
-    encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
-    model = UnetB4(encoder, num_classes=1, sampling=config.sampling, layer='end')
+    # encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
+    model = UnetB4(SRM_Classifer(), num_classes=54, sampling=config.sampling, layer='end')
     # model = UnetB4_Inception(encoder, num_classes=1, sampling=config.sampling)
     # model = UnetPP(encoder, num_classes=1, sampling=config.sampling)
     model.to(device)
@@ -91,21 +92,47 @@ def train(name, df, data_root, patch_size):
         "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
         "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
     }
-    train_aug = albumentations.Compose([
-        augmentations.transforms.Flip(p=0.5),
-        augmentations.transforms.Rotate((-45, 45), p=0.4),
-        augmentations.transforms.ShiftScaleRotate(p=0.3),
-        # augmentations.transforms.HueSaturationValue(p=0.3),
-        # augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
-        augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
-        albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-        albumentations.pytorch.ToTensor()
-    ])
-    valid_aug = albumentations.Compose([
-        augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
-        albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-        albumentations.pytorch.ToTensor()
-    ])
+    # train_aug = albumentations.Compose(
+    #     [
+    #         augmentations.transforms.Flip(p=0.6),
+    #         augmentations.transforms.Rotate((-45, 45), p=0.4),
+    #         augmentations.transforms.ShiftScaleRotate(p=0.5),
+    #         augmentations.transforms.HueSaturationValue(p=0.3),
+    #         augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
+    #         augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+    #         albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+    #         albumentations.pytorch.ToTensor()
+    #     ],
+    #     additional_targets={'ela':'image'}
+    # )
+    train_aug = albumentations.Compose(
+        [
+            HorizontalFlip(p=0.5),
+            VerticalFlip(p=0.5),
+            RandomRotate90(p=0.1),
+            ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=45, p=0.25),
+            RandomBrightnessContrast(p=0.5),
+            IAAEmboss(p=0.25),
+            Blur(p=0.1, blur_limit = 3),
+            OneOf([
+                ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
+                GridDistortion(p=0.5),
+                OpticalDistortion(p=1, distort_limit=2, shift_limit=0.5)                  
+            ], p=0.8),
+            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+            albumentations.pytorch.ToTensor()
+        ],
+        additional_targets={'ela':'image'}
+    )
+    valid_aug = albumentations.Compose(
+        [
+            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+            albumentations.pytorch.ToTensor()
+        ],
+        additional_targets={'ela':'image'}
+    )
 
     #region SIMULATION
     # trans = transforms.Compose([
@@ -127,7 +154,7 @@ def train(name, df, data_root, patch_size):
         test_fold=TEST_FOLD,
         root_dir=data_root,
         patch_size=patch_size,
-        equal_sample=False,
+        equal_sample=True,
         transforms=train_aug,
     )
     train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
@@ -139,10 +166,10 @@ def train(name, df, data_root, patch_size):
         test_fold=TEST_FOLD,
         root_dir=data_root,
         patch_size=patch_size,
-        equal_sample=False,
+        equal_sample=True,
         transforms=valid_aug,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
 
     test_dataset = CASIA(
         dataframe=df,
@@ -151,10 +178,10 @@ def train(name, df, data_root, patch_size):
         test_fold=TEST_FOLD,
         root_dir=data_root,
         patch_size=patch_size,
-        equal_sample=False,
+        equal_sample=True,
         transforms=valid_aug,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
 
     optimizer = get_optimizer(model, config.optimizer,config.learning_rate, config.weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -182,7 +209,7 @@ def train(name, df, data_root, patch_size):
         if epoch == 9:
             model.module.encoder.unfreeze()
 
-        train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
+        train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG)
 
         valid_metrics = valid_epoch(model, valid_loader, criterion,  epoch)
         scheduler.step(valid_metrics["valid_loss_segmentation"])
@@ -315,7 +342,7 @@ def train(name, df, data_root, patch_size):
 #######################################################################################
 #endregion
     
-def train_epoch(model, train_loader, optimizer, criterion, epoch):
+def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
     model.train()
 
     segmentation_loss = AverageMeter()
@@ -324,11 +351,12 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
 
     for batch in tqdm(train_loader):
         images = batch["image"].to(device)
+        elas = batch["ela"].to(device)
         gt = batch["mask"].to(device)
 
         optimizer.zero_grad()
 
-        out_mask = model(images)
+        out_mask = model(images, elas)
 
         loss_segmentation = criterion(out_mask, gt)
 
@@ -337,6 +365,14 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         loss_segmentation.backward()
         optimizer.step()
 
+        if SRM_FLAG == 1:
+            bayer_mask = torch.zeros(3,3,5,5).cuda()
+            bayer_mask[:,:,5//2, 5//2] = 1
+            bayer_weight = model.module.encoder.bayer_conv.weight * (1-bayer_mask)
+            bayer_weight = (bayer_weight / torch.sum(bayer_weight, dim=(2,3), keepdim=True)) + 1e-7
+            bayer_weight -= bayer_mask
+            model.module.encoder.bayer_conv.weight = nn.Parameter(bayer_weight)
+            
         # ---------------------Batch Loss Update-------------------------
         segmentation_loss.update(loss_segmentation.item(), train_loader.batch_size)
 
@@ -379,9 +415,10 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     with torch.no_grad():
         for batch in tqdm(valid_loader):
             images = batch["image"].to(device)
+            elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
             
-            out_mask = model(images)
+            out_mask = model(images, elas)
 
             loss_segmentation = criterion(out_mask, gt)
 
@@ -429,9 +466,10 @@ def test(model, test_loader, criterion):
     with torch.no_grad():
         for batch in tqdm(test_loader):
             images = batch["image"].to(device)
+            elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
 
-            out_mask = model(images)
+            out_mask = model(images, elas)
 
             loss_segmentation = criterion(out_mask, gt)
 
@@ -489,13 +527,26 @@ def expand_prediction(arr):
 
 if __name__ == "__main__":
     patch_size = 64
-    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_64"
+    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_{patch_size}"
 
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
-
-    train(
-        name=f"224_CASIA_{patch_size}" + config_defaults["model"],
-        df=df,
-        data_root=DATA_ROOT,
-        patch_size=patch_size,
-    )
+    dice = AverageMeter()
+    jaccard = AverageMeter()
+    loss = AverageMeter()
+    for i in range(0,1):
+        print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
+        test_metrics = train(
+            name=f"224CASIA_{patch_size}" + config_defaults["model"],
+            df=df,
+            data_root=DATA_ROOT,
+            patch_size=patch_size,
+            VAL_FOLD=i,
+            SRM_FLAG=1
+        )
+        dice.update(test_metrics['test_dice'])
+        jaccard.update(test_metrics['test_jaccard'])
+        loss.update(test_metrics['test_loss_segmentation'])
+    
+    print(f'DICE : {dice.avg}')
+    print(f'JACCARD : {jaccard.avg}')
+    print(f'LOSS : {loss.avg}')
