@@ -44,7 +44,7 @@ OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 64,
+    "train_batch_size": 32,
     "valid_batch_size": 128,
     "optimizer": "radam",
     "learning_rate": 0.001,
@@ -121,7 +121,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
                 GridDistortion(p=0.5),
                 OpticalDistortion(p=1, distort_limit=2, shift_limit=0.5)                  
             ], p=0.8),
-            augmentations.transforms.Resize(64, 64, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.ToTensor()
         ],
@@ -129,7 +129,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
     )
     valid_aug = albumentations.Compose(
         [
-            augmentations.transforms.Resize(64, 64, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.ToTensor()
         ],
