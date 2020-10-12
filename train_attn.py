@@ -36,14 +36,14 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 35,
+    "train_batch_size": 28,
     "valid_batch_size": 64,
-    "optimizer": "adam",
+    "optimizer": "radam",
     "learning_rate": 0.001,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
-    "model": "EFFNET",
+    "model": "SRM+ELA",
     "attn_map_weight": 0,
 }
 
@@ -452,7 +452,7 @@ def expand_prediction(arr):
 
 if __name__ == "__main__":
     # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
-    patch_size = 128
+    patch_size = 64
     DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_{patch_size}"
 
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
