@@ -45,10 +45,10 @@ config_defaults = {
     "train_batch_size": 50,
     "valid_batch_size": 64,
     "optimizer": "adam",
-    "learning_rate": 0.001959,
-    "weight_decay": 0.0005938,
+    "learning_rate": 0.001,
+    "weight_decay": 0.0005,
     "schedule_patience": 3,
-    "schedule_factor": 0.2569,
+    "schedule_factor": 0.25,
     'sampling':'nearest',
     "model": "UnetB4",
 }
