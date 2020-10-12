@@ -14,7 +14,7 @@ from albumentations import augmentations
 
 class CASIA(Dataset):
     def __init__(self, dataframe, mode, val_fold, test_fold, root_dir, patch_size, 
-                 transforms=None, label_smoothing=0.1, equal_sample=False, attention=False
+                 transforms=None, label_smoothing=0.1, equal_sample=False, segment=False
     ):
 
         super().__init__()
@@ -27,6 +27,7 @@ class CASIA(Dataset):
         self.transforms = transforms
         self.label_smoothing = label_smoothing
         self.equal_sample = equal_sample
+        self.segment = segment
         # self.normalize = {
         #     "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
         #     "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
@@ -49,6 +50,8 @@ class CASIA(Dataset):
 
         if self.equal_sample:
             rows = self._equalize(rows)
+        if self.segment:
+            rows = self._segment(rows)
 
         print(
             "real:{}, fakes:{}, mode = {}".format(
@@ -130,3 +133,9 @@ class CASIA(Dataset):
         else:
             real = real.sample(n=num_fake, replace=False)
         return pd.concat([real, fakes])
+
+    def _segment(self, rows: pd.DataFrame) -> pd.DataFrame:
+        """
+            Returns only fake rows for segmentation
+        """
+        return rows[rows["label"] == 1]

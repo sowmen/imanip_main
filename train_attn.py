@@ -38,12 +38,12 @@ config_defaults = {
     "epochs": 60,
     "train_batch_size": 45,
     "valid_batch_size": 128,
-    "optimizer": "adam",
+    "optimizer": "radam",
     "learning_rate": 0.001,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
-    "model": "SRM+ELA",
+    "model": "SRM+ELA(No resize)",
     "attn_map_weight": 0,
 }
 
@@ -104,7 +104,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
                 GridDistortion(p=0.5),
                 OpticalDistortion(p=1, distort_limit=2, shift_limit=0.5)                  
             ], p=0.8),
-            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            augmentations.transforms.Resize(64, 64, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.ToTensor()
         ],
@@ -112,7 +112,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
     )
     valid_aug = albumentations.Compose(
         [
-            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            augmentations.transforms.Resize(64, 64, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.ToTensor()
         ],
@@ -452,11 +452,7 @@ def expand_prediction(arr):
 
 if __name__ == "__main__":
     # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
-<<<<<<< HEAD
     patch_size = 64
-=======
-    patch_size = 128
->>>>>>> 238c9c02a52131c64237b82e8e71b0cbf9021b51
     DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_{patch_size}"
 
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
