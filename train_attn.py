@@ -36,9 +36,9 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 28,
-    "valid_batch_size": 64,
-    "optimizer": "radam",
+    "train_batch_size": 45,
+    "valid_batch_size": 128,
+    "optimizer": "adam",
     "learning_rate": 0.001,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
@@ -235,7 +235,7 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         optimizer.zero_grad()
         
         # out_labels, attn_map = model(images)
-        out_labels = model(images, elas)
+        out_labels, _ = model(images, elas)
 
         loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
         # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -307,7 +307,7 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels = model(images, elas)
+            out_labels, _ = model(images, elas)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -382,7 +382,7 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels = model(images, elas)
+            out_labels, _ = model(images, elas)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -452,7 +452,11 @@ def expand_prediction(arr):
 
 if __name__ == "__main__":
     # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
+<<<<<<< HEAD
     patch_size = 64
+=======
+    patch_size = 128
+>>>>>>> 238c9c02a52131c64237b82e8e71b0cbf9021b51
     DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_{patch_size}"
 
     df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
