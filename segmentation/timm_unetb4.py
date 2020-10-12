@@ -64,7 +64,7 @@ class UnetB4_Inception(nn.Module):
         
         # BOTTOM UP -> LOWEST DECODER IS 0
         if self.layer == 'start':
-            self.size = [272,112,56,32,24]
+            self.size = [272,112,56,32,24]  
         elif self.layer == 'end':
             self.size = [448,160,56,32,24]
         

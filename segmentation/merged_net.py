@@ -10,7 +10,7 @@ import gc
 import copy
 
 class SRM_Classifer(nn.Module):
-    def __init__(self, in_channels=3, layer='end'):
+    def __init__(self, in_channels=3, encoder_checkpoint="", freeze_encoder=False, layer='end'):
         super(SRM_Classifer, self).__init__()
         
         self.in_channels = in_channels
@@ -35,7 +35,7 @@ class SRM_Classifer(nn.Module):
         nn.init.xavier_uniform_(self.ela_net[0].weight)
         nn.init.xavier_uniform_(self.ela_net[3].weight)
 
-        base_model = EfficientNet(in_channels=54)
+        base_model = EfficientNet(in_channels=54, encoder_checkpoint=encoder_checkpoint, freeze_encoder=freeze_encoder)
         self.encoder = base_model.encoder
         self.classifier = base_model.classifier
 
