@@ -41,7 +41,7 @@ class UnetB4(nn.Module):
             layer = start
         else:
             layer = end
-            
+  
         x = self.decode0([upsize2(layer[-1], self.sampling), layer[-2]]) # 1792x8x8 -> 1792x16x16 + 112x16x16 => 512x16x16
         x = self.decode1([upsize2(x, self.sampling), layer[-3]])   # 512x16x16 -> 512x32x32 + 56x32x32 => 256x32x32
         x = self.decode2([upsize2(x, self.sampling), layer[-4]])   # 256x32x32 -> 256x64x64 + 32x64x64 => 128x64x64

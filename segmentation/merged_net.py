@@ -8,6 +8,7 @@ from segmentation.srm_kernel import setup_srm_layer
 from segmentation.timm_efficientnet import EfficientNet
 import gc
 import copy
+from collections import OrderedDict
 
 class SRM_Classifer(nn.Module):
     def __init__(self, in_channels=3, encoder_checkpoint="", freeze_encoder=False):
@@ -43,6 +44,8 @@ class SRM_Classifer(nn.Module):
 
         if freeze_encoder:
             self.freeze()
+        if encoder_checkpoint:
+            self.load_weights(encoder_checkpoint)
         
     def forward(self, im, ela):
         x1 = self.srm_conv(im)
@@ -65,3 +68,16 @@ class SRM_Classifer(nn.Module):
         for param in super().parameters():
             param.requires_grad = True
         print('--------- SRM Opened -----------')
+    
+    def load_weights(self, checkpoint=""):
+        # print(f'--------- Loaded Checkpoint: {checkpoint} ----------')
+        checkpoint = torch.load(checkpoint)
+        encoder_dict = OrderedDict()
+        for item in checkpoint.items():
+            key = item[0].split('.',1)[-1]
+            if('base_model' in key):
+                s = key.replace('base_model.','')
+                encoder_dict[s] = item[1]
+            else:
+                encoder_dict[key] = item[1]
+        super().load_state_dict(encoder_dict)
