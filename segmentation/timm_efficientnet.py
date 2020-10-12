@@ -67,31 +67,36 @@ class EfficientNet(nn.Module):
         def forward(self, x):
             
 
-            start_outputs = OrderedDict()
-            end_outputs = OrderedDict()
+            start_outputs = []
+            end_outputs = []
             smp_outputs = []
             
+            ##################################
             smp_outputs.append(x) # input
+            ##################################
             
             x = self.stem(x)
+            
+            ##################################
             smp_outputs.append(x) # conv_stem
+            ##################################
             
             idx = 0
             for (i, block) in enumerate(self.blocks):
                 for inner_block in block:
                     x = inner_block(x)
 
-                    if idx in [0, 2, 6, 10]:
-                        start_outputs[f"block_{i}_layer_{idx}"] = x
+                    if idx in [0, 2, 6, 10, 22]:
+                        start_outputs.append(x)
                     if idx in [1, 5, 9, 21, 31]:
-                        end_outputs[f"block_{i}_layer_{idx}"] = x
+                        end_outputs.append(x)
                     if idx in [5, 9, 21, 31]:
                         smp_outputs.append(x)
                     idx += 1
 
-            x = self.head(x)
+            feat = self.head(x)
 
-            return x, (start_outputs, end_outputs), smp_outputs 
+            return feat, (start_outputs, end_outputs), smp_outputs 
         
         def load_weights(self, checkpoint=""):
             # print(f'--------- Loaded Checkpoint: {checkpoint} ----------')

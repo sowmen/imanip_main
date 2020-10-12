@@ -214,6 +214,10 @@ class Decode(nn.Module):
             BatchNorm2d(out_channel),
             Swish(), #nn.ReLU(inplace=True),
         )
+        nn.init.xavier_uniform_(self.top[0].weight)
+        nn.init.xavier_uniform_(self.top[3].weight)
+        nn.init.xavier_uniform_(self.top[6].weight)
+
 
     def forward(self, x):
         x = self.top(torch.cat(x, 1))
@@ -224,12 +228,16 @@ class BnInception(nn.Module):
         super(BnInception, self).__init__()
         
         self.conv_c0 = nn.Conv2d(in_channels, out_channels, kernel_size[0], padding=padding[0])
+        nn.init.xavier_uniform_(self.conv_c0.weight)
         self.conv_c1 = nn.Conv2d(in_channels, out_channels, kernel_size[1], padding=padding[1])
+        nn.init.xavier_uniform_(self.conv_c1.weight)
         self.conv_c2 = nn.Conv2d(in_channels, out_channels, kernel_size[2], padding=padding[2])
+        nn.init.xavier_uniform_(self.conv_c2.weight)
         self.batchNorm1 = nn.BatchNorm2d(int(out_channels*3))
         self.relu = nn.ReLU(inplace=True)
 
         self.final_conv = nn.Conv2d(3*out_channels, out_channels, kernel_size=1)
+        nn.init.xavier_uniform_(self.final_conv.weight)
         self.batchNorm2 = nn.BatchNorm2d(out_channels)
         
     def forward(self, x):

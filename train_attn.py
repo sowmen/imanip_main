@@ -235,7 +235,7 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         optimizer.zero_grad()
         
         # out_labels, attn_map = model(images)
-        out_labels = model(images, elas)
+        out_labels, _ = model(images, elas)
 
         loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
         # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -307,7 +307,7 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels = model(images, elas)
+            out_labels, _ = model(images, elas)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -382,7 +382,7 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels = model(images, elas)
+            out_labels, _ = model(images, elas)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)

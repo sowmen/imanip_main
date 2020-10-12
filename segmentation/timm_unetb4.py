@@ -18,7 +18,7 @@ class UnetB4(nn.Module):
         
         # BOTTOM UP -> LOWEST DECODER IS 0
         if self.layer == 'start':
-            self.size = [1792,112,56,32,24]
+            self.size = [272,112,56,32,24]
         elif self.layer == 'end':
             self.size = [448,160,56,32,24]
         
@@ -30,21 +30,23 @@ class UnetB4(nn.Module):
         
         self.final_conv = nn.Conv2d(32, self.num_classes, kernel_size=1)
         # self.final_conv = nn.Conv2d(32, self.num_classes, kernel_size=3, padding=1)
+        nn.init.xavier_uniform_(self.final_conv.weight)
+
+    def forward(self, inp, ela):
+        # _input = copy.deepcopy(x)
         
-    def forward(self, x):
-        _input = copy.deepcopy(x)
+        x, (_merged_input, feat, start, end) = self.encoder(inp, ela)
         
-        out, (start, end), _ = self.encoder(x)
         if self.layer == 'start':
             layer = start
         else:
             layer = end
             
-        x = self.decode0([upsize2(layer.popitem()[1], self.sampling), layer.popitem()[1]]) # 1792x8x8 -> 1792x16x16 + 112x16x16 => 512x16x16
-        x = self.decode1([upsize2(x, self.sampling), layer.popitem()[1]])   # 512x16x16 -> 512x32x32 + 56x32x32 => 256x32x32
-        x = self.decode2([upsize2(x, self.sampling), layer.popitem()[1]])   # 256x32x32 -> 256x64x64 + 32x64x64 => 128x64x64
-        x = self.decode3([upsize2(x, self.sampling), layer.popitem()[1]])   # 128x64x64 -> 128x128x128 + 24x128x128 => 64x128x128
-        x = self.decode_input([upsize2(x, self.sampling), _input]) # 64x128x128 -> 64x256x256 + 3x256x256 => 32x256x256
+        x = self.decode0([upsize2(layer[-1], self.sampling), layer[-2]]) # 1792x8x8 -> 1792x16x16 + 112x16x16 => 512x16x16
+        x = self.decode1([upsize2(x, self.sampling), layer[-3]])   # 512x16x16 -> 512x32x32 + 56x32x32 => 256x32x32
+        x = self.decode2([upsize2(x, self.sampling), layer[-4]])   # 256x32x32 -> 256x64x64 + 32x64x64 => 128x64x64
+        x = self.decode3([upsize2(x, self.sampling), layer[-5]])   # 128x64x64 -> 128x128x128 + 24x128x128 => 64x128x128
+        x = self.decode_input([upsize2(x, self.sampling), _merged_input]) # 64x128x128 -> 64x256x256 + 54x256x256 => 32x256x256
         
         x = self.final_conv(x) # 32x256x256 => 1x256x256
         
@@ -62,9 +64,9 @@ class UnetB4_Inception(nn.Module):
         
         # BOTTOM UP -> LOWEST DECODER IS 0
         if self.layer == 'start':
-            self.size = [1792,112,56,32,24]
+            self.size = [272,112,56,32,24]
         elif self.layer == 'end':
-            self.size = [1792,160,56,32,24]
+            self.size = [448,160,56,32,24]
         
         self.decode0 = BnInception(self.size[0] + self.size[1], 256)
         self.decode1 = BnInception(256 + self.size[2], 128)
@@ -74,21 +76,23 @@ class UnetB4_Inception(nn.Module):
         
         self.final_conv = nn.Conv2d(16, self.num_classes, kernel_size=1)
         # self.final_conv = nn.Conv2d(32, self.num_classes, kernel_size=3, padding=1)
+        nn.init.xavier_uniform_(self.final_conv.weight)
         
-    def forward(self, x):
-        _input = copy.deepcopy(x)
+    def forward(self, inp, ela):
+        # _input = copy.deepcopy(x)
         
-        out, (start, end), _ = self.encoder(x)
+        x, (_merged_input, feat, start, end) = self.encoder(inp, ela)
+        
         if self.layer == 'start':
             layer = start
         else:
             layer = end
             
-        x = self.decode0([upsize2(out, self.sampling), layer.popitem()[1]]) # 1792x8x8 -> 1792x16x16 + 112x16x16 => 512x16x16
-        x = self.decode1([upsize2(x, self.sampling), layer.popitem()[1]])   # 512x16x16 -> 512x32x32 + 56x32x32 => 256x32x32
-        x = self.decode2([upsize2(x, self.sampling), layer.popitem()[1]])   # 256x32x32 -> 256x64x64 + 32x64x64 => 128x64x64
-        x = self.decode3([upsize2(x, self.sampling), layer.popitem()[1]])   # 128x64x64 -> 128x128x128 + 24x128x128 => 64x128x128
-        x = self.decode_input([upsize2(x, self.sampling), _input]) # 64x128x128 -> 64x256x256 + 3x256x256 => 32x256x256
+        x = self.decode0([upsize2(layer[-1], self.sampling), layer[-2]]) # 1792x8x8 -> 1792x16x16 + 112x16x16 => 512x16x16
+        x = self.decode1([upsize2(x, self.sampling), layer[-3]])   # 512x16x16 -> 512x32x32 + 56x32x32 => 256x32x32
+        x = self.decode2([upsize2(x, self.sampling), layer[-4]])   # 256x32x32 -> 256x64x64 + 32x64x64 => 128x64x64
+        x = self.decode3([upsize2(x, self.sampling), layer[-5]])   # 128x64x64 -> 128x128x128 + 24x128x128 => 64x128x128
+        x = self.decode_input([upsize2(x, self.sampling), _merged_input]) # 64x128x128 -> 64x256x256 + 54x256x256 => 32x256x256
         
         x = self.final_conv(x) # 32x256x256 => 1x256x256
         
