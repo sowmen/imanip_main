@@ -52,7 +52,7 @@ config_defaults = {
     "schedule_patience": 3,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "UnetB4(ELA)",
+    "model": "UnetPP(ELA)No Resize log dice",
 }
 TEST_FOLD = 9
 
@@ -82,9 +82,8 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
     
     # encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
     encoder = SRM_Classifer(encoder_checkpoint='64_ELA.h5', freeze_encoder=True)
-    model = UnetB4(encoder, in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
-    # model = UnetB4_Inception(encoder, num_classes=1, sampling=config.sampling)
-    # model = UnetPP(encoder, num_classes=1, sampling=config.sampling)
+    # model = UnetB4_Inception(encoder, in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
+    model = UnetPP(encoder, in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
     model.to(device)
     model = nn.DataParallel(model)
 
@@ -196,7 +195,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
     # model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
 
     bce = nn.BCEWithLogitsLoss()
-    dice = losses.DiceLoss(mode='binary')
+    dice = losses.DiceLoss(mode='binary', log_loss=True)
     criterion = losses.JointLoss(bce, dice)
 
     es = EarlyStopping(patience=16, mode="min")
@@ -207,7 +206,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        if epoch == 5:
+        if epoch == 3:
             model.module.encoder.unfreeze()
 
         train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG)
