@@ -35,7 +35,7 @@ class UnetB4(nn.Module):
     def forward(self, inp, ela):
         # _input = copy.deepcopy(x)
         
-        x, (_merged_input, feat, start, end) = self.encoder(inp, ela)
+        _, (_merged_input, _, start, end) = self.encoder(inp, ela)
         
         if self.layer == 'start':
             layer = start
