@@ -86,7 +86,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
     # model = UnetB4_Inception(encoder, num_classes=1, sampling=config.sampling)
     # model = UnetPP(encoder, num_classes=1, sampling=config.sampling)
     model.to(device)
-    # model = nn.DataParallel(model)
+    model = nn.DataParallel(model)
 
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     
@@ -194,7 +194,6 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
     )
 
     # model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
-    model = nn.DataParallel(model)
 
     bce = nn.BCEWithLogitsLoss()
     dice = losses.DiceLoss(mode='binary')
