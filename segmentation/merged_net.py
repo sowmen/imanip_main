@@ -54,10 +54,10 @@ class SRM_Classifer(nn.Module):
         x_ela = self.ela_net(ela)
         _merged_input = torch.cat([x1, x2, x3, x_ela], dim=1)
         
-        feat, (start, end), _ = self.encoder(_merged_input)
-        x = self.classifier(feat)
+        enc_out, (start, end), _ = self.encoder(_merged_input)
+        x = self.classifier(enc_out)
         
-        return x, (_merged_input, feat, start, end)
+        return x, (_merged_input, enc_out, start, end)
     
     def freeze(self):
         for param in super().parameters():
@@ -70,7 +70,7 @@ class SRM_Classifer(nn.Module):
         print('--------- SRM Opened -----------')
     
     def load_weights(self, checkpoint=""):
-        # print(f'--------- Loaded Checkpoint: {checkpoint} ----------')
+        print(f'--------- Loaded Checkpoint: {checkpoint} ----------')
         checkpoint = torch.load(checkpoint)
         encoder_dict = OrderedDict()
         for item in checkpoint.items():
@@ -80,4 +80,4 @@ class SRM_Classifer(nn.Module):
                 encoder_dict[s] = item[1]
             else:
                 encoder_dict[key] = item[1]
-        super().load_state_dict(encoder_dict)
+        print(super().load_state_dict(encoder_dict))
