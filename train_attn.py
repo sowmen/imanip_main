@@ -29,21 +29,22 @@ import wandb
 from utils import *
 from effb4_attention import Efficient_Attention
 from segmentation.timm_efficientnet import EfficientNet
-from casia_dataset import CASIA
+from dataset import DATASET
 from segmentation.merged_net import SRM_Classifer
+
 
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 45,
-    "valid_batch_size": 128,
+    "train_batch_size": 26,
+    "valid_batch_size": 64,
     "optimizer": "radam",
     "learning_rate": 0.001,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
-    "model": "SRM+ELA(No resize)",
+    "model": "SRM+ELA",
     "attn_map_weight": 0,
 }
 
@@ -104,7 +105,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
                 GridDistortion(p=0.5),
                 OpticalDistortion(p=1, distort_limit=2, shift_limit=0.5)                  
             ], p=0.8),
-            augmentations.transforms.Resize(64, 64, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.ToTensor()
         ],
@@ -112,7 +113,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
     )
     valid_aug = albumentations.Compose(
         [
-            augmentations.transforms.Resize(64, 64, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.ToTensor()
         ],
@@ -120,7 +121,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
     )
 
     # -------------------------------- CREATE DATASET and DATALOADER --------------------------
-    train_dataset = CASIA(
+    train_dataset = DATASET(
         dataframe=df,
         mode="train",
         val_fold=VAL_FOLD,
@@ -130,9 +131,9 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
         equal_sample=True,
         transforms=train_aug,
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8, pin_memory=True)
 
-    valid_dataset = CASIA(
+    valid_dataset = DATASET(
         dataframe=df,
         mode="val",
         val_fold=VAL_FOLD,
@@ -142,9 +143,9 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
         equal_sample=True,
         transforms=valid_aug,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8, pin_memory=True)
 
-    test_dataset = CASIA(
+    test_dataset = DATASET(
         dataframe=df,
         mode="test",
         val_fold=VAL_FOLD,
@@ -154,7 +155,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
         equal_sample=True,
         transforms=valid_aug,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8, pin_memory=True)
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
@@ -208,7 +209,9 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
             print("Early stopping")
             break
 
-    model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")))
+    if os.path.exists(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")):
+        print(model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))))
+        print("LOADED FOR TEST")
 
     test_metrics = test(model, test_loader, criterion, attn_map_criterion, config.attn_map_weight)
     wandb.save(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))
