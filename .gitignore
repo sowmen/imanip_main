@@ -8,4 +8,6 @@ weights/
 history/
 __pycache__/
 *.h5
+best_weights/
+checkpoint/
 phase2 (SRM+Fake,ELA+Unet).ipynb
