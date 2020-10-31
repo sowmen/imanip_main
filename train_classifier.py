@@ -27,26 +27,26 @@ from apex import amp
 
 from utils import *
 from classifier_dataset import Classifier_Dataset
-from classifier import ClassifierConv, Classifier3
+from classifier import ClassifierConv, Classifier3, Classifier_GAP
 
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 50,
-    "train_batch_size": 64,
-    "valid_batch_size": 100,
-    "optimizer": "adam",
-    "learning_rate": 0.001,
+    "train_batch_size": 32,
+    "valid_batch_size": 64,
+    "optimizer": "sgd",
+    "learning_rate": 1e-6,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
-    "schedule_factor": 0.25,
-    "model": "CLASSIFIER CONV",
+    "schedule_factor": 0.15,
+    "model": "CLASSIFIER-GAP",
 }
 
 TEST_FOLD = 9
 
 
-def train(name, df, data_root, VAL_FOLD=0):
+def train(name, df, data_root, VAL_FOLD=0, resume=False):
     now = datetime.now()
     dt_string = now.strftime("%d|%m_%H|%M|%S")
     print("Starting -->", dt_string)
@@ -60,7 +60,7 @@ def train(name, df, data_root, VAL_FOLD=0):
     # neptune.init("sowmen/imanip")
     # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
 
-    model = ClassifierConv(21*448).to(device)
+    model = Classifier_GAP(1792).to(device)
     print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))
     # model = Classifier2(1792).to(device)
     
@@ -75,7 +75,7 @@ def train(name, df, data_root, VAL_FOLD=0):
         root_dir=data_root,
         equal_sample=False,
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8, pin_memory=True)
 
     valid_dataset = Classifier_Dataset(
         dataframe=df,
@@ -85,7 +85,7 @@ def train(name, df, data_root, VAL_FOLD=0):
         root_dir=data_root,
         equal_sample=False,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8, pin_memory=True)
 
     test_dataset = Classifier_Dataset(
         dataframe=df,
@@ -95,7 +95,7 @@ def train(name, df, data_root, VAL_FOLD=0):
         root_dir=data_root,
         equal_sample=False,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8, pin_memory=True)
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
@@ -111,7 +111,16 @@ def train(name, df, data_root, VAL_FOLD=0):
     criterion = nn.BCEWithLogitsLoss()
     es = EarlyStopping(patience=16, mode="max")
 
-    for epoch in range(config.epochs):
+    start_epoch = 0
+    if resume:
+        checkpoint = torch.load('checkpoint/')
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        print("-----------> Resuming <------------")
+
+    for epoch in range(start_epoch, config.epochs):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
@@ -135,6 +144,14 @@ def train(name, df, data_root, VAL_FOLD=0):
             print("Early stopping")
             break
 
+        # checkpoint = {
+        #     'epoch': epoch,
+        #     'model_state_dict': model.state_dict(),
+        #     'optimizer_state_dict' : optimizer.state_dict(),
+        #     'scheduler_state_dict': scheduler.state_dict(),
+        # }
+        # torch.save(checkpoint, os.path.join('checkpoint', f"{name}_[{dt_string}].pt"))
+
     model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")))
 
     test_metrics = test(model, test_loader, criterion)
@@ -152,11 +169,11 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
     targets = []
 
     for batch in tqdm(train_loader):
-        images = batch["image"].to(device)
+        tensors = batch["tensor"].to(device)
         target_labels = batch["label"].to(device)
         
         optimizer.zero_grad()
-        out_labels = model(images)
+        out_labels = model(tensors)
 
         loss = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
         loss.backward()
@@ -202,10 +219,10 @@ def valid_epoch(model, valid_loader, criterion, epoch):
 
     with torch.no_grad():
         for batch in tqdm(valid_loader):
-            images = batch["image"].to(device)
+            tensors = batch["tensor"].to(device)
             target_labels = batch["label"].to(device)
 
-            out_labels = model(images)
+            out_labels = model(tensors)
 
             loss = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             
@@ -218,8 +235,8 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             targets.append(batch_targets)
             predictions.append(batch_preds)
 
-            best_batch_pred_idx = np.argmin(abs(batch_targets - batch_preds))
-            worst_batch_pred_idx = np.argmax(abs(batch_targets - batch_preds))
+            # best_batch_pred_idx = np.argmin(abs(batch_targets - batch_preds))
+            # worst_batch_pred_idx = np.argmax(abs(batch_targets - batch_preds))
             # example_images.append(
             #     wandb.Image(
             #         images[best_batch_pred_idx],
@@ -265,10 +282,10 @@ def test(model, test_loader, criterion):
 
     with torch.no_grad():
         for batch in tqdm(test_loader):
-            images = batch["image"].to(device)
+            tensors = batch["tensor"].to(device)
             target_labels = batch["label"].to(device)
 
-            out_labels = model(images)
+            out_labels = model(tensors)
 
             loss = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             
@@ -332,28 +349,29 @@ def expand_prediction(arr):
 
 if __name__ == "__main__":
     # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
-    DATA_ROOT = 'Image_Manipulation_Dataset/CASIA_2.0/448_tensors'
+    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/1792_tensors"
 
-    df = pd.read_csv('casia_tensor_448.csv').sample(frac=1).reset_index(drop=True)
-    acc = 0
-    f1 = 0
-    loss = 0
-    auc = 0
-    # for i in range(0,9):
-    #     print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
-    test_metrics = train(
-        name=f"Classification" + config_defaults["model"],
-        df=df,
-        data_root=DATA_ROOT,
-        VAL_FOLD=0
-    )
-    acc += test_metrics['test_acc_05']
-    f1 += test_metrics['test_f1_05']
-    loss += test_metrics['test_loss']
-    auc += test_metrics['test_auc']
+    df = pd.read_csv(f"casia_1792_tensors.csv").sample(frac=1).reset_index(drop=True)
+    acc = AverageMeter()
+    f1 = AverageMeter()
+    loss = AverageMeter()
+    auc = AverageMeter()
+    for i in range(0,1):
+        print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
+        test_metrics = train(
+            name=f"CASIA_Classifier" + config_defaults["model"],
+            df=df,
+            data_root=DATA_ROOT,
+            VAL_FOLD=i,
+            resume=False
+        )
+        acc.update(test_metrics['test_acc_05'])
+        f1.update(test_metrics['test_f1_05'])
+        loss.update(test_metrics['test_loss'])
+        auc.update(test_metrics['test_auc'])
     
-    print(f'ACCURACY : {acc}')
-    print(f'F1 : {f1}')
-    print(f'LOSS : {loss}')
-    print(f'AUC : {auc}')
+    print(f'ACCURACY : {acc.avg}')
+    print(f'F1 : {f1.avg}')
+    print(f'LOSS : {loss.avg}')
+    print(f'AUC : {auc.avg}')
 

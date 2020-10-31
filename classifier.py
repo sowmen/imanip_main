@@ -119,30 +119,36 @@ class Classifier3(nn.Module):
 
         return x
     
-class Classifier2(nn.Module):
+class Classifier_GAP(nn.Module):
     def __init__(self, in_channels):
-        super(Classifier2, self).__init__()
-        
-        self.gap1D = nn.AdaptiveAvgPool1d(output_size=1)
-        
+        super(Classifier_GAP, self).__init__()
+
+        self.pool = nn.AdaptiveAvgPool1d(1)     
         ### Fully Connected Multi-Layer Perceptron (FC-MLP)
         self.mlp = nn.Sequential(
-            nn.Linear(in_channels, in_channels // 16, bias=False),
+            nn.Linear(in_channels, in_channels // 16, bias=True),
             nn.ReLU(inplace=True),
-            nn.Linear(in_channels // 16, in_channels, bias=False),
-            nn.Sigmoid()
+            nn.Linear(in_channels // 16, in_channels, bias=True),
+            nn.ReLU(inplace=True)
         )
+        nn.init.xavier_uniform_(self.mlp[0].weight)
+        nn.init.xavier_uniform_(self.mlp[2].weight)
+
         self.fc = nn.Linear(in_channels, 1)
+        nn.init.xavier_uniform_(self.fc.weight)
         
-    def forward(self, x):
-        y = x.permute((0,2,1))
-        y = self.gap1D(y).squeeze(-1)
-        y = self.mlp(y).unsqueeze(1)
-        x =  x * y
+    def forward(self, x): # x -> (B,21,1792)
+        # y = torch.mean(x,dim=1) # y -> (B,1792)
+        y = torch.sigmoid(x)
+        y = self.pool(x.permute(0,2,1)).squeeze() # y -> (B,1792)
+        # print(y.shape)
+        y = self.mlp(y) # y -> (B,1792)
+        # print(y.shape)
+        x =  x * y.unsqueeze(1) # x -> (B,21,1792)
         
         x = F.dropout(x, p=0.3)
-        x = x.permute((0,2,1))
-        x = self.gap1D(x).squeeze(-1)
+        # x = torch.mean(x,dim=1) # x -> (B,1,1792)
+        x = self.pool(x.permute(0,2,1)).squeeze()
         
         x = self.fc(x)
         

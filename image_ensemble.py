@@ -1,9 +1,10 @@
-from albumentations.pytorch.functional import img_to_tensor
+import cv2
 import torch
 import numpy as np
-import cv2
+import albumentations
+from albumentations import augmentations
 
-def patch_func(img, patch_size):
+def patch_func(img, ela, patch_size):
     d = img.shape
     patches = []
     for i in range(0, d[0], patch_size):
@@ -12,49 +13,65 @@ def patch_func(img, patch_size):
             y = j + patch_size
             if x > d[0] or y > d[1]:
                 break
-            temp = img[i: x, j: y]
-            temp = cv2.resize(temp, (d[0],d[1]), interpolation=cv2.INTER_AREA)
-            patches.append(temp)
-    return np.stack(patches)
+            temp_img = img[i: x, j: y]
+            temp_ela = ela[i: x, j: y]
+            # temp = cv2.resize(temp, (d[0],d[1]), interpolation=cv2.INTER_AREA)
+            patches.append((temp_img, temp_ela))
+    return patches
 
 
-def ensemble(model, image):
+def ensemble(model, image, ela_image):
     normalize = {
         "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
         "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
     }
+    valid_aug = albumentations.Compose(
+        [
+            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+            albumentations.pytorch.ToTensor()
+        ],
+        additional_targets={'ela':'image'}
+    )
+
     model.eval()
+    res = []
     # print("=====>1 ", next(model.parameters()).device)
-    model.load_weights('256_encoder.h5')
-    image_full = img_to_tensor(image, normalize).unsqueeze(0).cuda()
+    model.load_state_dict(torch.load('best_weights/CASIA_FULL_ELA.h5'))
+    trans = valid_aug(image=image, ela=ela_image)
+    image_tensor = trans["image"].unsqueeze(0).cuda()
+    ela_tensor = trans["ela"].unsqueeze(0).cuda()
     with torch.no_grad():
-        _, _, smp = model(image_full)
-        tensor1 = smp[-1]
-        # print(tensor1.shape)
-        del(image_full)
+        _, (_, enc_out, _, _) = model(image_tensor, ela_tensor)
+        res.append(enc_out.cpu().detach())
+        # print(enc_out.shape)
 
     # print("=====>2 ", next(model.parameters()).device)
-    model.load_weights('128_encoder.h5')
-    image_128 = patch_func(image, 128)
-    image_128_norm = [img_to_tensor(x, normalize) for x in image_128]
-    image_128_norm = torch.from_numpy(np.stack(image_128_norm)).cuda()
+    model.load_state_dict(torch.load('best_weights/CASIA_128_ELA.h5'))
+    patches_128 = patch_func(image, ela_image, 128)
     with torch.no_grad():
-        _, _, smp = model(image_128_norm)
-        tensor2 = smp[-1]
-        # print(tensor2.shape)
-        del(image_128_norm)
-    
-    # print("=====>3 ", next(model.parameters()).device)
-    model.load_weights('64_encoder.h5')
-    image_64 = patch_func(image, 64)
-    image_64_norm = [img_to_tensor(x, normalize) for x in image_64]
-    image_64_norm = torch.from_numpy(np.stack(image_64_norm)).cuda()
+        for x in patches_128:
+            trans = valid_aug(image=x[0], ela=x[1])
+            image_tensor = trans["image"].unsqueeze(0).cuda()
+            ela_tensor = trans["ela"].unsqueeze(0).cuda()
+
+            _, (_, enc_out, _, _) = model(image_tensor, ela_tensor)
+            res.append(enc_out.cpu().detach())
+            # print(enc_out.shape)
+        
+    # # print("=====>3 ", next(model.parameters()).device)
+    model.load_state_dict(torch.load('best_weights/CASIA_64_ELA.h5'))
+    patches_64 = patch_func(image, ela_image, 64)
     with torch.no_grad():
-        _, _, smp = model(image_64_norm)
-        tensor3 = smp[-1]
-        # print(tensor3.shape)
-        del(image_64_norm)
+        for x in patches_64:
+            trans = valid_aug(image=x[0], ela=x[1])
+            image_tensor = trans["image"].unsqueeze(0).cuda()
+            ela_tensor = trans["ela"].unsqueeze(0).cuda()
+
+            _, (_, enc_out, _, _) = model(image_tensor, ela_tensor)
+            res.append(enc_out.cpu().detach())
+            # print(enc_out.shape)
 
     del(model)
     
-    return torch.cat([tensor1, tensor2, tensor3]) 
+    return torch.cat(res, dim=0) 

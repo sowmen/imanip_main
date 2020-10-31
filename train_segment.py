@@ -35,7 +35,7 @@ from dataset import DATASET
 import seg_metrics
 from pytorch_toolbelt import losses
 from utils import *
-# import segmentation_models_pytorch as smp
+import segmentation_models_pytorch as smp
 # from segmentation.smp_effb4 import SMP_DIY
 # from segmentation.timm_unetb4 import UnetB4, UnetB4_Inception
 from segmentation.timm_unetpp import UnetPP
@@ -45,16 +45,16 @@ from sim_dataset import SimDataset
 OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
-    "epochs": 65,
-    "train_batch_size": 8,
-    "valid_batch_size": 12,
+    "epochs": 60,
+    "train_batch_size": 64,
+    "valid_batch_size": 128,
     "optimizer": "radam",
     "learning_rate": 0.0009,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "UnetPP",
+    "model": "DeepLabv3+resnet34",
 }
 TEST_FOLD = 9
 
@@ -79,13 +79,13 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False)
     #     # encoder_checkpoint='weights/256_CASIA_FULLtimm_effunet_[20_09_08_11_47].h5',
     #     # freeze_encoder=True
     # )
-    # model = smp.Unet('timm-efficientnet-b4', classes=6, encoder_weights='imagenet')
+    model = smp.DeepLabV3('resnet34', classes=1, encoder_weights='imagenet')
     # model = SMP_DIY(num_classes=6)
     
     # encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
-    encoder = SRM_Classifer(encoder_checkpoint='CASIA_64_ELA.h5', freeze_encoder=False)
+    # encoder = SRM_Classifer(encoder_checkpoint='best_weights/CASIA_FULL_ELA.h5', freeze_encoder=False)
     # model = UnetB4_Inception(encoder, in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
-    model = UnetPP(encoder, in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
+    # model = UnetPP(encoder, in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
     model.to(device)
     model = nn.DataParallel(model)
 
@@ -160,7 +160,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False)
         transforms=train_aug,
         segment=True
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=7)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -172,7 +172,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False)
         transforms=valid_aug,
         segment=True
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=7)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -184,7 +184,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False)
         transforms=valid_aug,
         segment=True
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=7)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8)
 
     optimizer = get_optimizer(model, config.optimizer,config.learning_rate, config.weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -202,11 +202,11 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False)
 
     es = EarlyStopping(patience=16, mode="max")
 
-    wandb.watch(model, log_freq=50, log='all')
+    # wandb.watch(model, log_freq=50, log='all')
 
     start_epoch = 0
     if resume:
-        checkpoint = torch.load('checkpoint/224CASIA_64_(Full Freeze)UnetPP_[27|10_18|22|40].pt')
+        checkpoint = torch.load('checkpoint/224CASIA_128UnetPP_[30|10_05|21|34].pt')
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -217,7 +217,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False)
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        # if epoch >= 3:
+        # if epoch == 2:
         #     model.module.encoder.unfreeze()
 
         train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG)
@@ -374,11 +374,12 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
 
     for batch in tqdm(train_loader):
         images = batch["image"].to(device)
-        elas = batch["ela"].to(device)
+        # elas = batch["ela"].to(device)
         gt = batch["mask"].to(device)
 
         optimizer.zero_grad()
-        out_mask = model(images, elas)
+        # out_mask = model(images, elas)
+        out_mask = model(images)
 
         loss_segmentation = criterion(out_mask, gt)
 
@@ -437,10 +438,11 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     with torch.no_grad():
         for batch in tqdm(valid_loader):
             images = batch["image"].to(device)
-            elas = batch["ela"].to(device)
+            # elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
             
-            out_mask = model(images, elas)
+            # out_mask = model(images, elas)
+            out_mask = model(images)
 
             loss_segmentation = criterion(out_mask, gt)
 
@@ -488,10 +490,11 @@ def test(model, test_loader, criterion):
     with torch.no_grad():
         for batch in tqdm(test_loader):
             images = batch["image"].to(device)
-            elas = batch["ela"].to(device)
+            # elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
 
-            out_mask = model(images, elas)
+            # out_mask = model(images, elas)
+            out_mask = model(images)
 
             loss_segmentation = criterion(out_mask, gt)
 
@@ -559,13 +562,13 @@ if __name__ == "__main__":
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"224CASIA_{patch_size}_(Full Freeze)" + config_defaults["model"],
+            name=f"224CASIA_{patch_size}" + config_defaults["model"],
             df=df,
             data_root=DATA_ROOT,
             patch_size=patch_size,
             VAL_FOLD=i,
-            SRM_FLAG=1,
-            resume=True
+            SRM_FLAG=0,
+            resume=False
         )
         dice.update(test_metrics['test_dice'])
         jaccard.update(test_metrics['test_jaccard'])
