@@ -52,7 +52,7 @@ config_defaults = {
     "schedule_patience": 3,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "UnetPP(ELA)No Resize log dice",
+    "model": "UnetPP(ELA)log dice",
 }
 TEST_FOLD = 9
 
@@ -236,8 +236,10 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1):
 
     model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")))
 
-    test(model, test_loader, criterion)
+    test_metrics = test(model, test_loader, criterion)
     wandb.save(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))
+
+    return test_metrics
 
 #region DICE TEST
 ####################################################################################
@@ -491,6 +493,7 @@ def test(model, test_loader, criterion):
     }
     wandb.log(test_metrics)
     
+    return test_metrics
     #region TEST LOGGING
     # wandb.log(
     #     {
