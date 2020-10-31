@@ -35,7 +35,7 @@ from dataset import DATASET
 import seg_metrics
 from pytorch_toolbelt import losses
 from utils import *
-# import segmentation_models_pytorch as smp
+import segmentation_models_pytorch as smp
 # from segmentation.smp_effb4 import SMP_DIY
 # from segmentation.timm_unetb4 import UnetB4, UnetB4_Inception
 from segmentation.timm_unetpp import UnetPP
@@ -46,7 +46,7 @@ OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 32,
+    "train_batch_size": 64,
     "valid_batch_size": 128,
     "optimizer": "radam",
     "learning_rate": 0.0009,
@@ -54,7 +54,7 @@ config_defaults = {
     "schedule_patience": 3,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "UnetPP",
+    "model": "DeepLabv3+resnet34",
 }
 TEST_FOLD = 9
 
@@ -79,13 +79,13 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False)
     #     # encoder_checkpoint='weights/256_CASIA_FULLtimm_effunet_[20_09_08_11_47].h5',
     #     # freeze_encoder=True
     # )
-    # model = smp.Unet('timm-efficientnet-b4', classes=6, encoder_weights='imagenet')
+    model = smp.DeepLabV3('resnet34', classes=1, encoder_weights='imagenet')
     # model = SMP_DIY(num_classes=6)
     
     # encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
-    encoder = SRM_Classifer(encoder_checkpoint='best_weights/CASIA_FULL_ELA.h5', freeze_encoder=False)
+    # encoder = SRM_Classifer(encoder_checkpoint='best_weights/CASIA_FULL_ELA.h5', freeze_encoder=False)
     # model = UnetB4_Inception(encoder, in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
-    model = UnetPP(encoder, in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
+    # model = UnetPP(encoder, in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
     model.to(device)
     model = nn.DataParallel(model)
 
@@ -217,8 +217,8 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False)
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        if epoch == 2:
-            model.module.encoder.unfreeze()
+        # if epoch == 2:
+        #     model.module.encoder.unfreeze()
 
         train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG)
 
@@ -374,11 +374,12 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
 
     for batch in tqdm(train_loader):
         images = batch["image"].to(device)
-        elas = batch["ela"].to(device)
+        # elas = batch["ela"].to(device)
         gt = batch["mask"].to(device)
 
         optimizer.zero_grad()
-        out_mask = model(images, elas)
+        # out_mask = model(images, elas)
+        out_mask = model(images)
 
         loss_segmentation = criterion(out_mask, gt)
 
@@ -437,10 +438,11 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     with torch.no_grad():
         for batch in tqdm(valid_loader):
             images = batch["image"].to(device)
-            elas = batch["ela"].to(device)
+            # elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
             
-            out_mask = model(images, elas)
+            # out_mask = model(images, elas)
+            out_mask = model(images)
 
             loss_segmentation = criterion(out_mask, gt)
 
@@ -488,10 +490,11 @@ def test(model, test_loader, criterion):
     with torch.no_grad():
         for batch in tqdm(test_loader):
             images = batch["image"].to(device)
-            elas = batch["ela"].to(device)
+            # elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
 
-            out_mask = model(images, elas)
+            # out_mask = model(images, elas)
+            out_mask = model(images)
 
             loss_segmentation = criterion(out_mask, gt)
 
@@ -515,7 +518,6 @@ def test(model, test_loader, criterion):
     wandb.log(test_metrics)
     return test_metrics
     
-    return test_metrics
     #region TEST LOGGING
     # wandb.log(
     #     {
@@ -551,21 +553,21 @@ def expand_prediction(arr):
 
 if __name__ == "__main__":
     patch_size = 64
-    DATA_ROOT = f"Image_Manipulation_Dataset/IMD2020/image_patch_{patch_size}"
+    DATA_ROOT = f"Image_Manipulation_Dataset/CASIA_2.0/image_patch_{patch_size}"
 
-    df = pd.read_csv(f"imd_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
+    df = pd.read_csv(f"casia_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
     dice = AverageMeter()
     jaccard = AverageMeter()
     loss = AverageMeter()
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"224IMD_{patch_size}" + config_defaults["model"],
+            name=f"224CASIA_{patch_size}" + config_defaults["model"],
             df=df,
             data_root=DATA_ROOT,
             patch_size=patch_size,
             VAL_FOLD=i,
-            SRM_FLAG=1,
+            SRM_FLAG=0,
             resume=False
         )
         dice.update(test_metrics['test_dice'])
