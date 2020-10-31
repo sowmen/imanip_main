@@ -51,17 +51,17 @@ class Classifier_Dataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, index: int):
-        image_patch, mask_patch, label, fold, tensor_name = self.data[index]
+        fname, label, fold = self.data[index]
  
         if self.label_smoothing:
             label = np.clip(label, self.label_smoothing, 1 - self.label_smoothing)
 
-        tensor = torch.load(os.path.join(self.root_dir, tensor_name))
+        tensor = torch.load(os.path.join(self.root_dir, fname)).cpu()
         B,C,H,W = tensor.shape
-        tensor = tensor.view(-1,H,W)
-        # tensor = torch.nn.functional.adaptive_avg_pool2d(tensor, 1).squeeze()
+        # tensor = tensor.view(-1,H,W)
+        tensor = torch.nn.functional.adaptive_avg_pool2d(tensor, 1).squeeze()
         
-        return {"image": tensor, "label": label}
+        return {"tensor": tensor, "label": label}
 
     def _equalize(self, rows: pd.DataFrame) -> pd.DataFrame:
         """
@@ -69,11 +69,12 @@ class Classifier_Dataset(Dataset):
         """
         real = rows[rows["label"] == 0]
         fakes = rows[rows["label"] == 1]
-        num_fake = fakes["image"].count()
-        num_real = real["image"].count()
-        if self.mode == "train":
-            if int(num_fake * 1.5) <= num_real:
-                real = real.sample(n=int(num_fake * 1.5), replace=False)
-            else:
-                real = real.sample(n=num_fake, replace=False)
+
+        num_fake = fakes["label"].count()
+        num_real = real["label"].count()
+
+        if int(num_fake * 1.5) <= num_real:
+            real = real.sample(n=int(num_fake * 1.5), replace=False)
+        else:
+            real = real.sample(n=num_fake, replace=False)
         return pd.concat([real, fakes])
