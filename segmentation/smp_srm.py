@@ -35,7 +35,7 @@ class SMP_SRM(nn.Module):
         nn.init.xavier_uniform_(self.ela_net[3].weight)
         
         
-        self.base_model = smp.DeepLabV3Plus('timm-efficientnet-b4', in_channels=54, classes=1, encoder_weights='noisy-student') 
+        self.base_model = smp.DeepLabV3('timm-efficientnet-b4', in_channels=54, classes=1, encoder_weights='noisy-student') 
         
         
         
