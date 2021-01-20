@@ -11,10 +11,11 @@ from torch.utils.data import Dataset
 from albumentations.pytorch.functional import img_to_tensor
 import albumentations
 from albumentations import augmentations
+from albumentations.augmentations import functional
 
 
 class DATASET(Dataset):
-    def __init__(self, dataframe, mode, val_fold, test_fold, root_dir, patch_size, 
+    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, augment=None,
                  transforms=None, label_smoothing=0.1, equal_sample=False, segment=False
     ):
 
@@ -23,8 +24,8 @@ class DATASET(Dataset):
         self.mode = mode
         self.val_fold = val_fold
         self.test_fold = test_fold
-        self.root_dir = root_dir
         self.patch_size = patch_size
+        self.augment = augment
         self.transforms = transforms
         self.label_smoothing = label_smoothing
         self.equal_sample = equal_sample
@@ -68,19 +69,19 @@ class DATASET(Dataset):
     def __getitem__(self, index: int):
 
         if self.patch_size == 'FULL':
-            image_patch, mask_patch, label, fold, ela = self.data[index]
+            image_patch, mask_patch, label, fold, ela, root_dir = self.data[index]
         else:
-            image_name, image_patch, mask_patch, label, fold, ela = self.data[index]
+            image_name, image_patch, mask_patch, label, fold, ela, root_dir = self.data[index]
 
         if self.label_smoothing:
             label = np.clip(label, self.label_smoothing, 1 - self.label_smoothing)
 
         if self.patch_size == 'FULL':
-            image_path = os.path.join(self.root_dir, image_patch)
-            ela_path = os.path.join(self.root_dir, ela)
+            image_path = os.path.join(root_dir, image_patch)
+            ela_path = os.path.join(root_dir, ela)
         else:
-            image_path = os.path.join(self.root_dir, image_name, image_patch)
-            ela_path = os.path.join(self.root_dir, image_name, ela)
+            image_path = os.path.join(root_dir, image_name, image_patch)
+            ela_path = os.path.join(root_dir, image_name, ela)
 
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         ela_image = cv2.imread(ela_path, cv2.IMREAD_COLOR)
@@ -93,12 +94,16 @@ class DATASET(Dataset):
             mask_image = np.zeros((image.shape[0], image.shape[1]))
         else:
             if self.patch_size == 'FULL':
-                mask_path = os.path.join(self.root_dir, mask_patch)
+                mask_path = os.path.join(root_dir, mask_patch)
             else:
-                mask_path = os.path.join(self.root_dir, image_name, mask_patch)
+                mask_path = os.path.join(root_dir, image_name, mask_patch)
             mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
         # attn_mask_image = copy.deepcopy(mask_image)
-            
+
+        if self.augment is not None:
+            image = self.augment.augment_image(image=image)
+            # image = self.augment(image=image)['image']
+
         if self.transforms:
             data = self.transforms(image=image, mask=mask_image, ela=ela_image)
             image = data["image"]
@@ -129,10 +134,10 @@ class DATASET(Dataset):
         num_fake = fakes["label"].count()
         num_real = real["label"].count()
 
-        if int(num_fake * 1.5) <= num_real:
-            real = real.sample(n=int(num_fake * 1.5), replace=False)
-        else:
-            real = real.sample(n=num_fake, replace=False)
+        # if int(num_fake * 1.5) <= num_real:
+        #     real = real.sample(n=int(num_fake * 1.5), replace=False)
+        # else:
+        real = real.sample(n=num_fake, replace=False)
         return pd.concat([real, fakes])
 
     def _segment(self, rows: pd.DataFrame) -> pd.DataFrame:
