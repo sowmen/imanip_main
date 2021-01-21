@@ -32,7 +32,7 @@ encoder = SRM_Classifer(encoder_checkpoint='best_weights/CASIA_FULL_ELA.h5', fre
 model = UnetPP(encoder, in_channels=54, num_classes=1)
 model.to('cuda')
 model = nn.DataParallel(model)
-model.load_state_dict(torch.load('best_weights/CASIA_64_UNETPP_END-END.h5'))
+model.load_state_dict(torch.load('best_weights/CASIA_FULL_UNETPP_END-END.h5'))
 
 
 def valid_epoch(model, valid_loader, k):
@@ -88,7 +88,7 @@ def get_loader(aug):
         additional_targets={'ela':'image'}
     )
 
-    df = pd.read_csv(f"casia_64.csv").sample(frac=1).reset_index(drop=True)
+    df = pd.read_csv(f"casia_128.csv").sample(frac=1).reset_index(drop=True)
     valid_dataset = DATASET(
         dataframe=df,
         mode="val",
@@ -121,12 +121,13 @@ def get_loader(aug):
 
 
 wandb.init(
-    project="imanip", name=f"AddSaturation",
+    project="imanip", name=f"AddNoise-Gauss2_FULL"
 )
-for k in np.arange(-120,130,10):
+values = [0.002, 0.004, 0.006, 0.008, 0.010]
+for k in values:
     # aug = augmentations.transforms.ImageCompression(quality_lower=k, quality_upper=k, 
     #                                                 always_apply=True, p=1.0, compression_type=1)
-    aug = iaa.AddToSaturation(k)
+    aug = iaa.arithmetic.AdditiveGaussianNoise(k)
     valid_loader = get_loader(aug)
     ret = valid_epoch(model, valid_loader, k)
     print(ret)
