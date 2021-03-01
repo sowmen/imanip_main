@@ -121,12 +121,13 @@ def get_loader(aug):
 
 
 wandb.init(
-    project="imanip", name=f"AddSaturation",
+    project="imanip", name=f"AddNoise-Gauss2_FULL"
 )
-for k in np.arange(-120,130,10):
+values = [0.002, 0.004, 0.006, 0.008, 0.010]
+for k in values:
     # aug = augmentations.transforms.ImageCompression(quality_lower=k, quality_upper=k, 
     #                                                 always_apply=True, p=1.0, compression_type=1)
-    aug = iaa.AddToSaturation(k)
+    aug = iaa.arithmetic.AdditiveGaussianNoise(k)
     valid_loader = get_loader(aug)
     ret = valid_epoch(model, valid_loader, k)
     print(ret)

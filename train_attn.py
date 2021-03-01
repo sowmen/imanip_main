@@ -50,7 +50,7 @@ config_defaults = {
 
 TEST_FOLD = 9
 
-def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False):
+def train(name, df, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False):
     now = datetime.now()
     dt_string = now.strftime("%d|%m_%H|%M|%S")
     print("Starting -->", dt_string)
@@ -126,36 +126,33 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False)
         mode="train",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
-        root_dir=data_root,
         patch_size=patch_size,
         equal_sample=True,
         transforms=train_aug,
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
 
     valid_dataset = DATASET(
         dataframe=df,
         mode="val",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
-        root_dir=data_root,
         patch_size=patch_size,
         equal_sample=True,
         transforms=valid_aug,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
 
     test_dataset = DATASET(
         dataframe=df,
         mode="test",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
-        root_dir=data_root,
         patch_size=patch_size,
         equal_sample=True,
         transforms=valid_aug,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
@@ -176,7 +173,7 @@ def train(name, df, data_root, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False)
 
     start_epoch = 0
     if resume:
-        checkpoint = torch.load('checkpoint/224CASIA_128UnetPP_[30|10_05|21|34].pt')
+        checkpoint = torch.load('checkpoint/COMBINED_64SRM+ELA_[02|11_05|59|34].pt')
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -473,9 +470,9 @@ def expand_prediction(arr):
 if __name__ == "__main__":
     # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
     patch_size = 64
-    DATA_ROOT = f"Image_Manipulation_Dataset/IMD2020/image_patch_{patch_size}"
+    # DATA_ROOT = f"Image_Manipulation_Dataset/IMD2020/imd_data"#/image_patch_{patch_size}"
 
-    df = pd.read_csv(f"imd_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
+    df = pd.read_csv(f"combined_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
     acc = AverageMeter()
     f1 = AverageMeter()
     loss = AverageMeter()
@@ -483,13 +480,13 @@ if __name__ == "__main__":
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"224IMD_{patch_size}" + config_defaults["model"],
+            name=f"COMBINED_{patch_size}" + config_defaults["model"],
             df=df,
-            data_root=DATA_ROOT,
+            # data_root=DATA_ROOT,
             patch_size=patch_size,
             VAL_FOLD=i,
             SRM_FLAG=1,
-            resume=False
+            resume=True
         )
         acc.update(test_metrics['test_acc_05'])
         f1.update(test_metrics['test_f1_05'])
