@@ -21,8 +21,6 @@ from albumentations import *
 from albumentations import augmentations
 from torchvision import transforms
 
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 torch.backends.cudnn.benchmark = True
 
 # from apex import amp
