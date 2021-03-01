@@ -5,6 +5,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
+import argparse
 
 from functools import partial
 from glob import glob
@@ -12,26 +13,20 @@ from multiprocessing.pool import Pool
 from pathlib import Path
 from tqdm import tqdm
 
-import skimage
-from skimage.color import rgb2gray
-from skimage.color import gray2rgb
-from skimage import measure
 from skimage.metrics import structural_similarity as ssim
 
 
-def extract(param, increment, root_dir, out_dir):
-    img = cv2.imread(os.path.join(root_dir, "imd_data", param["img_path"]))
+def extract_tampered(param, increment, root_dir, out_dir, **kwargs):
+    img = cv2.imread(os.path.join(root_dir+kwargs['extension'], param["img_path"]))
     mask = cv2.imread(
-        os.path.join(root_dir, "imd_data", param["mask_path"]), cv2.IMREAD_GRAYSCALE
+        os.path.join(root_dir+kwargs['extension'], param["mask_path"]), cv2.IMREAD_GRAYSCALE
     )
-
-    pixels = increment * increment
+    
     _ratio = float(cv2.countNonZero(mask) / (mask.shape[0] * mask.shape[1])) * 100.0
     # print("Ratio printing: " + str(_ratio))
     Images = []  # Data
     Masks = []
     if _ratio >= 8.0:
-        # print("Call 1")
         d = mask.shape
         stride = int(
             increment / 2
@@ -45,15 +40,14 @@ def extract(param, increment, root_dir, out_dir):
                     break
 
                 mask_patch = mask[i:x, j:y]
-                bits = cv2.countNonZero(mask_patch)
 
-                if bits == 0 or bits == pixels:
+                ratio = (
+                        float(cv2.countNonZero(mask_patch) / (increment * increment))
+                        * 100.0
+                    )
+                if ratio < 13.0 or ratio >= 65.0:
                     continue
-
-                ratio = float(bits / pixels) * 100.0
-                if ratio > 65.0 or ratio < 5.0:
-                    continue
-
+                
                 valid = False
                 for rows in range(mask_patch.shape[0]):
                     for cols in range(mask_patch.shape[1]):
@@ -127,7 +121,7 @@ def extract(param, increment, root_dir, out_dir):
                         float(cv2.countNonZero(mask_patch1) / (increment * increment))
                         * 100.0
                     )
-                    if ratio >= 65.0:
+                    if ratio < 13.0 or ratio >= 65.0:
                         continue
                     image_patch1 = img[
                         upper_y : upper_y + increment, upper_x : upper_x + increment
@@ -139,7 +133,7 @@ def extract(param, increment, root_dir, out_dir):
                         float(cv2.countNonZero(mask_patch2) / (increment * increment))
                         * 100.0
                     )
-                    if ratio >= 65.0:
+                    if ratio < 13.0 or ratio >= 65.0:
                         continue
                     image_patch2 = img[
                         lower_y : lower_y + increment, lower_x : lower_x + increment
@@ -196,7 +190,7 @@ def extract(param, increment, root_dir, out_dir):
                         float(cv2.countNonZero(mask_patch1) / (increment * increment))
                         * 100.0
                     )
-                    if ratio >= 65.0:
+                    if ratio < 13.0 or ratio >= 65.0:
                         continue
                     image_patch1 = img[
                         upper_y : upper_y + increment, upper_x : upper_x + increment
@@ -208,29 +202,37 @@ def extract(param, increment, root_dir, out_dir):
                         float(cv2.countNonZero(mask_patch2) / (increment * increment))
                         * 100.0
                     )
-                    if ratio >= 65.0:
+                    if ratio < 13.0 or ratio >= 65.0:
                         continue
                     image_patch2 = img[
                         lower_y : lower_y + increment, lower_x : lower_x + increment
                     ]
                     Images.append(image_patch2)
                     Masks.append(mask_patch2)
-
-    # print("Number of patches and masks: " + str(len(Images)) + " " + str(len(Masks)))
+                    
+    patches = [(x,y) for x,y in zip(Images, Masks)]
+    patches = filter_similar(patches, type="fake")
+    
+    
+    # return patches
     dir = os.path.join(
         root_dir, out_dir, param["img_path"].split("/")[-1].split(".")[0]
     )
     os.makedirs(dir, exist_ok=True)
-    for i, (im, ms) in enumerate(zip(Images, Masks)):
+    
+    # print("Number of patches and masks: " + str(len(Images)) + " " + str(len(Masks)) + " " + dir)
+    
+    for i, (im, ms) in enumerate(patches):
+        # print(i, (float(cv2.countNonZero(ms) / (ms.shape[0] * ms.shape[1]))* 100.0))
         cv2.imwrite(os.path.join(dir, f"{i}.png"), im)
         cv2.imwrite(os.path.join(dir, f"{i}_gt.png"), ms)
-
+            
     f = open(os.path.join(dir, "done.txt"), "w")
     f.close()
 
 
-def extract_real(param, increment, root_dir, out_dir):
-    img = cv2.imread(os.path.join(root_dir, "imd_data", param["img_path"]))
+def extract_real(param, increment, root_dir, out_dir, **kwargs):
+    img = cv2.imread(os.path.join(root_dir+kwargs['extension'], param["img_path"]))
 
     coords = []
     d = img.shape
@@ -244,15 +246,16 @@ def extract_real(param, increment, root_dir, out_dir):
             coords.append((i, x, j, y))
 
     random.shuffle(coords)
-    if len(coords) <= 5:
+    if len(coords) <= 10:
         for i in coords:
             patches.append(img[i[0] : i[1], i[2] : i[3]])
     else:
-        for i in range(5):
+        for i in range(10):
             patches.append(
                 img[coords[i][0] : coords[i][1], coords[i][2] : coords[i][3]]
             )
-
+    patches = filter_similar(patches, type="real")
+    
     dir = os.path.join(
         root_dir, out_dir, param["img_path"].split("/")[-1].split(".")[0]
     )
@@ -275,6 +278,26 @@ def SSIM(imageA, imageB):
     ret += 1
     ret /= 2
     return ret
+
+
+def filter_similar(patches, type):
+    final_patches = []
+    vis = [0 for i in range(len(patches))]
+    for i in range(len(patches)):
+        if vis[i]:
+            continue
+        vis[i] = 1
+        final_patches.append(patches[i])
+        for j in range(i + 1, len(patches)):
+            if vis[j]:
+                continue
+            if type == "fake":
+                if SSIM(patches[i][0], patches[j][0]) >= 0.7:
+                    vis[j] = 1
+            elif type == "real":
+                if SSIM(patches[i], patches[j]) >= 0.7:
+                    vis[j] = 1
+    return final_patches
 
 
 def extract_imd_orig(param, increment, root_dir, out_dir):
@@ -318,36 +341,44 @@ def extract_imd_orig(param, increment, root_dir, out_dir):
     f.close()
 
 
-def main():
-    patch_size = 128
-    ROOT_DIR = "Image_Manipulation_Dataset/IMD2020"
+def main(type, patch_size):
+    ROOT_DIR = "G:/Image_Manipulation_Dataset/NIST16"
+    EXTENSION = "/nist16_full"
     OUT_DIR = f"image_patch_{patch_size}"
 
+    if type == "real":
+        label = 0
+        extract_function = extract_real
+    elif type == "fake":
+        label = 1
+        extract_function = extract_tampered
+        
     params = []
-    df = pd.read_csv("imd2020.csv")
+    df = pd.read_csv("nist16_full.csv")
     for idx, row in df.iterrows():
-        if row["label"] == 0:
-            params.append({"img_path": row["image"], "mask_path": row["mask"]})
+        if row["label"] == label:
+            params.append({"img_path": row["image_patch"], "mask_path": row["mask_patch"]})
     print(f"Total: {len(params)}")
 
-    # _temp = []
-    # for item in params:
-    #     image_id = item["img_path"].split("/")[-1].split(".")[0]
-    #     if os.path.exists(os.path.join(ROOT_DIR, OUT_DIR, image_id, "done.txt")):
-    #         continue
-    #     else:
-    #         _temp.append((item))
-    # params = _temp
-    # print("Remaining : {}".format(len(params)))
+    _temp = []
+    for item in params:
+        image_id = item["img_path"].split("/")[-1].split(".")[0]
+        if os.path.exists(os.path.join(ROOT_DIR, OUT_DIR, image_id, "done.txt")):
+            continue
+        else:
+            _temp.append((item))
+    params = _temp
+    print("Remaining : {}".format(len(params)))
 
     with Pool(processes=os.cpu_count()) as p:
         with tqdm(total=len(params)) as pbar:
             for v in p.imap_unordered(
                 partial(
-                    extract_imd_orig,
+                    extract_function,
                     increment=patch_size,
                     root_dir=ROOT_DIR,
                     out_dir=OUT_DIR,
+                    extension=EXTENSION
                 ),
                 params,
             ):
@@ -355,5 +386,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main("real", 64)
 
