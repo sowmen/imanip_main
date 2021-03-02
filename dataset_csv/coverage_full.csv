@@ -1,4 +1,4 @@
-image_patch,mask_patch,label,fold,ela,data_root
+image_patch,mask_patch,label,fold,ela,root_dir
 image/100t.jpg,mask/100forged.jpg,1,0,image/100t_ela.jpg,COVERAGE/coverage_full
 image/10t.jpg,mask/10forged.jpg,1,0,image/10t_ela.jpg,COVERAGE/coverage_full
 image/11t.jpg,mask/11forged.jpg,1,0,image/11t_ela.jpg,COVERAGE/coverage_full

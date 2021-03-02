@@ -1,4 +1,4 @@
-image_patch,mask_patch,label,fold,ela,data_root
+image_patch,mask_patch,label,fold,ela,root_dir
 image/NC2016_8350.jpg,mask/removal_NC2016_8350.jpg,1,0,image/NC2016_8350_ela.jpg,NIST16/nist16_full
 image/NC2016_4503.jpg,mask/removal_NC2016_4503.jpg,1,0,image/NC2016_4503_ela.jpg,NIST16/nist16_full
 image/NC2016_1213.jpg,mask/removal_NC2016_1213.jpg,1,0,image/NC2016_1213_ela.jpg,NIST16/nist16_full
