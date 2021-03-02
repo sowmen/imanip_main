@@ -7,7 +7,6 @@ from tqdm import tqdm
 from datetime import datetime
 import pickle as pkl
 from sklearn import metrics
-import scikitplot as skplt
 import gc
 import timm
 import torch
@@ -48,7 +47,7 @@ config_defaults = {
     "attn_map_weight": 0,
 }
 
-TEST_FOLD = 9
+TEST_FOLD = 1
 
 def train(name, df, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False):
     now = datetime.now()
@@ -468,11 +467,10 @@ def expand_prediction(arr):
 
 
 if __name__ == "__main__":
-    # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
-    patch_size = 64
-    # DATA_ROOT = f"Image_Manipulation_Dataset/IMD2020/imd_data"#/image_patch_{patch_size}"
+    patch_size = 'FULL'
+    DATA_ROOT = "Image_Manipulation_Dataset"
 
-    df = pd.read_csv(f"combined_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
+    df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
     acc = AverageMeter()
     f1 = AverageMeter()
     loss = AverageMeter()
@@ -480,13 +478,13 @@ if __name__ == "__main__":
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"COMBINED_{patch_size}" + config_defaults["model"],
+            name=f"COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
-            # data_root=DATA_ROOT,
+            data_root=DATA_ROOT,
             patch_size=patch_size,
             VAL_FOLD=i,
             SRM_FLAG=1,
-            resume=True
+            resume=False
         )
         acc.update(test_metrics['test_acc_05'])
         f1.update(test_metrics['test_f1_05'])
