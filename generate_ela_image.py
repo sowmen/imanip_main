@@ -7,7 +7,7 @@ def ELA(param, ROOT):
     
     img_path = param[0]
     ela_path = param[-1]
-
+    
     TEMP = os.path.join(ROOT, img_path[:-4]+'ela_' + 'temp.jpg')
     SCALE = 25
     original = Image.open(os.path.join(ROOT, img_path))
@@ -28,6 +28,6 @@ def ELA(param, ROOT):
     for x in range(WIDTH):
         for y in range(HEIGHT):
             d[x, y] = tuple(k * SCALE for k in d[x, y])
-
+    
     diff.save(os.path.join(ROOT,ela_path))
     os.remove(TEMP)
