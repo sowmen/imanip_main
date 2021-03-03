@@ -32,11 +32,6 @@ class DATASET(Dataset):
         self.segment = segment # Returns only fake rows for segmentation
         self.root_folder = "Image_Manipulation_Dataset"
 
-        # self.normalize = {
-        #     "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
-        #     "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
-        # }
-
         # self.attn_mask_transforms = albumentations.Compose([
         #     augmentations.transforms.Resize(
         #         32, 32, interpolation=cv2.INTER_LANCZOS4, always_apply=True, p=1
@@ -45,13 +40,15 @@ class DATASET(Dataset):
         #     albumentations.pytorch.ToTensor()
         # ])
 
-        # if self.mode == "train":
-        #     rows = self.dataframe[~self.dataframe["fold"].isin([self.val_fold, self.test_fold])]
-        # elif self.mode == "val":
-        #     rows = self.dataframe[self.dataframe["fold"] == self.val_fold]
-        # else:
-        #     rows = self.dataframe[self.dataframe["fold"] == self.test_fold]
-        rows = self.dataframe
+        if self.mode == "train":
+            rows = self.dataframe[~self.dataframe["fold"].isin([self.val_fold, self.test_fold])]
+        elif self.mode == "val":
+            rows = self.dataframe[self.dataframe["fold"] == self.val_fold]
+        else:
+            rows = self.dataframe[self.dataframe["fold"] == self.test_fold]
+
+        #---- For checking. Get all rows -------#
+        # rows = self.dataframe 
 
         if self.equal_sample:
             rows = self._equalize(rows)
@@ -87,7 +84,9 @@ class DATASET(Dataset):
             ela_path = os.path.join(self.root_folder, root_dir, image_name, ela)
 
         if(not os.path.exists(ela_path)):
-            print(ela_path)
+            print(f"ELA Not Found : {ela_path}")
+        if(not os.path.exists(image_path)):
+            print(f"Image Not Found : {image_path}")
 
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         ela_image = cv2.imread(ela_path, cv2.IMREAD_COLOR)
@@ -102,16 +101,21 @@ class DATASET(Dataset):
                 mask_path = os.path.join(self.root_folder, root_dir, mask_patch)
             else:
                 mask_path = os.path.join(self.root_folder, root_dir, image_name, mask_patch)
+
+            if(not os.path.exists(mask_path)):
+                print(f"Mask Not Found : {mask_path}")
             mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
 
-            # ----- For NIST16 Invert Mask ----- #
+            # ----- For NIST16 Invert Mask Here ----- #
+
+            ##########################################
             
         # attn_mask_image = copy.deepcopy(mask_image)
 
         # if self.imgaug_augment is not None:
         #     image = self.imgaug_augment.augment_image(image=image)
-            # image = self.augment(image=image)['image']
-        # print(type(mask_image), mask_path)
+        #     image = self.augment(image=image)['image']
+        
         if self.transforms:
             data = self.transforms(image=image, mask=mask_image, ela=ela_image)
             image = data["image"]
