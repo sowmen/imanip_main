@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 import albumentations
 from albumentations import augmentations
 from albumentations import *
-from albumentations.pytorch import ToTensorV2
+# from albumentations.pytorch import ToTensorV2
 
 torch.backends.cudnn.benchmark = True
 
@@ -37,13 +37,13 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 150,
-    "train_batch_size": 32,
+    "train_batch_size": 50,
     "valid_batch_size": 64,
     "optimizer": "adam",
-    "learning_rate": 0.0001,
-    "weight_decay": 0.00005,
-    "schedule_patience": 10,
-    "schedule_factor": 0.1,
+    "learning_rate": 0.0005,
+    "weight_decay": 0.0005,
+    "schedule_patience": 5,
+    "schedule_factor": 0.2,
     "model": "SRM+ELA",
     "attn_map_weight": 0,
 }
@@ -91,20 +91,20 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
                 Blur(p=1.0),
                 MedianBlur(p=1.0),
                 GaussianBlur(p=1.0)                  
-            ], p=0.7),
-            OneOf([
-                ImageCompression(quality_lower=70, p=0.7),
-                ImageCompression(quality_lower=70, compression_type=ImageCompression.ImageCompressionType.WEBP, p=0.7),           
-            ], p=0.7),
-            GaussNoise(p=0.5),
-            OneOf([
-                ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
-                GridDistortion(p=0.5),
-                OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
-            ], p=0.8),
+            ], p=0.6),
+            # OneOf([
+            #     ImageCompression(quality_lower=80, p=0.7),
+            #     # ImageCompression(quality_lower=70, compression_type=ImageCompression.ImageCompressionType.WEBP, p=0.7),           
+            # ], p=0.6),
+            # GaussNoise(p=0.5),
+            # OneOf([
+            #     ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
+            #     GridDistortion(p=0.5),
+            #     OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
+            # ], p=0.8),
             augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            ToTensorV2()
+            albumentations.pytorch.ToTensor()
         ],
         additional_targets={'ela':'image'}
     )
@@ -112,7 +112,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         [
             augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            ToTensorV2()
+            albumentations.pytorch.ToTensor()
         ],
         additional_targets={'ela':'image'}
     )
@@ -127,7 +127,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         equal_sample=False,
         transforms=train_aug,
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=True)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -138,7 +138,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         equal_sample=False,
         transforms=valid_aug,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=True)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -149,7 +149,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         equal_sample=False,
         transforms=valid_aug,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=True)
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
@@ -204,7 +204,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         )
 
         es(
-            valid_metrics["valid_acc_05"],
+            valid_metrics["valid_loss"],
             model,
             model_path=os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"),
         )
@@ -245,7 +245,7 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         elas = batch["ela"].to(device)
         target_labels = batch["label"].to(device)
         # attn_gt = batch["attn_mask"].to(device)
-
+        # print("GOTTEM")
         optimizer.zero_grad()
         
         # out_labels, attn_map = model(images)

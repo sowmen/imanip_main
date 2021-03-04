@@ -126,7 +126,7 @@ class DATASET(Dataset):
         # image = img_to_tensor(image, self.normalize)
         # mask_image = img_to_tensor(mask_image).unsqueeze(0)
         # attn_mask_image = img_to_tensor(attn_mask_image).unsqueeze(0)
-
+        # print("LOADED DATA")
         return {
             "image": image,
             "image_path" : image_path, 
