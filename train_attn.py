@@ -38,13 +38,13 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 150,
-    "train_batch_size": 50,
+    "train_batch_size": 45,
     "valid_batch_size": 64,
     "optimizer": "adam",
-    "learning_rate": 0.0005,
+    "learning_rate": 0.0007,
     "weight_decay": 0.0005,
     "schedule_patience": 5,
-    "schedule_factor": 0.2,
+    "schedule_factor": 0.25,
     "model": "SRM+ELA",
     "attn_map_weight": 0,
 }
@@ -83,30 +83,32 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     
     train_imgaug  = iaa.Sequential(
         [
-            iaa.SomeOf((0, 4),
+            iaa.SomeOf((0, 5),
                 [   
                     iaa.OneOf([
-                        iaa.JpegCompression(compression=(80, 99)),
-                        iaa.GaussianBlur((0, 3.0)), # blur images with a sigma between 0 and 3.0
+                        iaa.JpegCompression(compression=(10, 60)),
+                        iaa.GaussianBlur((0, 1.75)), # blur images with a sigma between 0 and 3.0
                         iaa.AverageBlur(k=(2, 7)), # blur image using local means with kernel sizes between 2 and 7
-                        iaa.MedianBlur(k=(3, 11)), # blur image using local medians with kernel sizes between 2 and 7
+                        iaa.MedianBlur(k=(3, 7)), # blur image using local medians with kernel sizes between 2 and 7
                     ]),
                     iaa.Sharpen(alpha=(0, 1.0), lightness=(0.75, 1.5)), # sharpen images
                     iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5), # add gaussian noise to images
                     # iaa.Sometimes(0.3, iaa.Invert(0.05, per_channel=True)), # invert color channels
-                    iaa.Add((-10, 10), per_channel=0.5), # change brightness of images (by -10 to 10 of original value)
+                    # iaa.Add((-10, 10), per_channel=0.5), # change brightness of images (by -10 to 10 of original value)
                     iaa.AddToHueAndSaturation((-20, 20)), # change hue and saturation
                     iaa.LinearContrast((0.5, 2.0), per_channel=0.5), # improve or worsen the contrast
                     # # either change the brightness of the whole image (sometimes
                     # # per channel) or change the brightness of subareas
-                    iaa.Sometimes(0.5,
+                    iaa.Sometimes(0.6,
                         iaa.OneOf([
                             iaa.Multiply((0.5, 1.5), per_channel=0.5),
-                            iaa.BlendAlphaFrequencyNoise(
-                                exponent=(-4, 0),
-                                foreground=iaa.Multiply((0.5, 1.5), per_channel=True),
-                                background=iaa.LinearContrast((0.5, 2.0))
-                            )
+                            iaa.MultiplyAndAddToBrightness(mul=(0.5, 2.5), add=(-10,10)),
+                            iaa.MultiplyHueAndSaturation(),
+                            # iaa.BlendAlphaFrequencyNoise(
+                            #     exponent=(-4, 0),
+                            #     foreground=iaa.Multiply((0.5, 1.5), per_channel=True),
+                            #     background=iaa.LinearContrast((0.5, 2.0))
+                            # )
                         ])
                     ),
                 ], random_order=True
@@ -119,24 +121,24 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             VerticalFlip(p=0.5),
             RandomRotate90(p=0.1),
             ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
-            # OneOf([
-            #     ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
-            #     GridDistortion(p=0.5),
-            #     OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
-            # ], p=0.3),
-            augmentations.geometric.resize.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            OneOf([
+                ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
+                GridDistortion(p=0.5),
+                OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
+            ], p=0.65),
+            augmentations.geometric.resize.Resize(256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.transforms.ToTensor()
+            albumentations.pytorch.transforms.ToTensorV2()
         ],
-        additional_targets={'ela':'mask'}
+        additional_targets={'ela':'image'}
     )
     valid_aug = albumentations.Compose(
         [
-            augmentations.geometric.resize.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            augmentations.geometric.resize.Resize(256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.transforms.ToTensor()
+            albumentations.pytorch.transforms.ToTensorV2()
         ],
-        additional_targets={'ela':'mask'}
+        additional_targets={'ela':'image'}
     )
 
     # -------------------------------- CREATE DATASET and DATALOADER --------------------------
@@ -193,7 +195,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
 
     start_epoch = 0
     if resume:
-        checkpoint = torch.load('checkpoint/COMBINED_64SRM+ELA_[02|11_05|59|34].pt')
+        checkpoint = torch.load('checkpoint/COMBO_ALL_FULLSRM+ELA_[05|03_02|37|25].pt')
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -225,7 +227,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         print(
             f"VALID_ACC = {valid_metrics['valid_acc_05']}, VALID_LOSS = {valid_metrics['valid_loss']}"
         )
-
+        print("New LR", optimizer.param_groups[0]['lr'])
         es(
             valid_metrics["valid_loss"],
             model,
@@ -498,7 +500,7 @@ if __name__ == "__main__":
     for i in [0]:
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"RESUME[05|03_02|37|25]_COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
