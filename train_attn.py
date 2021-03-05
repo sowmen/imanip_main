@@ -37,7 +37,7 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 150,
-    "train_batch_size": 40,
+    "train_batch_size": 42,
     "valid_batch_size": 64,
     "optimizer": "adam",
     "learning_rate": 0.0001,
@@ -82,16 +82,16 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     
     train_aug = albumentations.Compose(
         [
-            HorizontalFlip(p=0.5),
-            VerticalFlip(p=0.5),
-            RandomRotate90(p=0.1),
-            ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=45, p=0.25),
-            RandomBrightnessContrast(p=0.5),
-            OneOf([
-                Blur(p=1.0),
-                MedianBlur(p=1.0),
-                GaussianBlur(p=1.0)                  
-            ], p=0.6),
+            # HorizontalFlip(p=0.5),
+            # VerticalFlip(p=0.5),
+            # RandomRotate90(p=0.1),
+            # ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=45, p=0.25),
+            # RandomBrightnessContrast(p=0.5),
+            # OneOf([
+            #     Blur(p=1.0),
+            #     MedianBlur(p=1.0),
+            #     GaussianBlur(p=1.0)                  
+            # ], p=0.6),
             # OneOf([
             #     ImageCompression(quality_lower=80, p=0.7),
             #     # ImageCompression(quality_lower=70, compression_type=ImageCompression.ImageCompressionType.WEBP, p=0.7),           
@@ -127,7 +127,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         equal_sample=False,
         transforms=train_aug,
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=True)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -138,7 +138,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         equal_sample=False,
         transforms=valid_aug,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=True)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -149,7 +149,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         equal_sample=False,
         transforms=valid_aug,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=True)
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
