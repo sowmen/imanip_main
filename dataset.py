@@ -5,6 +5,7 @@ import pandas as pd
 import cv2
 import math
 import copy
+import gc
 
 import torch
 from torch.utils.data import Dataset
@@ -104,7 +105,7 @@ class DATASET(Dataset):
 
             if(not os.path.exists(mask_path)):
                 print(f"Mask Not Found : {mask_path}")
-            mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE).astype('uint8')
+            mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
 
             # ----- For NIST16 Invert Mask Here ----- #
 
@@ -114,12 +115,13 @@ class DATASET(Dataset):
 
         if self.imgaug_augment:
             try :
-                temp_image = copy.deepcopy(image)
+                # temp_image = copy.deepcopy(image)
                 image = self.imgaug_augment.augment_image(image)
             except Exception as e:
                 print(image_path, e) 
-                image = temp_image
-                del(temp_image)
+                # image = temp_image
+                # del(temp_image)
+                # gc.collect()
         
         # print("--- bfr ---")
         # print(image.shape, image.dtype)
@@ -130,7 +132,7 @@ class DATASET(Dataset):
             data = self.transforms(image=image, mask=mask_image, ela=ela_image)
             image = data["image"]
             mask_image = data["mask"]
-            ela_image = data["ela"]#.squeeze(0).permute(2,0,1)
+            ela_image = data["ela"]#.permute(2,0,1)
         # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
         # print("--- afr ---")

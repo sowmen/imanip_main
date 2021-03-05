@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 
 import albumentations
 from albumentations import augmentations
-from albumentations import *
+# from albumentations import *
 import imgaug.augmenters as iaa
 import albumentations.pytorch
 
@@ -38,7 +38,7 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 150,
-    "train_batch_size": 45,
+    "train_batch_size": 40,
     "valid_batch_size": 64,
     "optimizer": "adam",
     "learning_rate": 0.0007,
@@ -117,15 +117,15 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     )
     train_aug = albumentations.Compose(
         [
-            HorizontalFlip(p=0.5),
-            VerticalFlip(p=0.5),
-            RandomRotate90(p=0.1),
-            ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
-            OneOf([
-                ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
-                GridDistortion(p=0.5),
-                OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
-            ], p=0.65),
+            albumentations.HorizontalFlip(p=0.5),
+            albumentations.VerticalFlip(p=0.5),
+            albumentations.RandomRotate90(p=0.1),
+            albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
+            # albumentations.OneOf([
+            #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
+            #     albumentations.GridDistortion(p=0.5),
+            #     albumentations.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
+            # ], p=0.65),
             augmentations.geometric.resize.Resize(256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.transforms.ToTensorV2()
@@ -152,7 +152,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         transforms=train_aug,
         imgaug_augment=train_imgaug
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -163,7 +163,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         equal_sample=False,
         transforms=valid_aug,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -174,7 +174,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         equal_sample=False,
         transforms=valid_aug,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
