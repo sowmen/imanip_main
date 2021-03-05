@@ -112,9 +112,8 @@ class DATASET(Dataset):
             
         # attn_mask_image = copy.deepcopy(mask_image)
 
-        # if self.imgaug_augment is not None:
-        #     image = self.imgaug_augment.augment_image(image=image)
-        #     image = self.augment(image=image)['image']
+        if self.imgaug_augment is not None:
+            image = self.imgaug_augment.augment_image(image)
         
         if self.transforms:
             data = self.transforms(image=image, mask=mask_image, ela=ela_image)
