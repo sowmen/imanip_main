@@ -16,9 +16,8 @@ from torch.utils.data import DataLoader
 import albumentations
 from albumentations import augmentations
 from albumentations import *
-import imgaug as ia
 import imgaug.augmenters as iaa
-# from albumentations.pytorch import ToTensorV2
+import albumentations.pytorch
 
 torch.backends.cudnn.benchmark = True
 
@@ -94,7 +93,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
                     ]),
                     iaa.Sharpen(alpha=(0, 1.0), lightness=(0.75, 1.5)), # sharpen images
                     iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5), # add gaussian noise to images
-                    iaa.Sometimes(0.3, iaa.Invert(0.05, per_channel=True)), # invert color channels
+                    # iaa.Sometimes(0.3, iaa.Invert(0.05, per_channel=True)), # invert color channels
                     iaa.Add((-10, 10), per_channel=0.5), # change brightness of images (by -10 to 10 of original value)
                     iaa.AddToHueAndSaturation((-20, 20)), # change hue and saturation
                     iaa.LinearContrast((0.5, 2.0), per_channel=0.5), # improve or worsen the contrast
@@ -103,10 +102,10 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
                     iaa.Sometimes(0.5,
                         iaa.OneOf([
                             iaa.Multiply((0.5, 1.5), per_channel=0.5),
-                            iaa.FrequencyNoiseAlpha(
+                            iaa.BlendAlphaFrequencyNoise(
                                 exponent=(-4, 0),
-                                first=iaa.Multiply((0.5, 1.5), per_channel=True),
-                                second=iaa.LinearContrast((0.5, 2.0))
+                                foreground=iaa.Multiply((0.5, 1.5), per_channel=True),
+                                background=iaa.LinearContrast((0.5, 2.0))
                             )
                         ])
                     ),
@@ -125,17 +124,17 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             #     GridDistortion(p=0.5),
             #     OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
             # ], p=0.3),
-            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            augmentations.geometric.resize.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.ToTensor()
+            albumentations.pytorch.transforms.ToTensor()
         ],
         additional_targets={'ela':'mask'}
     )
     valid_aug = albumentations.Compose(
         [
-            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            augmentations.geometric.resize.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.ToTensor()
+            albumentations.pytorch.transforms.ToTensor()
         ],
         additional_targets={'ela':'mask'}
     )
