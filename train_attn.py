@@ -7,7 +7,6 @@ from tqdm import tqdm
 from datetime import datetime
 import pickle as pkl
 from sklearn import metrics
-import scikitplot as skplt
 import gc
 import timm
 import torch
@@ -16,7 +15,9 @@ from torch.utils.data import DataLoader
 
 import albumentations
 from albumentations import augmentations
-from albumentations import *
+# from albumentations import *
+import imgaug.augmenters as iaa
+import albumentations.pytorch
 
 torch.backends.cudnn.benchmark = True
 
@@ -36,21 +37,21 @@ from segmentation.merged_net import SRM_Classifer
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
-    "epochs": 60,
-    "train_batch_size": 26,
+    "epochs": 150,
+    "train_batch_size": 40,
     "valid_batch_size": 64,
     "optimizer": "adam",
-    "learning_rate": 0.0009,
+    "learning_rate": 0.0007,
     "weight_decay": 0.0005,
-    "schedule_patience": 3,
+    "schedule_patience": 5,
     "schedule_factor": 0.25,
     "model": "SRM+ELA",
     "attn_map_weight": 0,
 }
 
-TEST_FOLD = 9
+TEST_FOLD = 1
 
-def train(name, df, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False):
+def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     now = datetime.now()
     dt_string = now.strftime("%d|%m_%H|%M|%S")
     print("Starting -->", dt_string)
@@ -67,6 +68,7 @@ def train(name, df, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False):
     # model = Efficient_Attention()
     # model = EfficientNet().to(device)
     model = SRM_Classifer().to(device)
+    SRM_FLAG = 1 # Set for SRM extraction layers
 
     print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))
     # model = Classifier2(1792).to(device)
@@ -75,47 +77,66 @@ def train(name, df, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False):
     # wandb.watch(model)
 
     normalize = {
-        "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
-        "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
+        "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
+        "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
     }
-    # train_aug = albumentations.Compose(
-    #     [
-    #         augmentations.transforms.Flip(p=0.6),
-    #         augmentations.transforms.Rotate((-45, 45), p=0.4),
-    #         augmentations.transforms.ShiftScaleRotate(p=0.5),
-    #         augmentations.transforms.HueSaturationValue(p=0.3),
-    #         augmentations.transforms.JpegCompression(quality_lower=70, p=0.3),
-    #         augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
-    #         albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-    #         albumentations.pytorch.ToTensor()
-    #     ],
-    #     additional_targets={'ela':'image'}
-    # )
+    
+    train_imgaug  = iaa.Sequential(
+        [
+            iaa.SomeOf((0, 5),
+                [   
+                    iaa.OneOf([
+                        iaa.JpegCompression(compression=(10, 60)),
+                        iaa.GaussianBlur((0, 1.75)), # blur images with a sigma between 0 and 3.0
+                        iaa.AverageBlur(k=(2, 7)), # blur image using local means with kernel sizes between 2 and 7
+                        iaa.MedianBlur(k=(3, 7)), # blur image using local medians with kernel sizes between 2 and 7
+                    ]),
+                    iaa.Sharpen(alpha=(0, 1.0), lightness=(0.75, 1.5)), # sharpen images
+                    iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5), # add gaussian noise to images
+                    # iaa.Sometimes(0.3, iaa.Invert(0.05, per_channel=True)), # invert color channels
+                    # iaa.Add((-10, 10), per_channel=0.5), # change brightness of images (by -10 to 10 of original value)
+                    iaa.AddToHueAndSaturation((-20, 20)), # change hue and saturation
+                    iaa.LinearContrast((0.5, 2.0), per_channel=0.5), # improve or worsen the contrast
+                    # # either change the brightness of the whole image (sometimes
+                    # # per channel) or change the brightness of subareas
+                    iaa.Sometimes(0.6,
+                        iaa.OneOf([
+                            iaa.Multiply((0.5, 1.5), per_channel=0.5),
+                            iaa.MultiplyAndAddToBrightness(mul=(0.5, 2.5), add=(-10,10)),
+                            iaa.MultiplyHueAndSaturation(),
+                            # iaa.BlendAlphaFrequencyNoise(
+                            #     exponent=(-4, 0),
+                            #     foreground=iaa.Multiply((0.5, 1.5), per_channel=True),
+                            #     background=iaa.LinearContrast((0.5, 2.0))
+                            # )
+                        ])
+                    ),
+                ], random_order=True
+            )
+        ], random_order=True
+    )
     train_aug = albumentations.Compose(
         [
-            HorizontalFlip(p=0.5),
-            VerticalFlip(p=0.5),
-            RandomRotate90(p=0.1),
-            ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=45, p=0.25),
-            RandomBrightnessContrast(p=0.5),
-            IAAEmboss(p=0.25),
-            Blur(p=0.1, blur_limit = 3),
-            OneOf([
-                ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
-                GridDistortion(p=0.5),
-                OpticalDistortion(p=1, distort_limit=2, shift_limit=0.5)                  
-            ], p=0.8),
-            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            albumentations.HorizontalFlip(p=0.5),
+            albumentations.VerticalFlip(p=0.5),
+            albumentations.RandomRotate90(p=0.1),
+            albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
+            # albumentations.OneOf([
+            #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
+            #     albumentations.GridDistortion(p=0.5),
+            #     albumentations.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
+            # ], p=0.65),
+            augmentations.geometric.resize.Resize(256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.ToTensor()
+            albumentations.pytorch.transforms.ToTensorV2()
         ],
         additional_targets={'ela':'image'}
     )
     valid_aug = albumentations.Compose(
         [
-            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            augmentations.geometric.resize.Resize(256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.ToTensor()
+            albumentations.pytorch.transforms.ToTensorV2()
         ],
         additional_targets={'ela':'image'}
     )
@@ -127,10 +148,11 @@ def train(name, df, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         patch_size=patch_size,
-        equal_sample=True,
+        equal_sample=False,
         transforms=train_aug,
+        imgaug_augment=train_imgaug
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -138,10 +160,10 @@ def train(name, df, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         patch_size=patch_size,
-        equal_sample=True,
+        equal_sample=False,
         transforms=valid_aug,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -149,10 +171,10 @@ def train(name, df, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         patch_size=patch_size,
-        equal_sample=True,
+        equal_sample=False,
         transforms=valid_aug,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
@@ -163,17 +185,17 @@ def train(name, df, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False):
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         patience=config.schedule_patience,
-        mode="max",
+        mode="min",
         factor=config.schedule_factor,
     )
     criterion = nn.BCEWithLogitsLoss()
     attn_map_criterion = nn.L1Loss()
 
-    es = EarlyStopping(patience=15, mode="max")
+    es = EarlyStopping(patience=30, mode="min")
 
     start_epoch = 0
     if resume:
-        checkpoint = torch.load('checkpoint/COMBINED_64SRM+ELA_[02|11_05|59|34].pt')
+        checkpoint = torch.load('checkpoint/COMBO_ALL_FULLSRM+ELA_[05|03_02|37|25].pt')
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -197,7 +219,7 @@ def train(name, df, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False):
         valid_metrics = valid_epoch(
             model, valid_loader, criterion, attn_map_criterion, config.attn_map_weight, epoch
         )
-        scheduler.step(valid_metrics["valid_acc_05"])
+        scheduler.step(valid_metrics["valid_loss"])
 
         print(
             f"TRAIN_ACC = {train_metrics['train_acc_05']}, TRAIN_LOSS = {train_metrics['train_loss']}"
@@ -205,9 +227,9 @@ def train(name, df, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False):
         print(
             f"VALID_ACC = {valid_metrics['valid_acc_05']}, VALID_LOSS = {valid_metrics['valid_loss']}"
         )
-
+        print("New LR", optimizer.param_groups[0]['lr'])
         es(
-            valid_metrics["valid_acc_05"],
+            valid_metrics["valid_loss"],
             model,
             model_path=os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"),
         )
@@ -236,8 +258,8 @@ def train(name, df, patch_size, VAL_FOLD=0, SRM_FLAG=1, resume=False):
 def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, attn_map_weight, epoch, SRM_FLAG):
     model.train()
 
-    classification_loss = AverageMeter()
-    attn_map_loss = AverageMeter()
+    # classification_loss = AverageMeter()
+    # attn_map_loss = AverageMeter()
     total_loss = AverageMeter()
     
     predictions = []
@@ -248,7 +270,7 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         elas = batch["ela"].to(device)
         target_labels = batch["label"].to(device)
         # attn_gt = batch["attn_mask"].to(device)
-
+        # print("GOTTEM")
         optimizer.zero_grad()
         
         # out_labels, attn_map = model(images)
@@ -308,8 +330,8 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
 def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_weight, epoch):
     model.eval()
 
-    classification_loss = AverageMeter()
-    attn_map_loss = AverageMeter()
+    # classification_loss = AverageMeter()
+    # attn_map_loss = AverageMeter()
     total_loss = AverageMeter()
     
     predictions = []
@@ -366,9 +388,9 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
     valid_balanced_acc_05 = metrics.balanced_accuracy_score(targets, (predictions >= 0.5) * 1)
 
     valid_metrics = {
-        "valid_loss": total_loss.avg,
         # "valid_loss_classification": classification_loss.avg,
         # "valid_loss_attn_map": attn_map_loss.avg,
+        "valid_loss": total_loss.avg,
         "valid_auc": valid_auc,
         "valid_f1_05": valid_f1_05,
         "valid_acc_05": valid_acc_05,
@@ -384,8 +406,8 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
 def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
     model.eval()
 
-    classification_loss = AverageMeter()
-    attn_map_loss = AverageMeter()
+    # classification_loss = AverageMeter()
+    # attn_map_loss = AverageMeter()
     total_loss = AverageMeter()
     
     predictions = []
@@ -423,9 +445,9 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
     test_balanced_acc_05 = metrics.balanced_accuracy_score(targets, (predictions >= 0.5) * 1)
 
     test_metrics = {
-        "test_loss": total_loss.avg,
         # "test_loss_classification": classification_loss.avg,
         # "test_loss_attn_map": attn_map_loss.avg,
+        "test_loss": total_loss.avg,
         "test_auc": test_auc,
         "test_f1_05": test_f1_05,
         "test_acc_05": test_acc_05,
@@ -468,33 +490,29 @@ def expand_prediction(arr):
 
 
 if __name__ == "__main__":
-    # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
-    patch_size = 64
-    # DATA_ROOT = f"Image_Manipulation_Dataset/IMD2020/imd_data"#/image_patch_{patch_size}"
+    patch_size = 'FULL'
 
-    df = pd.read_csv(f"combined_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
+    df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
     acc = AverageMeter()
     f1 = AverageMeter()
     loss = AverageMeter()
     auc = AverageMeter()
-    for i in range(0,1):
+    for i in [0]:
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"COMBINED_{patch_size}" + config_defaults["model"],
+            name=f"RESUME[05|03_02|37|25]_COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
-            # data_root=DATA_ROOT,
             patch_size=patch_size,
             VAL_FOLD=i,
-            SRM_FLAG=1,
-            resume=True
+            resume=False
         )
         acc.update(test_metrics['test_acc_05'])
         f1.update(test_metrics['test_f1_05'])
         loss.update(test_metrics['test_loss'])
         auc.update(test_metrics['test_auc'])
     
-    print(f'ACCURACY : {acc.avg}')
-    print(f'F1 : {f1.avg}')
-    print(f'LOSS : {loss.avg}')
-    print(f'AUC : {auc.avg}')
+    print(f'FINAL ACCURACY : {acc.avg}')
+    print(f'FINAL F1 : {f1.avg}')
+    print(f'FINAL LOSS : {loss.avg}')
+    print(f'FINAL AUC : {auc.avg}')
 

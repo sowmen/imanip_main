@@ -5,6 +5,7 @@ import pandas as pd
 import cv2
 import math
 import copy
+import gc
 
 import torch
 from torch.utils.data import Dataset
@@ -18,8 +19,8 @@ iaa = imgaug.augmenters.Sequential([])
 
 
 class DATASET(Dataset):
-    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, augment=None,
-                 transforms=None, label_smoothing=0.1, equal_sample=False, segment=False
+    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, imgaug_augment=None,
+                 transforms=None, equal_sample=False, segment=False
     ):
 
         super().__init__()
@@ -28,15 +29,12 @@ class DATASET(Dataset):
         self.val_fold = val_fold
         self.test_fold = test_fold
         self.patch_size = patch_size
-        self.augment = augment
+        self.imgaug_augment = imgaug_augment
         self.transforms = transforms
-        self.label_smoothing = label_smoothing
+        self.label_smoothing = 0.1
         self.equal_sample = equal_sample
-        self.segment = segment
-        # self.normalize = {
-        #     "mean": [0.42468103282400615, 0.4259826707370029, 0.38855473517307415],
-        #     "std": [0.2744059987371694, 0.2684138285232067, 0.29527622263685294],
-        # }
+        self.segment = segment # Returns only fake rows for segmentation
+        self.root_folder = "Image_Manipulation_Dataset"
 
         # self.attn_mask_transforms = albumentations.Compose([
         #     augmentations.transforms.Resize(
@@ -52,6 +50,9 @@ class DATASET(Dataset):
             rows = self.dataframe[self.dataframe["fold"] == self.val_fold]
         else:
             rows = self.dataframe[self.dataframe["fold"] == self.test_fold]
+
+        #---- For checking. Get all rows -------#
+        # rows = self.dataframe 
 
         if self.equal_sample:
             rows = self._equalize(rows)
@@ -72,52 +73,81 @@ class DATASET(Dataset):
     def __getitem__(self, index: int):
 
         if self.patch_size == 'FULL':
-            image_patch, mask_patch, label, fold, ela, root_dir = self.data[index]
+            image_patch, mask_patch, label, _, ela, root_dir = self.data[index]
         else:
-            image_name, image_patch, mask_patch, label, fold, ela, root_dir = self.data[index]
+            image_name, image_patch, mask_patch, label, _, ela, root_dir = self.data[index]
 
         if self.label_smoothing:
             label = np.clip(label, self.label_smoothing, 1 - self.label_smoothing)
 
         if self.patch_size == 'FULL':
-            image_path = os.path.join(root_dir, image_patch)
-            ela_path = os.path.join(root_dir, ela)
+            image_path = os.path.join(self.root_folder, root_dir, image_patch)
+            ela_path = os.path.join(self.root_folder, root_dir, ela)
         else:
-            image_path = os.path.join(root_dir, image_name, image_patch)
-            ela_path = os.path.join(root_dir, image_name, ela)
+            image_path = os.path.join(self.root_folder, root_dir, image_name, image_patch)
+            ela_path = os.path.join(self.root_folder, root_dir, image_name, ela)
+
+        if(not os.path.exists(ela_path)):
+            print(f"ELA Not Found : {ela_path}")
+        if(not os.path.exists(image_path)):
+            print(f"Image Not Found : {image_path}")
 
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         ela_image = cv2.imread(ela_path, cv2.IMREAD_COLOR)
-        if image is None:
-            print(image_path)
+
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         ela_image = cv2.cvtColor(ela_image, cv2.COLOR_BGR2RGB)
 
         if not isinstance(mask_patch, str) and np.isnan(mask_patch):
-            mask_image = np.zeros((image.shape[0], image.shape[1]))
+            mask_image = np.zeros((image.shape[0], image.shape[1])).astype('uint8')
         else:
             if self.patch_size == 'FULL':
-                mask_path = os.path.join(root_dir, mask_patch)
+                mask_path = os.path.join(self.root_folder, root_dir, mask_patch)
             else:
-                mask_path = os.path.join(root_dir, image_name, mask_patch)
+                mask_path = os.path.join(self.root_folder, root_dir, image_name, mask_patch)
+
+            if(not os.path.exists(mask_path)):
+                print(f"Mask Not Found : {mask_path}")
             mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+
+            # ----- For NIST16 Invert Mask Here ----- #
+
+            ##########################################
+            
         # attn_mask_image = copy.deepcopy(mask_image)
 
-        if self.augment is not None:
-            image = self.augment.augment_image(image=image)
-            # image = self.augment(image=image)['image']
-
+        if self.imgaug_augment:
+            try :
+                # temp_image = copy.deepcopy(image)
+                image = self.imgaug_augment.augment_image(image)
+            except Exception as e:
+                print(image_path, e) 
+                # image = temp_image
+                # del(temp_image)
+                # gc.collect()
+        
+        # print("--- bfr ---")
+        # print(image.shape, image.dtype)
+        # print(ela_image.shape, ela_image.dtype)
+        # print(mask_image.shape, mask_image.dtype)
+        # print("-------")
         if self.transforms:
             data = self.transforms(image=image, mask=mask_image, ela=ela_image)
             image = data["image"]
             mask_image = data["mask"]
-            ela_image = data["ela"]
+            ela_image = data["ela"]#.permute(2,0,1)
         # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
+
+        # print("--- afr ---")
+        # print(image.shape, image.type())
+        # print(ela_image.shape, ela_image.type())
+        # print(mask_image.shape, mask_image.type())
+        # print("-------")
 
         # image = img_to_tensor(image, self.normalize)
         # mask_image = img_to_tensor(mask_image).unsqueeze(0)
         # attn_mask_image = img_to_tensor(attn_mask_image).unsqueeze(0)
-
+        # print("LOADED DATA")
         return {
             "image": image,
             "image_path" : image_path, 
@@ -137,10 +167,10 @@ class DATASET(Dataset):
         num_fake = fakes["label"].count()
         num_real = real["label"].count()
 
-        # if int(num_fake * 1.5) <= num_real:
-        #     real = real.sample(n=int(num_fake * 1.5), replace=False)
-        # else:
-        real = real.sample(n=num_fake, replace=False)
+        if num_fake < num_real:
+            real = real.sample(n=num_fake, replace=False)
+        else:
+            fakes = fakes.sample(n=num_real, replace=False)
         return pd.concat([real, fakes])
 
     def _segment(self, rows: pd.DataFrame) -> pd.DataFrame:
