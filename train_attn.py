@@ -37,8 +37,8 @@ from segmentation.merged_net import SRM_Classifer
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
-    "epochs": 150,
-    "train_batch_size": 40,
+    "epochs": 100,
+    "train_batch_size": 42,
     "valid_batch_size": 64,
     "optimizer": "adam",
     "learning_rate": 0.0007,
@@ -125,7 +125,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
             #     albumentations.GridDistortion(p=0.5),
             #     albumentations.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
-            # ], p=0.65),
+            # ], p=0.7),
             augmentations.geometric.resize.Resize(256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.transforms.ToTensorV2()
@@ -191,7 +191,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     criterion = nn.BCEWithLogitsLoss()
     attn_map_criterion = nn.L1Loss()
 
-    es = EarlyStopping(patience=30, mode="min")
+    es = EarlyStopping(patience=20, mode="min")
 
     start_epoch = 0
     if resume:
@@ -500,7 +500,7 @@ if __name__ == "__main__":
     for i in [0]:
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"RESUME[05|03_02|37|25]_COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"3x3COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
