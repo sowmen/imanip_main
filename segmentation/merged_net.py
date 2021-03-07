@@ -21,19 +21,29 @@ class SRM_Classifer(nn.Module):
         self.bayer_conv = nn.Conv2d(self.in_channels, out_channels=3, kernel_size=5, padding=2, bias=False)
         nn.init.xavier_uniform_(self.bayer_conv.weight)
         
-        self.rgb_conv = nn.Conv2d(self.in_channels, out_channels=16, kernel_size=5, padding=2, bias=False)
-        nn.init.xavier_uniform_(self.rgb_conv.weight)
+        # self.rgb_conv = nn.Conv2d(self.in_channels, out_channels=16, kernel_size=5, padding=2, bias=False)
+        self.rgb_conv = nn.Sequential(
+            nn.Conv2d(self.in_channels, out_channels=16, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
+            # nn.ReLU(inplace=True),
+            nn.Conv2d(16, out_channels=16, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True)
+        )
+        # nn.init.xavier_uniform_(self.rgb_conv.weight)
+        nn.init.xavier_uniform_(self.rgb_conv[0].weight)
+        nn.init.xavier_uniform_(self.rgb_conv[1].weight)
         
         self.ela_net = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=5, padding=2, bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, 32, kernel_size=5, padding=2, bias=False),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(3, 32, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
+            # nn.ReLU(inplace=True),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
             nn.ReLU(inplace=True)
         )
         nn.init.xavier_uniform_(self.ela_net[0].weight)
-        nn.init.xavier_uniform_(self.ela_net[3].weight)
+        nn.init.xavier_uniform_(self.ela_net[1].weight)
 
         base_model = EfficientNet(in_channels=54)
         self.encoder = base_model.encoder
