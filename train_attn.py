@@ -37,13 +37,13 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 150,
-    "train_batch_size": 50,
-    "valid_batch_size": 64,
+    "train_batch_size": 20,
+    "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0005,
     "weight_decay": 0.0005,
     "schedule_patience": 5,
-    "schedule_factor": 0.2,
+    "schedule_factor": 0.25,
     "model": "SRM+ELA",
     "attn_map_weight": 0,
 }
@@ -92,17 +92,17 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
                 MedianBlur(p=1.0),
                 GaussianBlur(p=1.0)                  
             ], p=0.6),
-            # OneOf([
-            #     ImageCompression(quality_lower=80, p=0.7),
-            #     # ImageCompression(quality_lower=70, compression_type=ImageCompression.ImageCompressionType.WEBP, p=0.7),           
-            # ], p=0.6),
+            OneOf([
+                ImageCompression(quality_lower=80, p=0.7),
+                # ImageCompression(quality_lower=70, compression_type=ImageCompression.ImageCompressionType.WEBP, p=0.7),           
+            ], p=0.6),
             # GaussNoise(p=0.5),
-            # OneOf([
-            #     ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
-            #     GridDistortion(p=0.5),
-            #     OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
-            # ], p=0.8),
-            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            OneOf([
+                ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
+                GridDistortion(p=0.5),
+                OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
+            ], p=0.8),
+            augmentations.transforms.Resize(256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.ToTensor()
         ],
@@ -110,7 +110,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     )
     valid_aug = albumentations.Compose(
         [
-            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            augmentations.transforms.Resize(256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.ToTensor()
         ],
