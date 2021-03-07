@@ -38,8 +38,8 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 42,
-    "valid_batch_size": 64,
+    "train_batch_size": 20,
+    "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0007,
     "weight_decay": 0.0005,
@@ -76,11 +76,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     
     # wandb.watch(model)
 
-    normalize = {
-        "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
-        "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
-    }
-    
+    #####################################################################################################################
     train_imgaug  = iaa.Sequential(
         [
             iaa.SomeOf((0, 5),
@@ -115,7 +111,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             )
         ], random_order=True
     )
-    train_aug = albumentations.Compose(
+    train_geo_aug = albumentations.Compose(
         [
             albumentations.HorizontalFlip(p=0.5),
             albumentations.VerticalFlip(p=0.5),
@@ -126,13 +122,17 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             #     albumentations.GridDistortion(p=0.5),
             #     albumentations.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
             # ], p=0.7),
-            augmentations.geometric.resize.Resize(256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
-            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.transforms.ToTensorV2()
         ],
         additional_targets={'ela':'image'}
     )
-    valid_aug = albumentations.Compose(
+    ####################################################################################################################
+
+    normalize = {
+        "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
+        "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
+    }
+
+    transforms_normalize = albumentations.Compose(
         [
             augmentations.geometric.resize.Resize(256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
@@ -149,7 +149,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         test_fold=TEST_FOLD,
         patch_size=patch_size,
         equal_sample=False,
-        transforms=train_aug,
+        transforms_normalize=transforms_normalize,
         imgaug_augment=train_imgaug
     )
     train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
@@ -161,7 +161,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         test_fold=TEST_FOLD,
         patch_size=patch_size,
         equal_sample=False,
-        transforms=valid_aug,
+        transforms_normalize=transforms_normalize,
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
@@ -172,7 +172,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         test_fold=TEST_FOLD,
         patch_size=patch_size,
         equal_sample=False,
-        transforms=valid_aug,
+        transforms_normalize=transforms_normalize,
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
