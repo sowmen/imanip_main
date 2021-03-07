@@ -15,12 +15,14 @@ from albumentations import augmentations
 from albumentations.augmentations import functional
 import imgaug
 
+from dft_dwt import generate_dft_dwt_vector
+
 iaa = imgaug.augmenters.Sequential([])
 
 
 class DATASET(Dataset):
     def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, imgaug_augment=None,
-                 transforms=None, equal_sample=False, segment=False
+                 transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False
     ):
 
         super().__init__()
@@ -30,7 +32,8 @@ class DATASET(Dataset):
         self.test_fold = test_fold
         self.patch_size = patch_size
         self.imgaug_augment = imgaug_augment
-        self.transforms = transforms
+        self.geo_augment = geo_augment
+        self.transforms_normalize = transforms_normalize
         self.label_smoothing = 0.1
         self.equal_sample = equal_sample
         self.segment = segment # Returns only fake rows for segmentation
@@ -126,23 +129,25 @@ class DATASET(Dataset):
                 # del(temp_image)
                 # gc.collect()
         
-        # print("--- bfr ---")
-        # print(image.shape, image.dtype)
-        # print(ela_image.shape, ela_image.dtype)
-        # print(mask_image.shape, mask_image.dtype)
-        # print("-------")
-        if self.transforms:
-            data = self.transforms(image=image, mask=mask_image, ela=ela_image)
+        if self.geo_augment:
+            data = self.geo_aug(image=image, mask=mask_image, ela=ela_image)
+            image = data["image"]
+            mask_image = data["mask"]
+            ela_image = data["ela"]
+        
+
+        ###--- Generate DFT DWT Vector -----------------
+
+        dft_dwt_vector = generate_dft_dwt_vector(image)
+
+
+        if self.transforms_normalize:
+            data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)
             image = data["image"]
             mask_image = data["mask"]
             ela_image = data["ela"]#.permute(2,0,1)
         # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
-        # print("--- afr ---")
-        # print(image.shape, image.type())
-        # print(ela_image.shape, ela_image.type())
-        # print(mask_image.shape, mask_image.type())
-        # print("-------")
 
         # image = img_to_tensor(image, self.normalize)
         # mask_image = img_to_tensor(mask_image).unsqueeze(0)
@@ -153,7 +158,8 @@ class DATASET(Dataset):
             "image_path" : image_path, 
             "label": label, 
             "mask": mask_image,
-            "ela" : ela_image 
+            "ela" : ela_image ,
+            "dft_dwt_vector" : dft_dwt_vector
             # "attn_mask": attn_mask_image
         }
 
