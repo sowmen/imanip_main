@@ -5,6 +5,7 @@ import pandas as pd
 import cv2
 import math
 import copy
+import gc
 
 import torch
 from torch.utils.data import Dataset
@@ -12,6 +13,9 @@ from albumentations.pytorch.functional import img_to_tensor
 import albumentations
 from albumentations import augmentations
 from albumentations.augmentations import functional
+import imgaug
+
+iaa = imgaug.augmenters.Sequential([])
 
 
 class DATASET(Dataset):
@@ -95,7 +99,7 @@ class DATASET(Dataset):
         ela_image = cv2.cvtColor(ela_image, cv2.COLOR_BGR2RGB)
 
         if not isinstance(mask_patch, str) and np.isnan(mask_patch):
-            mask_image = np.zeros((image.shape[0], image.shape[1]))
+            mask_image = np.zeros((image.shape[0], image.shape[1])).astype('uint8')
         else:
             if self.patch_size == 'FULL':
                 mask_path = os.path.join(self.root_folder, root_dir, mask_patch)
@@ -112,16 +116,33 @@ class DATASET(Dataset):
             
         # attn_mask_image = copy.deepcopy(mask_image)
 
-        # if self.imgaug_augment is not None:
-        #     image = self.imgaug_augment.augment_image(image=image)
-        #     image = self.augment(image=image)['image']
+        if self.imgaug_augment:
+            try :
+                # temp_image = copy.deepcopy(image)
+                image = self.imgaug_augment.augment_image(image)
+            except Exception as e:
+                print(image_path, e) 
+                # image = temp_image
+                # del(temp_image)
+                # gc.collect()
         
+        # print("--- bfr ---")
+        # print(image.shape, image.dtype)
+        # print(ela_image.shape, ela_image.dtype)
+        # print(mask_image.shape, mask_image.dtype)
+        # print("-------")
         if self.transforms:
             data = self.transforms(image=image, mask=mask_image, ela=ela_image)
             image = data["image"]
             mask_image = data["mask"]
-            ela_image = data["ela"]
+            ela_image = data["ela"]#.permute(2,0,1)
         # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
+
+        # print("--- afr ---")
+        # print(image.shape, image.type())
+        # print(ela_image.shape, ela_image.type())
+        # print(mask_image.shape, mask_image.type())
+        # print("-------")
 
         # image = img_to_tensor(image, self.normalize)
         # mask_image = img_to_tensor(mask_image).unsqueeze(0)
