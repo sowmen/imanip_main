@@ -112,16 +112,18 @@ class DATASET(Dataset):
             
         # attn_mask_image = copy.deepcopy(mask_image)
 
-        if self.imgaug_augment is not None:
+        if self.imgaug_augment:
             image = self.imgaug_augment.augment_image(image)
         
+        # print("Before", image.shape, mask_image.shape, ela_image.shape)
         if self.transforms:
             data = self.transforms(image=image, mask=mask_image, ela=ela_image)
             image = data["image"]
             mask_image = data["mask"]
-            ela_image = data["ela"]
-        # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
+            ela_image = data["ela"].squeeze(0).permute(2,0,1)
 
+        # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
+        # print("After", image.shape, mask_image.shape, ela_image.shape)
         # image = img_to_tensor(image, self.normalize)
         # mask_image = img_to_tensor(mask_image).unsqueeze(0)
         # attn_mask_image = img_to_tensor(attn_mask_image).unsqueeze(0)

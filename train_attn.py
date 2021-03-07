@@ -16,11 +16,9 @@ from torch.utils.data import DataLoader
 import albumentations
 from albumentations import augmentations
 from albumentations import *
-<<<<<<< HEAD
-=======
+import albumentations.pytorch
 import imgaug as ia
 import imgaug.augmenters as iaa
->>>>>>> 67b40e804c90617c252824ac35e554a7ef6712c6
 # from albumentations.pytorch import ToTensorV2
 
 torch.backends.cudnn.benchmark = True
@@ -42,11 +40,7 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 150,
-<<<<<<< HEAD
-    "train_batch_size": 42,
-=======
     "train_batch_size": 50,
->>>>>>> 67b40e804c90617c252824ac35e554a7ef6712c6
     "valid_batch_size": 64,
     "optimizer": "adam",
     "learning_rate": 0.0005,
@@ -101,19 +95,19 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
                     ]),
                     iaa.Sharpen(alpha=(0, 1.0), lightness=(0.75, 1.5)), # sharpen images
                     iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5), # add gaussian noise to images
-                    iaa.Sometimes(0.3, iaa.Invert(0.05, per_channel=True)), # invert color channels
+                    # iaa.Sometimes(0.3, iaa.Invert(0.05, per_channel=True)), # invert color channels
                     iaa.Add((-10, 10), per_channel=0.5), # change brightness of images (by -10 to 10 of original value)
                     iaa.AddToHueAndSaturation((-20, 20)), # change hue and saturation
                     iaa.LinearContrast((0.5, 2.0), per_channel=0.5), # improve or worsen the contrast
                     # # either change the brightness of the whole image (sometimes
                     # # per channel) or change the brightness of subareas
-                    iaa.Sometimes(0.5,
+                    iaa.Sometimes(0.4,
                         iaa.OneOf([
                             iaa.Multiply((0.5, 1.5), per_channel=0.5),
-                            iaa.FrequencyNoiseAlpha(
+                            iaa.BlendAlphaFrequencyNoise(
                                 exponent=(-4, 0),
-                                first=iaa.Multiply((0.5, 1.5), per_channel=True),
-                                second=iaa.LinearContrast((0.5, 2.0))
+                                foreground=iaa.Multiply((0.5, 1.5), per_channel=True),
+                                background=iaa.LinearContrast((0.5, 2.0))
                             )
                         ])
                     ),
@@ -123,48 +117,26 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     )
     train_aug = albumentations.Compose(
         [
-<<<<<<< HEAD
-            # HorizontalFlip(p=0.5),
-            # VerticalFlip(p=0.5),
-            # RandomRotate90(p=0.1),
-            # ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=45, p=0.25),
-            # RandomBrightnessContrast(p=0.5),
-            # OneOf([
-            #     Blur(p=1.0),
-            #     MedianBlur(p=1.0),
-            #     GaussianBlur(p=1.0)                  
-            # ], p=0.6),
-            # OneOf([
-            #     ImageCompression(quality_lower=80, p=0.7),
-            #     # ImageCompression(quality_lower=70, compression_type=ImageCompression.ImageCompressionType.WEBP, p=0.7),           
-            # ], p=0.6),
-            # GaussNoise(p=0.5),
-=======
             HorizontalFlip(p=0.5),
             VerticalFlip(p=0.5),
             RandomRotate90(p=0.1),
             ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
->>>>>>> 67b40e804c90617c252824ac35e554a7ef6712c6
             # OneOf([
             #     ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
             #     GridDistortion(p=0.5),
             #     OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
-<<<<<<< HEAD
-            # ], p=0.8),
-=======
             # ], p=0.3),
->>>>>>> 67b40e804c90617c252824ac35e554a7ef6712c6
-            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            augmentations.geometric.resize.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.ToTensor()
+            albumentations.pytorch.transforms.ToTensor()
         ],
         additional_targets={'ela':'mask'}
     )
     valid_aug = albumentations.Compose(
         [
-            augmentations.transforms.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
+            augmentations.geometric.resize.Resize(224, 224, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.ToTensor()
+            albumentations.pytorch.transforms.ToTensor()
         ],
         additional_targets={'ela':'mask'}
     )
@@ -180,11 +152,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         transforms=train_aug,
         imgaug_augment=train_imgaug
     )
-<<<<<<< HEAD
     train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=True)
-=======
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=True)
->>>>>>> 67b40e804c90617c252824ac35e554a7ef6712c6
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -195,11 +163,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         equal_sample=False,
         transforms=valid_aug,
     )
-<<<<<<< HEAD
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=True)
-=======
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=True)
->>>>>>> 67b40e804c90617c252824ac35e554a7ef6712c6
 
     test_dataset = DATASET(
         dataframe=df,
@@ -210,11 +174,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         equal_sample=False,
         transforms=valid_aug,
     )
-<<<<<<< HEAD
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=True)
-=======
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=True)
->>>>>>> 67b40e804c90617c252824ac35e554a7ef6712c6
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
@@ -315,7 +275,7 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         
         # out_labels, attn_map = model(images)
         out_labels, _ = model(images, elas)
-
+        # print(images.type(), elas.type(), target_labels.type(), out_labels.type())
         loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
         # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
         loss = loss_classification  #+ attn_map_weight * loss_attn_map
