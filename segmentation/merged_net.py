@@ -21,6 +21,7 @@ class SRM_Classifer(nn.Module):
         self.bayer_conv = nn.Conv2d(self.in_channels, out_channels=3, kernel_size=5, padding=2, bias=False)
         nn.init.xavier_uniform_(self.bayer_conv.weight)
         
+<<<<<<< HEAD
         self.rgb_conv = nn.Sequential(
             nn.Conv2d(self.in_channels, out_channels=16, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(16),
@@ -40,10 +41,39 @@ class SRM_Classifer(nn.Module):
             nn.ReLU(inplace=True),
             nn.Conv2d(32, 32, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(32),
+=======
+        # self.rgb_conv = nn.Conv2d(self.in_channels, out_channels=16, kernel_size=5, padding=2, bias=False)
+        self.rgb_conv = nn.Sequential(
+            nn.Conv2d(self.in_channels, out_channels=32, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, out_channels=32, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True)
+            nn.Conv2d(32, out_channels=32, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True)
+        )
+        # nn.init.xavier_uniform_(self.rgb_conv.weight)
+        nn.init.xavier_uniform_(self.rgb_conv[0].weight)
+        nn.init.xavier_uniform_(self.rgb_conv[2].weight)
+        nn.init.xavier_uniform_(self.rgb_conv[4].weight)
+        
+        self.ela_net = nn.Sequential(
+            nn.Conv2d(3, 16, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 16, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 16, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(16),
+>>>>>>> 6a14cea5a329a220086a7386cb2898e0c78944e4
             nn.ReLU(inplace=True)
         )
         nn.init.xavier_uniform_(self.ela_net[0].weight)
-        nn.init.xavier_uniform_(self.ela_net[3].weight)
+        nn.init.xavier_uniform_(self.ela_net[2].weight)
+        nn.init.xavier_uniform_(self.ela_net[4].weight)
 
         base_model = EfficientNet(in_channels=54)
         self.encoder = base_model.encoder

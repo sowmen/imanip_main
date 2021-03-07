@@ -515,4 +515,3 @@ if __name__ == "__main__":
     print(f'FINAL F1 : {f1.avg}')
     print(f'FINAL LOSS : {loss.avg}')
     print(f'FINAL AUC : {auc.avg}')
-
