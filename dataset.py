@@ -13,6 +13,9 @@ from albumentations.pytorch.functional import img_to_tensor
 import albumentations
 from albumentations import augmentations
 from albumentations.augmentations import functional
+import imgaug
+
+iaa = imgaug.augmenters.Sequential([])
 
 
 class DATASET(Dataset):
