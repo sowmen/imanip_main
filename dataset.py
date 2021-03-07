@@ -137,9 +137,9 @@ class DATASET(Dataset):
             ela_image = data["ela"]
         
 
-        image = functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
-        mask_image = functional.resize(mask_image, self.resize, self.resize, cv2.INTER_AREA)
-        ela_image = functional.resize(ela_image, self.resize, self.resize, cv2.INTER_AREA)
+        image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
+        mask_image = augmentations.geometric.functional.resize(mask_image, self.resize, self.resize, cv2.INTER_AREA)
+        ela_image = augmentations.geometric.functional.resize(ela_image, self.resize, self.resize, cv2.INTER_AREA)
 
 
         ###--- Generate DFT DWT Vector -----------------

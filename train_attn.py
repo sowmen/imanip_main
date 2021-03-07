@@ -38,10 +38,10 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 38,
+    "train_batch_size": 35,
     "valid_batch_size": 64,
     "optimizer": "adam",
-    "learning_rate": 0.0008,
+    "learning_rate": 0.0005,
     "weight_decay": 0.0005,
     "schedule_patience": 5,
     "schedule_factor": 0.25,
@@ -75,6 +75,8 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     
     
     # wandb.watch(model)
+    wandb.save('segmentation/merged_net.py')
+    wandb.save('dataset.py')
 
     #####################################################################################################################
     train_imgaug  = iaa.Sequential(

@@ -44,18 +44,18 @@ class SRM_Classifer(nn.Module):
         nn.init.xavier_uniform_(self.ela_net[1].weight)
 
         self.dft_net = nn.Sequential(
-            nn.Conv2d(18, 32, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(18, 48, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(48),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(48, 48, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(48),
             nn.ReLU(inplace=True),
         )
         nn.init.xavier_uniform_(self.dft_net[0].weight)
         nn.init.xavier_uniform_(self.dft_net[3].weight)
 
 
-        base_model = EfficientNet(in_channels=70)
+        base_model = EfficientNet(in_channels=86)
         self.encoder = base_model.encoder
         self.classifier = base_model.classifier
 
