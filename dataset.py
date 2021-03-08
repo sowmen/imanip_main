@@ -130,7 +130,7 @@ class DATASET(Dataset):
                 # gc.collect()
         
         if self.geo_augment:
-            data = self.geo_aug(image=image, mask=mask_image, ela=ela_image)
+            data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
             image = data["image"]
             mask_image = data["mask"]
             ela_image = data["ela"]
@@ -139,7 +139,7 @@ class DATASET(Dataset):
         ###--- Generate DFT DWT Vector -----------------
 
         dft_dwt_vector = generate_dft_dwt_vector(image)
-
+        dft_dwt_vector = torch.from_numpy(dft_dwt_vector)
 
         if self.transforms_normalize:
             data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)

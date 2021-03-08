@@ -150,7 +150,8 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         patch_size=patch_size,
         equal_sample=False,
         transforms_normalize=transforms_normalize,
-        imgaug_augment=train_imgaug
+        imgaug_augment=train_imgaug,
+        geo_augment=train_geo_aug
     )
     train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
