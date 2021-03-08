@@ -21,7 +21,7 @@ iaa = imgaug.augmenters.Sequential([])
 
 
 class DATASET(Dataset):
-    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, imgaug_augment=None,
+    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, resize, imgaug_augment=None,
                  transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False
     ):
 
@@ -31,6 +31,7 @@ class DATASET(Dataset):
         self.val_fold = val_fold
         self.test_fold = test_fold
         self.patch_size = patch_size
+        self.resize = resize
         self.imgaug_augment = imgaug_augment
         self.geo_augment = geo_augment
         self.transforms_normalize = transforms_normalize
@@ -136,10 +137,15 @@ class DATASET(Dataset):
             ela_image = data["ela"]
         
 
-        ###--- Generate DFT DWT Vector -----------------
+        image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
+        mask_image = augmentations.geometric.functional.resize(mask_image, self.resize, self.resize, cv2.INTER_AREA)
+        ela_image = augmentations.geometric.functional.resize(ela_image, self.resize, self.resize, cv2.INTER_AREA)
 
+
+        ###--- Generate DFT DWT Vector -----------------
         dft_dwt_vector = generate_dft_dwt_vector(image)
-        dft_dwt_vector = torch.from_numpy(dft_dwt_vector)
+        dft_dwt_vector = torch.from_numpy(dft_dwt_vector).float()
+
 
         if self.transforms_normalize:
             data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)

@@ -38,10 +38,10 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 20,
-    "valid_batch_size": 32,
+    "train_batch_size": 35,
+    "valid_batch_size": 64,
     "optimizer": "adam",
-    "learning_rate": 0.0007,
+    "learning_rate": 0.0005,
     "weight_decay": 0.0005,
     "schedule_patience": 5,
     "schedule_factor": 0.25,
@@ -75,6 +75,8 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     
     
     # wandb.watch(model)
+    wandb.save('segmentation/merged_net.py')
+    wandb.save('dataset.py')
 
     #####################################################################################################################
     train_imgaug  = iaa.Sequential(
@@ -134,7 +136,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
 
     transforms_normalize = albumentations.Compose(
         [
-            augmentations.geometric.resize.Resize(256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.transforms.ToTensorV2()
         ],
@@ -148,7 +149,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         patch_size=patch_size,
-        equal_sample=False,
+        resize=256,
         transforms_normalize=transforms_normalize,
         imgaug_augment=train_imgaug,
         geo_augment=train_geo_aug
@@ -161,7 +162,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         patch_size=patch_size,
-        equal_sample=False,
+        resize=256,
         transforms_normalize=transforms_normalize,
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
@@ -172,7 +173,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         patch_size=patch_size,
-        equal_sample=False,
+        resize=256,
         transforms_normalize=transforms_normalize,
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
@@ -270,12 +271,13 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         images = batch["image"].to(device)
         elas = batch["ela"].to(device)
         target_labels = batch["label"].to(device)
+        dft_dwt_vector = batch["dft_dwt_vector"].to(device)
         # attn_gt = batch["attn_mask"].to(device)
         # print("GOTTEM")
         optimizer.zero_grad()
         
         # out_labels, attn_map = model(images)
-        out_labels, _ = model(images, elas)
+        out_labels, _ = model(images, elas, dft_dwt_vector)
 
         loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
         # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -344,10 +346,11 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             target_labels = batch["label"].to(device)
+            dft_dwt_vector = batch["dft_dwt_vector"].to(device)
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels, _ = model(images, elas)
+            out_labels, _ = model(images, elas, dft_dwt_vector)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -419,10 +422,11 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             target_labels = batch["label"].to(device)
+            dft_dwt_vector = batch["dft_dwt_vector"].to(device)
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels, _ = model(images, elas)
+            out_labels, _ = model(images, elas, dft_dwt_vector)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -501,7 +505,7 @@ if __name__ == "__main__":
     for i in [0]:
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"3x3COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"DFT(No norm)+COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
