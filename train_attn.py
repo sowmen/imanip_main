@@ -38,12 +38,12 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 35,
-    "valid_batch_size": 64,
+    "train_batch_size": 20,
+    "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0005,
     "weight_decay": 0.0005,
-    "schedule_patience": 5,
+    "schedule_patience": 3,
     "schedule_factor": 0.25,
     "model": "SRM+ELA",
     "attn_map_weight": 0,
