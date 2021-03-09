@@ -17,8 +17,6 @@ import imgaug
 
 from dft_dwt import generate_dft_dwt_vector
 
-iaa = imgaug.augmenters.Sequential([])
-
 
 class DATASET(Dataset):
     def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, resize, imgaug_augment=None,

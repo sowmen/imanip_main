@@ -38,7 +38,7 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 35,
+    "train_batch_size": 32,
     "valid_batch_size": 64,
     "optimizer": "adam",
     "learning_rate": 0.0005,
@@ -193,11 +193,11 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     criterion = nn.BCEWithLogitsLoss()
     attn_map_criterion = nn.L1Loss()
 
-    es = EarlyStopping(patience=20, mode="min")
+    es = EarlyStopping(patience=15, mode="min")
 
     start_epoch = 0
     if resume:
-        checkpoint = torch.load('checkpoint/COMBO_ALL_FULLSRM+ELA_[05|03_02|37|25].pt')
+        checkpoint = torch.load('checkpoint/DFT(No norm)+COMBO_ALL_FULLSRM+ELA_[08|03_04|52|35].pt')
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -505,11 +505,11 @@ if __name__ == "__main__":
     for i in [0]:
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"DFT(No norm)+COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(RESUME-4-52-35) DFT(No norm)+COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
-            resume=False
+            resume=True
         )
         acc.update(test_metrics['test_acc_05'])
         f1.update(test_metrics['test_f1_05'])
