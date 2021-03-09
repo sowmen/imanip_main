@@ -55,6 +55,8 @@ class DATASET(Dataset):
             self.dataframe = pd.concat([df_without_cmfd_128, cmfd_128_real_sample, cmfd_128_fake_sample])
         
         if self.patch_size == 64 and self.combo:
+            df_without = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD|CASIA|IMD')]
+
             df_without_cmfd_64 = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD')]
             cmfd_64 = self.dataframe[self.dataframe['root_dir'].str.contains('CMFD')]
             cmfd_64_real_sample = cmfd_64[cmfd_64['label'] == 0].sample(n=10000, random_state=123)
@@ -69,6 +71,9 @@ class DATASET(Dataset):
             imd_64 = self.dataframe[self.dataframe['root_dir'].str.contains('IMD')]
             imd_64_real_sample = imd_64[imd_64['label'] == 0].sample(n=15000, random_state=123)
             imd_64_fake_sample = imd_64[imd_64['label'] == 1].sample(n=15000, random_state=123)
+
+            self.dataframe = pd.concat([df_without, cmfd_64_real_sample, cmfd_64_fake_sample, casia_64_real_sample,\
+                         casia_64_fake_sample, imd_64_real_sample, imd_64_fake_sample])
 
 
         if self.mode == "train":
