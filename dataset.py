@@ -21,7 +21,7 @@ iaa = imgaug.augmenters.Sequential([])
 
 
 class DATASET(Dataset):
-    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, resize, imgaug_augment=None,
+    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, resize, combo=True, imgaug_augment=None,
                  transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False
     ):
 
@@ -32,6 +32,7 @@ class DATASET(Dataset):
         self.test_fold = test_fold
         self.patch_size = patch_size
         self.resize = resize
+        self.combo = combo
         self.imgaug_augment = imgaug_augment
         self.geo_augment = geo_augment
         self.transforms_normalize = transforms_normalize
@@ -48,12 +49,29 @@ class DATASET(Dataset):
         #     albumentations.pytorch.ToTensor()
         # ])
 
-        if self.patch_size == 128:
+        if self.patch_size == 128 and self.combo:
             df_without_cmfd_128 = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD')]
             cmfd_128 = self.dataframe[self.dataframe['root_dir'].str.contains('CMFD')]
             cmfd_128_real_sample = cmfd_128[cmfd_128['label'] == 0].sample(n=7000, random_state=123)
             cmfd_128_fake_sample = cmfd_128[cmfd_128['label'] == 1].sample(n=7000, random_state=123)
             self.dataframe = pd.concat([df_without_cmfd_128, cmfd_128_real_sample, cmfd_128_fake_sample])
+        
+        if self.patch_size == 64 and self.combo:
+            df_without_cmfd_64 = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD')]
+            cmfd_64 = self.dataframe[self.dataframe['root_dir'].str.contains('CMFD')]
+            cmfd_64_real_sample = cmfd_64[cmfd_64['label'] == 0].sample(n=10000, random_state=123)
+            cmfd_64_fake_sample = cmfd_64[cmfd_64['label'] == 1].sample(n=10000, random_state=123)
+
+            df_without_casia_64 = self.dataframe[~self.dataframe['root_dir'].str.contains('CASIA')]
+            casia_64 = self.dataframe[self.dataframe['root_dir'].str.contains('CASIA')]
+            casia_64_real_sample = casia_64[casia_64['label'] == 0].sample(n=15000, random_state=123)
+            casia_64_fake_sample = casia_64[casia_64['label'] == 1].sample(n=15000, random_state=123)
+
+            df_without_imd_64 = self.dataframe[~self.dataframe['root_dir'].str.contains('IMD')]
+            imd_64 = self.dataframe[self.dataframe['root_dir'].str.contains('IMD')]
+            imd_64_real_sample = imd_64[imd_64['label'] == 0].sample(n=15000, random_state=123)
+            imd_64_fake_sample = imd_64[imd_64['label'] == 1].sample(n=15000, random_state=123)
+
 
         if self.mode == "train":
             rows = self.dataframe[~self.dataframe["fold"].isin([self.val_fold, self.test_fold])]
