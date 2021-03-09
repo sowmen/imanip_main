@@ -1,4 +1,4 @@
-image,image_patch,mask_patch,label,fold,ela,data_root
+image,image_patch,mask_patch,label,fold,ela,root_dir
 1,0.png,,0,0,0_ela.jpg,COVERAGE/image_patch_64
 1,1.png,,0,0,1_ela.jpg,COVERAGE/image_patch_64
 1,2.png,,0,0,2_ela.jpg,COVERAGE/image_patch_64
