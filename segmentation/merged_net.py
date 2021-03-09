@@ -4,6 +4,7 @@ sys.path.append('../image_manipulation/')
 import torch
 from torch import nn
 import timm
+from timm.models.layers.adaptive_avgmax_pool import SelectAdaptivePool2d
 from segmentation.srm_kernel import setup_srm_layer
 from segmentation.timm_efficientnet import EfficientNet
 import gc
@@ -43,35 +44,34 @@ class SRM_Classifer(nn.Module):
         nn.init.xavier_uniform_(self.ela_net[0].weight)
         nn.init.xavier_uniform_(self.ela_net[1].weight)
 
-        self.dft_net = nn.Sequential(
-            nn.Conv2d(18, 32, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-        )
-        nn.init.xavier_uniform_(self.dft_net[0].weight)
-        nn.init.xavier_uniform_(self.dft_net[3].weight)
+        # self.dft_net = nn.Sequential(
+        #     nn.Conv2d(18, 32, kernel_size=3, padding=1, bias=False),
+        #     nn.BatchNorm2d(32),
+        #     nn.ReLU(inplace=True),
+        #     nn.Conv2d(32, 32, kernel_size=3, padding=1, bias=False),
+        #     nn.BatchNorm2d(32),
+        #     nn.ReLU(inplace=True),
+        # )
+        # nn.init.xavier_uniform_(self.dft_net[0].weight)
+        # nn.init.xavier_uniform_(self.dft_net[3].weight)
 
 
-        base_model = EfficientNet(in_channels=86)
+        base_model = EfficientNet(in_channels=54)
         self.encoder = base_model.encoder
         # self.classifier = base_model.classifier
 
         self.classifier = nn.Sequential(
-            timm.models.layers.SelectAdaptivePool2d(pool_type="avg", flatten=True),
+            SelectAdaptivePool2d(pool_type="avg", flatten=True),
             nn.Dropout(0.3),
             nn.Linear(1792, 512),
             nn.ReLU(inplace=True),
-            nn.Linear(512, 512),
-            nn.ReLU(inplace=True),
             nn.Linear(512, 256),
-            nn.ReLU(inplace=True),
-            nn.Linear(256, 256),
             nn.ReLU(inplace=True),
             nn.Linear(256, 1)
         )
+        nn.init.xavier_uniform_(self.classifier[2].weight)
+        nn.init.xavier_uniform_(self.classifier[4].weight)
+        nn.init.xavier_uniform_(self.classifier[6].weight)
 
         del base_model
         gc.collect()
@@ -81,16 +81,17 @@ class SRM_Classifer(nn.Module):
         if encoder_checkpoint:
             self.load_weights(encoder_checkpoint)
         
-    def forward(self, im, ela, dft_dwt):
+    def forward(self, im, ela):#, dft_dwt):
         x1 = self.srm_conv(im)
         x2 = self.bayer_conv(im)
         x3 = self.rgb_conv(im)
         x_ela = self.ela_net(ela)
 
-        x_dft = self.dft_net(dft_dwt)
+        # x_dft = self.dft_net(dft_dwt)
         # x_dft = torch.add(x_dft, dft_dwt)
 
-        _merged_input = torch.cat([x1, x2, x3, x_ela, x_dft], dim=1)
+        # _merged_input = torch.cat([x1, x2, x3, x_ela, x_dft], dim=1)
+        _merged_input = torch.cat([x1, x2, x3, x_ela], dim=1)
         
         enc_out, (start, end), _ = self.encoder(_merged_input)
         x = self.classifier(enc_out)

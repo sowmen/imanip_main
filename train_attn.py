@@ -38,14 +38,14 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 20,
+    "train_batch_size": 25,
     "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0005,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
-    "model": "SRM+ELA",
+    "model": "ChangedClass",
     "attn_map_weight": 0,
 }
 
@@ -271,13 +271,13 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         images = batch["image"].to(device)
         elas = batch["ela"].to(device)
         target_labels = batch["label"].to(device)
-        dft_dwt_vector = batch["dft_dwt_vector"].to(device)
+        # dft_dwt_vector = batch["dft_dwt_vector"].to(device)
         # attn_gt = batch["attn_mask"].to(device)
         # print("GOTTEM")
         optimizer.zero_grad()
         
         # out_labels, attn_map = model(images)
-        out_labels, _ = model(images, elas, dft_dwt_vector)
+        out_labels, _ = model(images, elas)#, dft_dwt_vector)
 
         loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
         # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -346,11 +346,11 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             target_labels = batch["label"].to(device)
-            dft_dwt_vector = batch["dft_dwt_vector"].to(device)
+            # dft_dwt_vector = batch["dft_dwt_vector"].to(device)
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels, _ = model(images, elas, dft_dwt_vector)
+            out_labels, _ = model(images, elas)#, dft_dwt_vector)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -422,11 +422,11 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             target_labels = batch["label"].to(device)
-            dft_dwt_vector = batch["dft_dwt_vector"].to(device)
+            # dft_dwt_vector = batch["dft_dwt_vector"].to(device)
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels, _ = model(images, elas, dft_dwt_vector)
+            out_labels, _ = model(images, elas)#, dft_dwt_vector)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -489,15 +489,16 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
     # log_class_metrics_by_threshold(y_test, y_test_pred[:, 1])
     #endregion
 
+
 def expand_prediction(arr):
     arr_reshaped = arr.reshape(-1, 1)
     return np.clip(np.concatenate((1.0 - arr_reshaped, arr_reshaped), axis=1), 0.0, 1.0)
 
 
 if __name__ == "__main__":
-    patch_size = 'FULL'
+    patch_size = '128'
 
-    df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
+    df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=0.5, random_state=123).reset_index(drop=True)
     acc = AverageMeter()
     f1 = AverageMeter()
     loss = AverageMeter()
@@ -505,7 +506,7 @@ if __name__ == "__main__":
     for i in [0]:
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"DFT(No norm)+COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,

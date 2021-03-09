@@ -48,6 +48,13 @@ class DATASET(Dataset):
         #     albumentations.pytorch.ToTensor()
         # ])
 
+        if self.patch_size == 128:
+            df_without_cmfd_128 = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD')]
+            cmfd_128 = self.dataframe[self.dataframe['root_dir'].str.contains('CMFD')]
+            cmfd_128_real_sample = cmfd_128[cmfd_128['label'] == 0].sample(n=7000, random_state=123)
+            cmfd_128_fake_sample = cmfd_128[cmfd_128['label'] == 1].sample(n=7000, random_state=123)
+            self.dataframe = pd.concat([df_without_cmfd_128, cmfd_128_real_sample, cmfd_128_fake_sample])
+
         if self.mode == "train":
             rows = self.dataframe[~self.dataframe["fold"].isin([self.val_fold, self.test_fold])]
         elif self.mode == "val":
@@ -143,8 +150,8 @@ class DATASET(Dataset):
 
 
         ###--- Generate DFT DWT Vector -----------------
-        dft_dwt_vector = generate_dft_dwt_vector(image)
-        dft_dwt_vector = torch.from_numpy(dft_dwt_vector).float()
+        # dft_dwt_vector = generate_dft_dwt_vector(image)
+        # dft_dwt_vector = torch.from_numpy(dft_dwt_vector).float()
 
 
         if self.transforms_normalize:
@@ -165,7 +172,7 @@ class DATASET(Dataset):
             "label": label, 
             "mask": mask_image,
             "ela" : ela_image ,
-            "dft_dwt_vector" : dft_dwt_vector
+            # "dft_dwt_vector" : dft_dwt_vector
             # "attn_mask": attn_mask_image
         }
 
