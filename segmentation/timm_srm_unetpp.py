@@ -9,11 +9,10 @@ from segmentation.layers import upsize2, Decode
 import copy
 
 class UnetPP(nn.Module):
-    def __init__(self, encoder, in_channels=3, num_classes=1, layer='end', sampling='nearest'):
+    def __init__(self, encoder, num_classes=1, layer='end', sampling='nearest'):
         super(UnetPP, self).__init__()
         
         self.encoder = encoder
-        self.in_channels = in_channels
         self.num_classes = num_classes
         self.layer = layer
         self.sampling = sampling
