@@ -29,12 +29,11 @@ import wandb
 # from neptunecontrib.monitoring.metrics import *
 
 from dataset import DATASET
-# from segmentation.timm_efficientnet import EfficientNet
 import seg_metrics
 from pytorch_toolbelt import losses
 from utils import *
+
 # import segmentation_models_pytorch as smp
-# from segmentation.timm_unetb4 import UnetB4, UnetB4_Inception
 from segmentation.timm_srm_unetpp import UnetPP
 from segmentation.merged_net import SRM_Classifer 
 from sim_dataset import SimDataset
@@ -43,15 +42,15 @@ OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 64,
-    "valid_batch_size": 128,
+    "train_batch_size": 8,
+    "valid_batch_size": 16,
     "optimizer": "adam",
     "learning_rate": 0.0005,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "ChangedClass+UnetPP",
+    "model": "UnetPP",
 }
 TEST_FOLD = 1
 
@@ -399,7 +398,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
         gt = batch["mask"].to(device)
 
         optimizer.zero_grad()
-        out_mask = model(images, elas)
+        out_mask = model(images, elas).squeeze(1)
         # out_mask = model(images)
 
         loss_segmentation = criterion(out_mask, gt)
@@ -460,7 +459,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
             
-            out_mask = model(images, elas)
+            out_mask = model(images, elas).squeeze(1)
             # out_mask = model(images)
 
             loss_segmentation = criterion(out_mask, gt)
@@ -512,7 +511,7 @@ def test(model, test_loader, criterion):
             elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
 
-            out_mask = model(images, elas)
+            out_mask = model(images, elas).squeeze(1)
             # out_mask = model(images)
 
             loss_segmentation = criterion(out_mask, gt)
@@ -537,33 +536,6 @@ def test(model, test_loader, criterion):
     wandb.log(test_metrics)
     return test_metrics
     
-    #region TEST LOGGING
-    # wandb.log(
-    #     {
-    #         "test_roc_auc_curve": skplt.metrics.plot_roc(
-    #             targets, expand_prediction(correct_predictions)
-    #         ),
-    #         "test_precision_recall_curve": skplt.metrics.plot_precision_recall(
-    #             targets, expand_prediction(correct_predictions)
-    #         ),
-    #     }
-    # )
-
-    # y_test = targets
-    # y_test_pred = expand_prediction(correct_predictions)
-    # log_confusion_matrix(y_test, y_test_pred[:, 1] > 0.5)
-    # log_classification_report(y_test, y_test_pred[:, 1] > 0.5)
-    # log_class_metrics(y_test, y_test_pred[:, 1] > 0.5)
-    # log_roc_auc(y_test, y_test_pred)
-    # log_precision_recall_auc(y_test, y_test_pred)
-    # log_brier_loss(y_test, y_test_pred[:, 1])
-    # log_log_loss(y_test, y_test_pred)
-    # log_ks_statistic(y_test, y_test_pred)
-    # log_cumulative_gain(y_test, y_test_pred)
-    # log_lift_curve(y_test, y_test_pred)
-    # log_prediction_distribution(y_test, y_test_pred[:, 1])
-    # log_class_metrics_by_threshold(y_test, y_test_pred[:, 1])
-    #endregion
 
 def expand_prediction(arr):
     arr_reshaped = arr.reshape(-1, 1)
@@ -573,14 +545,14 @@ def expand_prediction(arr):
 if __name__ == "__main__":
     patch_size = "FULL"
 
-    df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=0.5, random_state=123).reset_index(drop=True)
+    df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
     dice = AverageMeter()
     jaccard = AverageMeter()
     loss = AverageMeter()
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"ChangedClass_COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,

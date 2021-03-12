@@ -191,7 +191,7 @@ class DATASET(Dataset):
             "image": image,
             "image_path" : image_path, 
             "label": label, 
-            "mask": mask_image,
+            "mask": mask_image.float(),
             "ela" : ela_image ,
             # "dft_dwt_vector" : dft_dwt_vector
             # "attn_mask": attn_mask_image
