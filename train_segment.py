@@ -66,8 +66,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     )
     config = wandb.config
 
-    # neptune.init("sowmen/imanip")
-    # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
 
     # model = EfficientNet('tf_efficientnet_b4_ns')
     # model = get_efficientunet(
@@ -81,7 +79,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     # model = UnetB4_Inception(encoder, in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
     encoder = SRM_Classifer(encoder_checkpoint='weights/Changed classifier+COMBO_ALL_FULLSRM+ELA_[08|03_21|22|09].h5', freeze_encoder=True)
     model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
-    model.to(device)
+    
     
     SRM_FLAG=1
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
@@ -208,6 +206,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
 
     # model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
     model = nn.DataParallel(model)
+    model.to(device)
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
@@ -216,9 +215,9 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         factor=config.schedule_factor,
     )
 
-    # bce = nn.BCEWithLogitsLoss()
+    bce = nn.BCEWithLogitsLoss()
     dice = losses.DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
-    criterion = dice #losses.JointLoss(bce, dice)
+    criterion = losses.JointLoss(bce, dice)
 
     es = EarlyStopping(patience=15, mode="min")
 
@@ -245,16 +244,16 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         valid_metrics = valid_epoch(model, valid_loader, criterion,  epoch)
         scheduler.step(valid_metrics["valid_loss_segmentation"])
 
-        print(
-            f"TRAIN_LOSS = {train_metrics['train_loss_segmentation']}, \
-            TRAIN_DICE = {train_metrics['train_dice']}, \
-            TRAIN_JACCARD = {train_metrics['train_jaccard']},"
-        )
-        print(
-            f"VALID_LOSS = {valid_metrics['valid_loss_segmentation']}, \
-            VALID_DICE = {valid_metrics['valid_dice']}, \
-            VALID_JACCARD = {valid_metrics['valid_jaccard']},"
-        )
+        # print(
+        #     f"TRAIN_LOSS = {train_metrics['train_loss_segmentation']}, \
+        #     TRAIN_DICE = {train_metrics['train_dice']}, \
+        #     TRAIN_JACCARD = {train_metrics['train_jaccard']},"
+        # )
+        # print(
+        #     f"VALID_LOSS = {valid_metrics['valid_loss_segmentation']}, \
+        #     VALID_DICE = {valid_metrics['valid_dice']}, \
+        #     VALID_JACCARD = {valid_metrics['valid_jaccard']},"
+        # )
 
         es(
             valid_metrics["valid_loss_segmentation"],
@@ -395,7 +394,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
     for batch in tqdm(train_loader):
         images = batch["image"].to(device)
         elas = batch["ela"].to(device)
-        gt = batch["mask"].to(device)
+        gt = batch["mask"].unsqueeze(1).to(device)
 
         optimizer.zero_grad()
         out_mask = model(images, elas)
@@ -418,25 +417,25 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
         segmentation_loss.update(loss_segmentation.item(), train_loader.batch_size)
 
         with torch.no_grad():
-            out_mask = torch.sigmoid(out_mask.detach().cpu())
-            out_mask = out_mask.squeeze(1)
-            gt = gt.detach().cpu()
+            out_mask = torch.sigmoid(out_mask)
+            out_mask = out_mask.cpu().detach()
+            gt = gt.cpu().detach()
             
-            targets.extend(list(gt))
-            outputs.extend(list(out_mask))
+            # targets.extend(list(gt))
+            # outputs.extend(list(out_mask))
 
         gc.collect()
         # torch.cuda.empty_cache()
 
-    print("~~~~~~~~~~~~~~~~~~~~~~~~~")
-    dice, _ = seg_metrics.dice_coeff(outputs, targets) 
-    jaccard, _ = seg_metrics.jaccard_coeff(outputs, targets)  
-    print("~~~~~~~~~~~~~~~~~~~~~~~~~")
+    # print("~~~~~~~~~~~~~~~~~~~~~~~~~")
+    # dice, _ = seg_metrics.dice_coeff(outputs, targets) 
+    # jaccard, _ = seg_metrics.jaccard_coeff(outputs, targets)  
+    # print("~~~~~~~~~~~~~~~~~~~~~~~~~")
 
     train_metrics = {
         "train_loss_segmentation": segmentation_loss.avg,
-        "train_dice": dice.item(),
-        "train_jaccard": jaccard.item(),
+        # "train_dice": dice.item(),
+        # "train_jaccard": jaccard.item(),
         "epoch" : epoch
     }
     wandb.log(train_metrics)
@@ -458,7 +457,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
         for batch in tqdm(valid_loader):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
-            gt = batch["mask"].to(device)
+            gt = batch["mask"].unsqueeze(1).to(device)
             
             out_mask = model(images, elas)
             # out_mask = model(images)
@@ -468,31 +467,36 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             # ---------------------Batch Loss Update-------------------------
             segmentation_loss.update(loss_segmentation.item(), valid_loader.batch_size)
 
-            out_mask = torch.sigmoid(out_mask.detach().cpu())
-            out_mask = out_mask.squeeze(1)
-            gt = gt.detach().cpu()
             
-            targets.extend(list(gt))
-            outputs.extend(list(out_mask))
-            example_images.extend(list(images.cpu()))
+            out_mask = torch.sigmoid(out_mask)
+            out_mask = out_mask.cpu().detach()
+            gt = gt.cpu().detach()
+            
+            # targets.extend(list(gt))
+            # outputs.extend(list(out_mask))
+
+            images = images.cpu().detach()
+            # example_images.extend(list(images))
             image_names.extend(batch["image_path"])
 
-    print("~~~~~~~~~~~~~~~~~~~~~~~~~")       
-    dice, best_dice = seg_metrics.dice_coeff(outputs, targets)  
-    jaccard, best_iou = seg_metrics.jaccard_coeff(outputs, targets) 
-    print("~~~~~~~~~~~~~~~~~~~~~~~~~")
+            gc.collect()
 
-    examples = []
-    caption = f"{epoch}Dice:{best_dice[1]}, IOU:{best_iou[1]} Path : {image_names[best_dice[0]]}"
-    examples.append(wandb.Image(example_images[best_dice[0]],caption=caption))
-    examples.append(wandb.Image(outputs[best_dice[0]],caption=f'{epoch}PRED'))
-    examples.append(wandb.Image(targets[best_dice[0]],caption=f'{epoch}GT'))
+    # print("~~~~~~~~~~~~~~~~~~~~~~~~~")       
+    # dice, best_dice = seg_metrics.dice_coeff(outputs, targets)  
+    # jaccard, best_iou = seg_metrics.jaccard_coeff(outputs, targets) 
+    # print("~~~~~~~~~~~~~~~~~~~~~~~~~")
+
+    # examples = []
+    # caption = f"{epoch}Dice:{best_dice[1]}, IOU:{best_iou[1]} Path : {image_names[best_dice[0]]}"
+    # examples.append(wandb.Image(example_images[best_dice[0]],caption=caption))
+    # examples.append(wandb.Image(outputs[best_dice[0]],caption=f'{epoch}PRED'))
+    # examples.append(wandb.Image(targets[best_dice[0]],caption=f'{epoch}GT'))
         
     valid_metrics = {
         "valid_loss_segmentation": segmentation_loss.avg,
-        "valid_dice": dice.item(),
-        "valid_jaccard": jaccard.item(),
-        "examples": examples,
+        # "valid_dice": dice.item(),
+        # "valid_jaccard": jaccard.item(),
+        # "examples": examples,
         "epoch" : epoch
     }
     wandb.log(valid_metrics)
@@ -511,7 +515,7 @@ def test(model, test_loader, criterion):
         for batch in tqdm(test_loader):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
-            gt = batch["mask"].to(device)
+            gt = batch["mask"].unsqueeze(1).to(device)
 
             out_mask = model(images, elas)
             # out_mask = model(images)
@@ -521,12 +525,14 @@ def test(model, test_loader, criterion):
             # ---------------------Batch Loss Update-------------------------
             segmentation_loss.update(loss_segmentation.item(), test_loader.batch_size)
 
-            out_mask = torch.sigmoid(out_mask.detach().cpu())
-            out_mask = out_mask.squeeze(1)
-            gt = gt.detach().cpu()
+            out_mask = torch.sigmoid(out_mask)
+            out_mask = out_mask.cpu().detach()
+            gt = gt.cpu().detach()
             
             targets.extend(list(gt))
             outputs.extend(list(out_mask))
+
+            gc.collect()
 
     dice, _ = seg_metrics.dice_coeff(outputs, targets)  
     jaccard, _ = seg_metrics.jaccard_coeff(outputs, targets) 
