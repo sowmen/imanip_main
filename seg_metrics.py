@@ -26,14 +26,15 @@ def dice_coeff(outputs : list, targets : list):
     #     s = torch.FloatTensor(1).cuda().zero_()
     # else:
     assert len(outputs) == len(targets)
-    assert outputs[0].size() == targets[0].size()
+    # assert outputs[0].size() == targets[0].size()
 
     s = torch.FloatTensor(1).zero_()
     mx_dice = -1
     best_idx = 0
 
     for i, c in enumerate(zip(outputs, targets)):
-        d = losses.functional.soft_dice_score(c[0], c[1])
+        # print(c[0].shape, c[1].shape)
+        d = losses.functional.soft_dice_score(c[0], c[1], smooth=1e-7)
         if torch.sum(c[1]).item() > 0 and d.item() > mx_dice:
             mx_dice = d.item()
             best_idx = i 
@@ -48,14 +49,14 @@ def jaccard_coeff(outputs, targets):
     #     s = torch.FloatTensor(1).cuda().zero_()
     # else:
     assert len(outputs) == len(targets)
-    assert outputs[0].size() == targets[0].size()
+    # assert outputs[0].size() == targets[0].size()
 
     s = torch.FloatTensor(1).zero_()
     mx_iou = -1
     best_idx = 0
     
     for i, c in enumerate(zip(outputs, targets)):
-        d = losses.functional.soft_jaccard_score(c[0], c[1])
+        d = losses.functional.soft_jaccard_score(c[0], c[1], smooth=1e-7)
         if torch.sum(c[1]).item() > 0 and d.item() > mx_iou:
             mx_iou = d.item()
             best_idx = i 

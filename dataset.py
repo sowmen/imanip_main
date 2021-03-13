@@ -178,7 +178,7 @@ class DATASET(Dataset):
         if self.transforms_normalize:
             data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)
             image = data["image"]
-            mask_image = data["mask"]
+            mask_image = data["mask"] / 255.0
             ela_image = data["ela"]#.permute(2,0,1)
         # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
@@ -191,7 +191,7 @@ class DATASET(Dataset):
             "image": image,
             "image_path" : image_path, 
             "label": label, 
-            "mask": mask_image.float(),
+            "mask": mask_image,
             "ela" : ela_image ,
             # "dft_dwt_vector" : dft_dwt_vector
             # "attn_mask": attn_mask_image

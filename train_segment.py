@@ -17,9 +17,9 @@ from collections import OrderedDict
 
 import albumentations
 from albumentations import augmentations
-# from albumentations import *
 import imgaug.augmenters as iaa
 import albumentations.pytorch
+from torchvision import transforms
 
 torch.backends.cudnn.benchmark = True
 
@@ -41,9 +41,9 @@ from sim_dataset import SimDataset
 OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
-    "epochs": 60,
-    "train_batch_size": 8,
-    "valid_batch_size": 16,
+    "epochs": 100,
+    "train_batch_size": 16,
+    "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0005,
     "weight_decay": 0.0005,
@@ -78,8 +78,8 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     # model = smp.DeepLabV3('resnet34', classes=1, encoder_weights='imagenet')
     
     # encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
-    encoder = SRM_Classifer(encoder_checkpoint='weights/Changed classifier+COMBO_ALL_FULLSRM+ELA_[08|03_21|22|09].h5', freeze_encoder=True)
     # model = UnetB4_Inception(encoder, in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
+    encoder = SRM_Classifer(encoder_checkpoint='weights/Changed classifier+COMBO_ALL_FULLSRM+ELA_[08|03_21|22|09].h5', freeze_encoder=True)
     model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
     model.to(device)
     
@@ -216,9 +216,9 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         factor=config.schedule_factor,
     )
 
-    bce = nn.BCEWithLogitsLoss()
-    dice = losses.DiceLoss(mode='binary', log_loss=True)
-    criterion = losses.JointLoss(bce, dice)
+    # bce = nn.BCEWithLogitsLoss()
+    dice = losses.DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
+    criterion = dice #losses.JointLoss(bce, dice)
 
     es = EarlyStopping(patience=15, mode="min")
 
@@ -398,7 +398,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
         gt = batch["mask"].to(device)
 
         optimizer.zero_grad()
-        out_mask = model(images, elas).squeeze(1)
+        out_mask = model(images, elas)
         # out_mask = model(images)
 
         loss_segmentation = criterion(out_mask, gt)
@@ -418,8 +418,9 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
         segmentation_loss.update(loss_segmentation.item(), train_loader.batch_size)
 
         with torch.no_grad():
-            out_mask = torch.sigmoid(out_mask.cpu())
-            gt = gt.cpu()
+            out_mask = torch.sigmoid(out_mask.detach().cpu())
+            out_mask = out_mask.squeeze(1)
+            gt = gt.detach().cpu()
             
             targets.extend(list(gt))
             outputs.extend(list(out_mask))
@@ -459,7 +460,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
             
-            out_mask = model(images, elas).squeeze(1)
+            out_mask = model(images, elas)
             # out_mask = model(images)
 
             loss_segmentation = criterion(out_mask, gt)
@@ -467,8 +468,9 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             # ---------------------Batch Loss Update-------------------------
             segmentation_loss.update(loss_segmentation.item(), valid_loader.batch_size)
 
-            out_mask = torch.sigmoid(out_mask.cpu())
-            gt = gt.cpu()
+            out_mask = torch.sigmoid(out_mask.detach().cpu())
+            out_mask = out_mask.squeeze(1)
+            gt = gt.detach().cpu()
             
             targets.extend(list(gt))
             outputs.extend(list(out_mask))
@@ -511,7 +513,7 @@ def test(model, test_loader, criterion):
             elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
 
-            out_mask = model(images, elas).squeeze(1)
+            out_mask = model(images, elas)
             # out_mask = model(images)
 
             loss_segmentation = criterion(out_mask, gt)
@@ -519,8 +521,9 @@ def test(model, test_loader, criterion):
             # ---------------------Batch Loss Update-------------------------
             segmentation_loss.update(loss_segmentation.item(), test_loader.batch_size)
 
-            out_mask = torch.sigmoid(out_mask.cpu())
-            gt = gt.cpu()
+            out_mask = torch.sigmoid(out_mask.detach().cpu())
+            out_mask = out_mask.squeeze(1)
+            gt = gt.detach().cpu()
             
             targets.extend(list(gt))
             outputs.extend(list(out_mask))
@@ -552,7 +555,7 @@ if __name__ == "__main__":
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"ChangedClass_COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(DICE)ChangedClass_COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
