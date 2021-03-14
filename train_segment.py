@@ -2,31 +2,22 @@ import os
 import random
 import numpy as np
 import pandas as pd
-import cv2
 from tqdm import tqdm
 from datetime import datetime
-import pickle as pkl
-from sklearn import metrics
 import gc
-import timm
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from collections import OrderedDict
 
 import albumentations
-from albumentations import augmentations
 import imgaug.augmenters as iaa
 import albumentations.pytorch
 from torchvision import transforms
 
 torch.backends.cudnn.benchmark = True
 
-# from apex import amp
 import wandb
-# import neptune
-# from neptunecontrib.monitoring.metrics import *
 
 from dataset import DATASET
 import seg_metrics
@@ -67,16 +58,8 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     config = wandb.config
 
 
-    # model = EfficientNet('tf_efficientnet_b4_ns')
-    # model = get_efficientunet(
-    #     'tf_efficientnet_b4_ns',
-    #     # encoder_checkpoint='weights/256_CASIA_FULLtimm_effunet_[20_09_08_11_47].h5',
-    #     # freeze_encoder=True
-    # )
     # model = smp.DeepLabV3('resnet34', classes=1, encoder_weights='imagenet')
     
-    # encoder = EfficientNet(encoder_checkpoint='64_encoder.h5', freeze_encoder=True).get_encoder()
-    # model = UnetB4_Inception(encoder, in_channels=54, num_classes=1, sampling=config.sampling, layer='end')
     encoder = SRM_Classifer(encoder_checkpoint='weights/Changed classifier+COMBO_ALL_FULLSRM+ELA_[08|03_21|22|09].h5', freeze_encoder=True)
     model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
     
@@ -204,7 +187,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
 
-    # model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
     model = nn.DataParallel(model)
     model.to(device)
 
@@ -244,16 +226,16 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         valid_metrics = valid_epoch(model, valid_loader, criterion,  epoch)
         scheduler.step(valid_metrics["valid_loss_segmentation"])
 
-        # print(
-        #     f"TRAIN_LOSS = {train_metrics['train_loss_segmentation']}, \
-        #     TRAIN_DICE = {train_metrics['train_dice']}, \
-        #     TRAIN_JACCARD = {train_metrics['train_jaccard']},"
-        # )
-        # print(
-        #     f"VALID_LOSS = {valid_metrics['valid_loss_segmentation']}, \
-        #     VALID_DICE = {valid_metrics['valid_dice']}, \
-        #     VALID_JACCARD = {valid_metrics['valid_jaccard']},"
-        # )
+        print(
+            f"TRAIN_LOSS = {train_metrics['train_loss_segmentation']}, \
+            TRAIN_DICE = {train_metrics['train_dice']}, \
+            TRAIN_JACCARD = {train_metrics['train_jaccard']},"
+        )
+        print(
+            f"VALID_LOSS = {valid_metrics['valid_loss_segmentation']}, \
+            VALID_DICE = {valid_metrics['valid_dice']}, \
+            VALID_JACCARD = {valid_metrics['valid_jaccard']},"
+        )
 
         es(
             valid_metrics["valid_loss_segmentation"],
@@ -388,8 +370,8 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
     model.train()
 
     segmentation_loss = AverageMeter()
-    targets = []
-    outputs = []
+    dice = AverageMeter()
+    jaccard = AverageMeter()
 
     for batch in tqdm(train_loader):
         images = batch["image"].to(device)
@@ -421,21 +403,19 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
             out_mask = out_mask.cpu().detach()
             gt = gt.cpu().detach()
             
-            # targets.extend(list(gt))
-            # outputs.extend(list(out_mask))
+            batch_dice, _, _ = seg_metrics.get_avg_batch_dice(out_mask, gt)
+            dice.update(batch_dice, train_loader.batch_size)
+
+            batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
+            jaccard.update(batch_jaccard, train_loader.batch_size)
 
         gc.collect()
         # torch.cuda.empty_cache()
 
-    # print("~~~~~~~~~~~~~~~~~~~~~~~~~")
-    # dice, _ = seg_metrics.dice_coeff(outputs, targets) 
-    # jaccard, _ = seg_metrics.jaccard_coeff(outputs, targets)  
-    # print("~~~~~~~~~~~~~~~~~~~~~~~~~")
-
     train_metrics = {
         "train_loss_segmentation": segmentation_loss.avg,
-        # "train_dice": dice.item(),
-        # "train_jaccard": jaccard.item(),
+        "train_dice": dice.avg,
+        "train_jaccard": jaccard.avg,
         "epoch" : epoch
     }
     wandb.log(train_metrics)
@@ -447,11 +427,10 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     model.eval()
 
     segmentation_loss = AverageMeter()
-    targets = []
-    outputs = []
+    dice = AverageMeter()
+    jaccard = AverageMeter()
 
     example_images = []
-    image_names = []
     
     with torch.no_grad():
         for batch in tqdm(valid_loader):
@@ -472,31 +451,46 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             out_mask = out_mask.cpu().detach()
             gt = gt.cpu().detach()
             
-            # targets.extend(list(gt))
-            # outputs.extend(list(out_mask))
+            batch_dice, (mx_dice, best_dice_idx), (worst_dice, worst_dice_idx) = seg_metrics.get_avg_batch_dice(out_mask, gt)
+            dice.update(batch_dice, valid_loader.batch_size)
 
-            images = images.cpu().detach()
-            # example_images.extend(list(images))
-            image_names.extend(batch["image_path"])
+            batch_jaccard, (mx_iou, best_iou__idx), (worst_iou, worst_idx) = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
+            jaccard.update(batch_jaccard, valid_loader.batch_size)
 
+            if(np.random.rand() < 0.5 and len(example_images) < 10):
+                images = images.cpu().detach()
+                example_images.append({
+                    "best_image" : images[best_dice_idx],
+                    "best_image_name" : batch["image_path"][best_dice_idx],
+                    "best_dice" : mx_dice,
+                    "best_pred" : out_mask[best_dice_idx],
+                    "best_gt" : gt[best_dice_idx],
+                    "worst_image" : images[worst_dice_idx],
+                    "worst_image_name" : batch["image_path"][worst_dice_idx],
+                    "worst_dice" : worst_dice,
+                    "worst_pred" : out_mask[worst_dice_idx],
+                    "worst_gt" : gt[worst_dice_idx],
+                })
+            
             gc.collect()
 
-    # print("~~~~~~~~~~~~~~~~~~~~~~~~~")       
-    # dice, best_dice = seg_metrics.dice_coeff(outputs, targets)  
-    # jaccard, best_iou = seg_metrics.jaccard_coeff(outputs, targets) 
-    # print("~~~~~~~~~~~~~~~~~~~~~~~~~")
+    examples = []
+    for b in example_images:
+        caption_best = f"{epoch}Best Dice:" + str(b["best_dice"]) + "Path : " + str(b["best_image_name"])
+        examples.append(wandb.Image(b['best_image'],caption=caption_best))
+        examples.append(wandb.Image(b['best_pred'],caption=f'{epoch}PRED'))
+        examples.append(wandb.Image(b['best_gt'],caption=f'{epoch}GT'))
 
-    # examples = []
-    # caption = f"{epoch}Dice:{best_dice[1]}, IOU:{best_iou[1]} Path : {image_names[best_dice[0]]}"
-    # examples.append(wandb.Image(example_images[best_dice[0]],caption=caption))
-    # examples.append(wandb.Image(outputs[best_dice[0]],caption=f'{epoch}PRED'))
-    # examples.append(wandb.Image(targets[best_dice[0]],caption=f'{epoch}GT'))
-        
+        caption_worst = f"{epoch}Worst Dice:" + str(b["worst_dice"]) + "Path : " + str(b["worst_image_name"])
+        examples.append(wandb.Image(b['worst_image'],caption=caption_worst))
+        examples.append(wandb.Image(b['worst_pred'],caption=f'{epoch}PRED'))
+        examples.append(wandb.Image(b['worst_gt'],caption=f'{epoch}GT'))
+
     valid_metrics = {
         "valid_loss_segmentation": segmentation_loss.avg,
-        # "valid_dice": dice.item(),
-        # "valid_jaccard": jaccard.item(),
-        # "examples": examples,
+        "valid_dice": dice.avg,
+        "valid_jaccard": jaccard.avg,
+        "examples": examples,
         "epoch" : epoch
     }
     wandb.log(valid_metrics)
@@ -508,8 +502,8 @@ def test(model, test_loader, criterion):
     model.eval()
 
     segmentation_loss = AverageMeter()
-    targets = []
-    outputs = []
+    dice = AverageMeter()
+    jaccard = AverageMeter()
 
     with torch.no_grad():
         for batch in tqdm(test_loader):
@@ -529,18 +523,19 @@ def test(model, test_loader, criterion):
             out_mask = out_mask.cpu().detach()
             gt = gt.cpu().detach()
             
-            targets.extend(list(gt))
-            outputs.extend(list(out_mask))
+            batch_dice, _, _ = seg_metrics.get_avg_batch_dice(out_mask, gt)
+            dice.update(batch_dice, test_loader.batch_size)
+
+            batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
+            jaccard.update(batch_jaccard, test_loader.batch_size)
 
             gc.collect()
 
-    dice, _ = seg_metrics.dice_coeff(outputs, targets)  
-    jaccard, _ = seg_metrics.jaccard_coeff(outputs, targets) 
 
     test_metrics = {
         "test_loss_segmentation": segmentation_loss.avg,
-        "test_dice": dice.item(),
-        "test_jaccard": jaccard.item(),
+        "test_dice": dice.avg,
+        "test_jaccard": jaccard.avg,
     }
     wandb.log(test_metrics)
     return test_metrics

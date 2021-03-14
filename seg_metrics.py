@@ -33,7 +33,9 @@ def dice_coeff(outputs : list, targets : list):
     best_idx = 0
 
     for i, c in enumerate(zip(outputs, targets)):
-        # print(c[0].shape, c[1].shape)
+        if(c[0].requires_grad or c[1].requires_grad):
+            print("NOT DETACHED dice_coeff")
+
         d = losses.functional.soft_dice_score(c[0], c[1], smooth=1e-7)
         if torch.sum(c[1]).item() > 0 and d.item() > mx_dice:
             mx_dice = d.item()
@@ -42,6 +44,29 @@ def dice_coeff(outputs : list, targets : list):
         
     print(f"Best Dice: {mx_dice}, Count = {torch.sum(targets[best_idx]).item()}, IDX : {best_idx}")
     return s / (i + 1), (best_idx, mx_dice)
+
+def get_avg_batch_dice(outputs : torch.tensor, targets : torch.tensor): 
+    """Dice coeff for batches"""
+
+    tot_dice = 0.0
+    mx_dice, worst_dice = -1, 1e9
+    best_idx, worst_idx = 0, 0
+
+    for i, c in enumerate(zip(outputs, targets)):
+
+        assert c[0].shape == c[1].shape
+        assert c[0].requires_grad == False
+        
+        d = losses.functional.soft_dice_score(c[0], c[1], smooth=1e-7).item()
+        tot_dice += d
+        if (d > 0 and d < 1.0) and d > mx_dice:
+            mx_dice = d
+            best_idx = i
+        if (d > 0 and d < 1.0) and d < worst_dice:
+            worst_dice = d
+            worst_idx = i 
+    
+    return tot_dice / (outputs.shape[0]), (mx_dice, best_idx), (worst_dice, worst_idx)
 
 def jaccard_coeff(outputs, targets):
     """jaccard coeff for batches"""
@@ -56,6 +81,9 @@ def jaccard_coeff(outputs, targets):
     best_idx = 0
     
     for i, c in enumerate(zip(outputs, targets)):
+        if(c[0].requires_grad or c[1].requires_grad):
+            print("NOT DETACHED jaccard_coeff")
+
         d = losses.functional.soft_jaccard_score(c[0], c[1], smooth=1e-7)
         if torch.sum(c[1]).item() > 0 and d.item() > mx_iou:
             mx_iou = d.item()
@@ -64,6 +92,29 @@ def jaccard_coeff(outputs, targets):
         
     print(f"Best IOU: {mx_iou}, Count = {torch.sum(targets[best_idx]).item()}, IDX : {best_idx}")
     return s / (i + 1), (best_idx, mx_iou)
+
+def get_avg_batch_jaccard(outputs : torch.tensor, targets : torch.tensor): 
+    """Dice coeff for batches"""
+
+    tot_iou = 0.0
+    mx_iou, worst_iou = -1, 1e9
+    best_idx, worst_idx = 0, 0
+
+    for i, c in enumerate(zip(outputs, targets)):
+
+        assert c[0].shape == c[1].shape
+        assert c[0].requires_grad == False
+        
+        d = losses.functional.soft_jaccard_score(c[0], c[1], smooth=1e-7).item()
+        tot_iou += d
+        if (d > 0 and d < 1.0) and d > mx_iou:
+            mx_iou = d
+            best_idx = i 
+        if (d > 0 and d < 1.0) and d < worst_iou:
+            worst_iou = d
+            worst_idx = i 
+    
+    return tot_iou / (outputs.shape[0]), (mx_iou, best_idx), (worst_iou, worst_idx)
 
 def sensitivity(outputs, targets):
     true_positives = torch.sum(torch.round(torch.clamp(targets * outputs, 0, 1)))
