@@ -143,7 +143,8 @@ class DATASET(Dataset):
             mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
 
             # ----- For NIST16 Invert Mask Here ----- #
-
+            if('NIST' in root_dir):
+                mask_image = 255 - mask_image
             ##########################################
             
         # attn_mask_image = copy.deepcopy(mask_image)

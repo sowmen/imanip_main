@@ -36,7 +36,7 @@ config_defaults = {
     "train_batch_size": 16,
     "valid_batch_size": 32,
     "optimizer": "adam",
-    "learning_rate": 0.0005,
+    "learning_rate": 0.001,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
@@ -201,7 +201,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     dice = losses.DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
     criterion = losses.JointLoss(bce, dice)
 
-    es = EarlyStopping(patience=15, mode="min")
+    es = EarlyStopping(patience=20, mode="min")
 
     # wandb.watch(model, log_freq=50, log='all')
 
@@ -253,6 +253,8 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             'scheduler_state_dict': scheduler.state_dict(),
         }
         torch.save(checkpoint, os.path.join('checkpoint', f"{name}_[{dt_string}].pt"))
+
+        gc.collect()
 
     if os.path.exists(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")):
         print(model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))))
@@ -556,7 +558,7 @@ if __name__ == "__main__":
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(DICE)ChangedClass_COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(DICE+BCE)(invert nist)ChangedClass_COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
