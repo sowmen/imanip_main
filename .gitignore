@@ -11,3 +11,4 @@ __pycache__/
 best_weights/
 checkpoint/
 phase2 (SRM+Fake,ELA+Unet).ipynb
+256_features/
