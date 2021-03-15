@@ -80,8 +80,15 @@ class SRM_Classifer(nn.Module):
             self.freeze()
         if encoder_checkpoint:
             self.load_weights(encoder_checkpoint)
+
+        self.dense_feat = []
+        def hook(module, input, output):
+            self.dense_feat.append(output)
+        self.classifier[4].register_forward_hook(hook)
         
     def forward(self, im, ela):#, dft_dwt):
+        self.dense_feat.clear()
+
         x1 = self.srm_conv(im)
         x2 = self.bayer_conv(im)
         x3 = self.rgb_conv(im)
@@ -96,7 +103,7 @@ class SRM_Classifer(nn.Module):
         enc_out, (start, end), _ = self.encoder(_merged_input)
         x = self.classifier(enc_out)
         
-        return x, (_merged_input, enc_out, start, end)
+        return x, self.dense_feat[-1], (_merged_input, enc_out, start, end)
     
     def freeze(self):
         for param in super().parameters():
