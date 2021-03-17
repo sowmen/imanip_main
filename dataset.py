@@ -10,7 +10,7 @@ import gc
 import torch
 from torch.utils.data import Dataset
 from albumentations import augmentations
-from torchvision.transforms import functional as F
+from torchvision import transforms
 
 from dft_dwt import generate_dft_dwt_vector
 
@@ -169,12 +169,19 @@ class DATASET(Dataset):
         # dft_dwt_vector = torch.from_numpy(dft_dwt_vector).float()
 
         ##########------Normalize-----##########
-        tensor_image = F.to_tensor(image)
-        tensor_ela = F.to_tensor(ela_image)
-        tensor_mask = F.to_tensor(mask_image)
+        image_normalize = {
+            "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
+            "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
+        }
+        transNormalize = transforms.Normalize(mean=image_normalize['mean'], std=image_normalize['std'])
+        transTensor = transforms.ToTensor()
 
-        tensor_image = F.normalize(tensor_image, mean=[0.4535, 0.4286, 0.4178], std=[0.2673, 0.2550, 0.2947])
-        #########---------------------##########
+        tensor_image = transTensor(image)
+        tensor_ela = transTensor(ela_image)
+        tensor_mask = transTensor(mask_image)
+
+        tensor_image = transNormalize(tensor_image)
+        ########################################
 
         # if self.transforms_normalize:
         #     data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)

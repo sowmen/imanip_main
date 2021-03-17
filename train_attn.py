@@ -33,10 +33,10 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 46,
+    "train_batch_size": 44,
     "valid_batch_size": 64,
     "optimizer": "adam",
-    "learning_rate": 0.0001,
+    "learning_rate": 0.0005,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
