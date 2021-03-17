@@ -181,8 +181,8 @@ class DATASET(Dataset):
         tensor_mask = transTensor(mask_image)
 
         tensor_image = transNormalize(tensor_image)
+        ########################################
 
-        #########---------------------##########
         # if self.transforms_normalize:
         #     data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)
         #     image = data["image"]
@@ -191,10 +191,6 @@ class DATASET(Dataset):
         # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
 
-        # image = img_to_tensor(image, self.normalize)
-        # mask_image = img_to_tensor(mask_image).unsqueeze(0)
-        # attn_mask_image = img_to_tensor(attn_mask_image).unsqueeze(0)
-        # print("LOADED DATA")
         # return {
         #     "image": image,
         #     "image_path" : image_path, 
@@ -209,8 +205,9 @@ class DATASET(Dataset):
             "image_path" : image_path, 
             "label": label, 
             "mask": tensor_mask,
-            "ela" : tensor_ela ,
+            "ela" : tensor_ela,
         }
+
 
     def _equalize(self, rows: pd.DataFrame) -> pd.DataFrame:
         """
@@ -227,6 +224,7 @@ class DATASET(Dataset):
         else:
             fakes = fakes.sample(n=num_real, replace=False)
         return pd.concat([real, fakes])
+
 
     def _segment(self, rows: pd.DataFrame) -> pd.DataFrame:
         """
