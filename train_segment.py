@@ -36,7 +36,7 @@ config_defaults = {
     "train_batch_size": 16,
     "valid_batch_size": 32,
     "optimizer": "adam",
-    "learning_rate": 0.001,
+    "learning_rate": 0.0001,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
@@ -264,109 +264,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     wandb.save(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))
 
     return test_metrics
-
-#region DICE TEST
-####################################################################################
-# def predict(X, threshold):
-#     X_p = np.copy(X)
-#     preds = (X_p > threshold).astype('uint8')
-#     return preds
-
-# def metric(probability, truth, threshold=0.5, reduction='none'):
-#     '''Calculates dice of positive and negative images seperately'''
-#     '''probability and truth must be torch tensors'''
-#     batch_size = len(truth)
-#     with torch.no_grad():
-#         probability = probability.view(batch_size, -1)
-#         truth = truth.view(batch_size, -1)
-#         assert(probability.shape == truth.shape)
-
-#         p = (probability > threshold).float()
-#         t = (truth > 0.5).float()
-
-#         t_sum = t.sum(-1)
-#         p_sum = p.sum(-1)
-#         neg_index = torch.nonzero(t_sum == 0)
-#         pos_index = torch.nonzero(t_sum >= 1)
-
-#         dice_neg = (p_sum == 0).float()
-#         dice_pos = 2 * (p*t).sum(-1)/((p+t).sum(-1))
-
-#         dice_neg = dice_neg[neg_index]
-#         dice_pos = dice_pos[pos_index]
-#         dice = torch.cat([dice_pos, dice_neg])
-
-# #         dice_neg = np.nan_to_num(dice_neg.mean().item(), 0)
-# #         dice_pos = np.nan_to_num(dice_pos.mean().item(), 0)
-# #         dice = dice.mean().item()
-
-#         num_neg = len(neg_index)
-#         num_pos = len(pos_index)
-
-#     return dice, dice_neg, dice_pos, num_neg, num_pos
-
-# def compute_ious(pred, label, classes, ignore_index=255, only_present=True):
-#     '''computes iou for one ground truth mask and predicted mask'''
-#     pred[label == ignore_index] = 0
-#     ious = []
-#     for c in classes:
-#         label_c = label == c
-#         if only_present and np.sum(label_c) == 0:
-#             ious.append(np.nan)
-#             continue
-#         pred_c = pred == c
-#         intersection = np.logical_and(pred_c, label_c).sum()
-#         union = np.logical_or(pred_c, label_c).sum()
-#         if union != 0:
-#             ious.append(intersection / union)
-#     return ious if ious else [1]
-
-
-# def compute_iou_batch(outputs, labels, classes=None):
-#     '''computes mean iou for a batch of ground truth masks and predicted masks'''
-#     ious = []
-#     preds = np.copy(outputs) # copy is imp
-#     labels = np.array(labels) # tensor to np
-#     for pred, label in zip(preds, labels):
-#         ious.append(np.nanmean(compute_ious(pred, label, classes)))
-#     iou = np.nanmean(ious)
-#     return iou
-
-# class Meter:
-#     '''A meter to keep track of iou and dice scores throughout an epoch'''
-#     def __init__(self, phase, epoch):
-#         self.base_threshold = 0.5 # <<<<<<<<<<< here's the threshold
-#         self.base_dice_scores = []
-#         self.dice_neg_scores = []
-#         self.dice_pos_scores = []
-#         self.iou_scores = []
-
-#     def update(self, targets, outputs):
-#         probs = torch.sigmoid(outputs)
-#         dice, dice_neg, dice_pos, _, _ = metric(probs, targets, self.base_threshold)
-#         self.base_dice_scores.extend(dice)
-#         self.dice_pos_scores.extend(dice_pos)
-#         self.dice_neg_scores.extend(dice_neg)
-#         preds = predict(probs, self.base_threshold)
-#         iou = compute_iou_batch(preds, targets, classes=[1])
-#         self.iou_scores.append(iou)
-
-#     def get_metrics(self):
-#         dice = np.nanmean(self.base_dice_scores)
-#         dice_neg = np.nanmean(self.dice_neg_scores)
-#         dice_pos = np.nanmean(self.dice_pos_scores)
-#         dices = [dice, dice_neg, dice_pos]
-#         iou = np.nanmean(self.iou_scores)
-#         return dices, iou
-    
-# def epoch_log(phase, epoch, epoch_loss, meter, start):
-#     '''logging the metrics at the end of an epoch'''
-#     dices, iou = meter.get_metrics()
-#     dice, dice_neg, dice_pos = dices
-#     print("Loss: %0.4f | dice: %0.4f | dice_neg: %0.4f | dice_pos: %0.4f | IoU: %0.4f" % (epoch_loss, dice, dice_neg, dice_pos, iou))
-#     return dice, iou
-#######################################################################################
-#endregion
     
 def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
     model.train()
@@ -374,6 +271,8 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
     segmentation_loss = AverageMeter()
     dice = AverageMeter()
     jaccard = AverageMeter()
+
+    scores = seg_metrics.DiceMeter()
 
     for batch in tqdm(train_loader):
         images = batch["image"].to(device)
@@ -411,14 +310,21 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
             batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
             jaccard.update(batch_jaccard, train_loader.batch_size)
 
+            scores.update(gt, out_mask)
+
         gc.collect()
         # torch.cuda.empty_cache()
 
+    dice2, dice_neg, dice_pos, iou2 = seg_metrics.epoch_score_log("TRAIN", scores)
     train_metrics = {
         "train_loss_segmentation": segmentation_loss.avg,
         "train_dice": dice.avg,
         "train_jaccard": jaccard.avg,
-        "epoch" : epoch
+        "epoch" : epoch,
+        "train_dice2" : dice2,
+        "train_dice_pos" : dice_pos,
+        "train_dice_neg" : dice_neg,
+        "train_iou2" : iou2
     }
     wandb.log(train_metrics)
 
@@ -431,6 +337,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     segmentation_loss = AverageMeter()
     dice = AverageMeter()
     jaccard = AverageMeter()
+    scores = seg_metrics.DiceMeter()
 
     example_images = []
     
@@ -448,7 +355,6 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             # ---------------------Batch Loss Update-------------------------
             segmentation_loss.update(loss_segmentation.item(), valid_loader.batch_size)
 
-            
             out_mask = torch.sigmoid(out_mask)
             out_mask = out_mask.cpu().detach()
             gt = gt.cpu().detach()
@@ -474,6 +380,8 @@ def valid_epoch(model, valid_loader, criterion, epoch):
                     "worst_gt" : gt[worst_dice_idx],
                 })
             
+            scores.update(gt, out_mask)
+
             gc.collect()
 
     examples = []
@@ -488,12 +396,18 @@ def valid_epoch(model, valid_loader, criterion, epoch):
         examples.append(wandb.Image(b['worst_pred'],caption=f'{epoch}PRED'))
         examples.append(wandb.Image(b['worst_gt'],caption=f'{epoch}GT'))
 
+    dice2, dice_neg, dice_pos, iou2 = seg_metrics.epoch_score_log("VALID", scores)
+
     valid_metrics = {
         "valid_loss_segmentation": segmentation_loss.avg,
         "valid_dice": dice.avg,
         "valid_jaccard": jaccard.avg,
         "examples": examples,
-        "epoch" : epoch
+        "epoch" : epoch,
+        "valid_dice2" : dice2,
+        "valid_dice_pos" : dice_pos,
+        "valid_dice_neg" : dice_neg,
+        "valid_iou2" : iou2
     }
     wandb.log(valid_metrics)
 
@@ -506,6 +420,7 @@ def test(model, test_loader, criterion):
     segmentation_loss = AverageMeter()
     dice = AverageMeter()
     jaccard = AverageMeter()
+    scores = seg_metrics.DiceMeter()
 
     with torch.no_grad():
         for batch in tqdm(test_loader):
@@ -531,13 +446,19 @@ def test(model, test_loader, criterion):
             batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
             jaccard.update(batch_jaccard, test_loader.batch_size)
 
+            scores.update(gt, out_mask)
+
             gc.collect()
 
-
+    dice2, dice_neg, dice_pos, iou2 = seg_metrics.epoch_score_log("TEST", scores)
     test_metrics = {
         "test_loss_segmentation": segmentation_loss.avg,
         "test_dice": dice.avg,
         "test_jaccard": jaccard.avg,
+        "test_dice2" : dice2,
+        "test_dice_pos" : dice_pos,
+        "test_dice_neg" : dice_neg,
+        "test_iou2" : iou2
     }
     wandb.log(test_metrics)
     return test_metrics
@@ -558,7 +479,7 @@ if __name__ == "__main__":
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(DICE+BCE)(invert nist)ChangedClass_COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(DICE+BCE)InvCClass_COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
