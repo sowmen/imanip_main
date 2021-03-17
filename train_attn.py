@@ -15,17 +15,12 @@ from torch.utils.data import DataLoader
 
 import albumentations
 from albumentations import augmentations
-# from albumentations import *
 import imgaug.augmenters as iaa
 import albumentations.pytorch
 
 torch.backends.cudnn.benchmark = True
 
 import wandb
-# import neptune
-# from neptunecontrib.monitoring.metrics import *
-
-# from apex import amp
 
 from utils import *
 from effb4_attention import Efficient_Attention
