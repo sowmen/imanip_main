@@ -33,7 +33,7 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 44,
+    "train_batch_size": 46,
     "valid_batch_size": 64,
     "optimizer": "adam",
     "learning_rate": 0.0005,
@@ -57,17 +57,11 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     )
     config = wandb.config
 
-    # neptune.init("sowmen/imanip")
-    # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
-
     # model = Efficient_Attention()
-    # model = EfficientNet().to(device)
-    model = SRM_Classifer().to(device)
+    model = SRM_Classifer()
     SRM_FLAG = 1 # Set for SRM extraction layers
 
-    print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))
-    # model = Classifier2(1792).to(device)
-    
+    print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))    
     
     # wandb.watch(model)
     wandb.save('segmentation/merged_net.py')
@@ -124,18 +118,18 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     )
     ####################################################################################################################
 
-    normalize = {
-        "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
-        "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
-    }
+    # normalize = {
+    #     "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
+    #     "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
+    # }
 
-    transforms_normalize = albumentations.Compose(
-        [
-            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.transforms.ToTensorV2()
-        ],
-        additional_targets={'ela':'image'}
-    )
+    # transforms_normalize = albumentations.Compose(
+    #     [
+    #         albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+    #         albumentations.pytorch.transforms.ToTensorV2()
+    #     ],
+    #     additional_targets={'ela':'image'}
+    # )
 
     # -------------------------------- CREATE DATASET and DATALOADER --------------------------
     train_dataset = DATASET(
@@ -145,7 +139,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         test_fold=TEST_FOLD,
         patch_size=patch_size,
         resize=256,
-        transforms_normalize=transforms_normalize,
+        # transforms_normalize=transforms_normalize,
         imgaug_augment=train_imgaug,
         geo_augment=train_geo_aug
     )
@@ -158,7 +152,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         test_fold=TEST_FOLD,
         patch_size=patch_size,
         resize=256,
-        transforms_normalize=transforms_normalize,
+        # transforms_normalize=transforms_normalize,
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
@@ -169,22 +163,21 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         test_fold=TEST_FOLD,
         patch_size=patch_size,
         resize=256,
-        transforms_normalize=transforms_normalize,
+        # transforms_normalize=transforms_normalize,
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
-
-    # model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
-    model = nn.DataParallel(model)
-
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         patience=config.schedule_patience,
         mode="min",
         factor=config.schedule_factor,
     )
+
+    model = nn.DataParallel(model).to(device)
+
     criterion = nn.BCEWithLogitsLoss()
     attn_map_criterion = nn.L1Loss()
 
@@ -272,7 +265,7 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         optimizer.zero_grad()
         
         # out_labels, attn_map = model(images)
-        out_labels, _ = model(images, elas)#, dft_dwt_vector)
+        out_labels, _, _ = model(images, elas)#, dft_dwt_vector)
 
         loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
         # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -345,7 +338,7 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels, _ = model(images, elas)#, dft_dwt_vector)
+            out_labels, _ , _ = model(images, elas)#, dft_dwt_vector)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -421,7 +414,7 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels, _ = model(images, elas)#, dft_dwt_vector)
+            out_labels, _, _ = model(images, elas)#, dft_dwt_vector)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -491,9 +484,9 @@ def expand_prediction(arr):
 
 
 if __name__ == "__main__":
-    patch_size = '64'
+    patch_size = 'FULL'
 
-    df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=0.5, random_state=123).reset_index(drop=True)
+    df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
     acc = AverageMeter()
     f1 = AverageMeter()
     loss = AverageMeter()
@@ -501,11 +494,11 @@ if __name__ == "__main__":
     for i in [0]:
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(Resume 22-35-18) COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(ELA no normal)COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
-            resume=True
+            resume=False
         )
         acc.update(test_metrics['test_acc_05'])
         f1.update(test_metrics['test_f1_05'])

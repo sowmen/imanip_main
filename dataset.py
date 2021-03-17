@@ -9,11 +9,8 @@ import gc
 
 import torch
 from torch.utils.data import Dataset
-from albumentations.pytorch.functional import img_to_tensor
-import albumentations
 from albumentations import augmentations
-from albumentations.augmentations import functional
-import imgaug
+from torchvision import transforms
 
 from dft_dwt import generate_dft_dwt_vector
 
@@ -151,13 +148,9 @@ class DATASET(Dataset):
 
         if self.imgaug_augment:
             try :
-                # temp_image = copy.deepcopy(image)
                 image = self.imgaug_augment.augment_image(image)
             except Exception as e:
                 print(image_path, e) 
-                # image = temp_image
-                # del(temp_image)
-                # gc.collect()
         
         if self.geo_augment:
             data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
@@ -175,12 +168,26 @@ class DATASET(Dataset):
         # dft_dwt_vector = generate_dft_dwt_vector(image)
         # dft_dwt_vector = torch.from_numpy(dft_dwt_vector).float()
 
+        ##########------Normalize-----##########
+        image_normalize = {
+            "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
+            "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
+        }
+        transNormalize = transforms.Normalize(mean=image_normalize['mean'], std=image_normalize['std'])
+        transTensor = transforms.ToTensor()
 
-        if self.transforms_normalize:
-            data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)
-            image = data["image"]
-            mask_image = data["mask"] / 255.0
-            ela_image = data["ela"]#.permute(2,0,1)
+        tensor_image = transTensor(image)
+        tensor_ela = transTensor(ela_image)
+        tensor_mask = transTensor(mask_image)
+
+        tensor_image = transNormalize(tensor_image)
+
+        #########---------------------##########
+        # if self.transforms_normalize:
+        #     data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)
+        #     image = data["image"]
+        #     mask_image = data["mask"] / 255.0
+        #     ela_image = data["ela"]#.permute(2,0,1)
         # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
 
@@ -188,14 +195,21 @@ class DATASET(Dataset):
         # mask_image = img_to_tensor(mask_image).unsqueeze(0)
         # attn_mask_image = img_to_tensor(attn_mask_image).unsqueeze(0)
         # print("LOADED DATA")
+        # return {
+        #     "image": image,
+        #     "image_path" : image_path, 
+        #     "label": label, 
+        #     "mask": mask_image,
+        #     "ela" : ela_image ,
+        #     # "dft_dwt_vector" : dft_dwt_vector
+        #     # "attn_mask": attn_mask_image
+        # }
         return {
-            "image": image,
+            "image": tensor_image,
             "image_path" : image_path, 
             "label": label, 
-            "mask": mask_image,
-            "ela" : ela_image ,
-            # "dft_dwt_vector" : dft_dwt_vector
-            # "attn_mask": attn_mask_image
+            "mask": tensor_mask,
+            "ela" : tensor_ela ,
         }
 
     def _equalize(self, rows: pd.DataFrame) -> pd.DataFrame:
