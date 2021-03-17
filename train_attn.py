@@ -36,7 +36,7 @@ config_defaults = {
     "train_batch_size": 46,
     "valid_batch_size": 64,
     "optimizer": "adam",
-    "learning_rate": 0.0005,
+    "learning_rate": 0.0001,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
@@ -139,7 +139,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         test_fold=TEST_FOLD,
         patch_size=patch_size,
         resize=256,
-        # transforms_normalize=transforms_normalize,
         imgaug_augment=train_imgaug,
         geo_augment=train_geo_aug
     )
@@ -152,7 +151,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         test_fold=TEST_FOLD,
         patch_size=patch_size,
         resize=256,
-        # transforms_normalize=transforms_normalize,
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
@@ -163,7 +161,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         test_fold=TEST_FOLD,
         patch_size=patch_size,
         resize=256,
-        # transforms_normalize=transforms_normalize,
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
@@ -265,7 +262,7 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         optimizer.zero_grad()
         
         # out_labels, attn_map = model(images)
-        out_labels, _, _ = model(images, elas)#, dft_dwt_vector)
+        out_labels, _ = model(images, elas)#, dft_dwt_vector)
 
         loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
         # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -338,7 +335,7 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels, _ , _ = model(images, elas)#, dft_dwt_vector)
+            out_labels, _ = model(images, elas)#, dft_dwt_vector)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -414,7 +411,7 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels, _, _ = model(images, elas)#, dft_dwt_vector)
+            out_labels, _ = model(images, elas)#, dft_dwt_vector)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
