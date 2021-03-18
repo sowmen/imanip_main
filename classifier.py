@@ -7,6 +7,7 @@ from timm.models import layers
 from timm.models.layers import SelectAdaptivePool2d
 from timm.models.layers.se import EffectiveSEModule, SEModule
 from timm.models.layers.separable_conv import SeparableConvBnAct
+from timm.models.layers import activations
 from torch.nn.functional import pad
 
 
@@ -150,6 +151,36 @@ class Classifier_GAP(nn.Module):
         # x = torch.mean(x,dim=1) # x -> (B,1,1792)
         x = self.pool(x.permute(0,2,1)).squeeze()
         
+        x = self.fc(x)
+        
+        return x
+
+
+class Classifier_Linear(nn.Module):
+    def __init__(self):
+        super(Classifier_Linear, self).__init__()
+
+        self.mlp = nn.Sequential(
+            nn.Linear(5376, 2688, bias=True),
+            nn.BatchNorm1d(2688),
+            activations.Swish(inplace=True),
+            nn.Dropout(0.3),
+            nn.Linear(2688, 1792, bias=True),
+            nn.BatchNorm1d(1792),
+            activations.Swish(inplace=True),
+            nn.Linear(1792, 1024, bias=True),
+            nn.BatchNorm1d(1024),
+            activations.Swish(inplace=True),
+        )
+        nn.init.xavier_uniform_(self.mlp[0].weight)
+        nn.init.xavier_uniform_(self.mlp[4].weight)
+        nn.init.xavier_uniform_(self.mlp[7].weight)
+
+        self.fc = nn.Linear(1024, 1)
+        nn.init.xavier_uniform_(self.fc.weight)
+        
+    def forward(self, x):
+        x = self.mlp(x)        
         x = self.fc(x)
         
         return x
