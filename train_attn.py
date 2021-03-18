@@ -118,18 +118,18 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     )
     ####################################################################################################################
 
-    # normalize = {
-    #     "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
-    #     "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
-    # }
+    normalize = {
+        "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
+        "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
+    }
 
-    # transforms_normalize = albumentations.Compose(
-    #     [
-    #         albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-    #         albumentations.pytorch.transforms.ToTensorV2()
-    #     ],
-    #     additional_targets={'ela':'image'}
-    # )
+    transforms_normalize = albumentations.Compose(
+        [
+            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+            albumentations.pytorch.transforms.ToTensorV2()
+        ],
+        additional_targets={'ela':'image'}
+    )
 
     # -------------------------------- CREATE DATASET and DATALOADER --------------------------
     train_dataset = DATASET(
@@ -139,6 +139,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         test_fold=TEST_FOLD,
         patch_size=patch_size,
         resize=256,
+        transforms_normalize=transforms_normalize,
         imgaug_augment=train_imgaug,
         geo_augment=train_geo_aug
     )
@@ -151,6 +152,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         test_fold=TEST_FOLD,
         patch_size=patch_size,
         resize=256,
+        transforms_normalize=transforms_normalize,
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
@@ -161,6 +163,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         test_fold=TEST_FOLD,
         patch_size=patch_size,
         resize=256,
+        transforms_normalize=transforms_normalize,
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
@@ -491,7 +494,7 @@ if __name__ == "__main__":
     for i in [0]:
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(ELA no normal)COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(ELAnormal)COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,

@@ -169,43 +169,37 @@ class DATASET(Dataset):
         # dft_dwt_vector = torch.from_numpy(dft_dwt_vector).float()
 
         ##########------Normalize-----##########
-        image_normalize = {
-            "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
-            "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
-        }
-        transNormalize = transforms.Normalize(mean=image_normalize['mean'], std=image_normalize['std'])
-        transTensor = transforms.ToTensor()
+        # image_normalize = {
+        #     "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
+        #     "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
+        # }
+        # transNormalize = transforms.Normalize(mean=image_normalize['mean'], std=image_normalize['std'])
+        # transTensor = transforms.ToTensor()
 
-        tensor_image = transTensor(image)
-        tensor_ela = transTensor(ela_image)
-        tensor_mask = transTensor(mask_image)
+        # tensor_image = transTensor(image)
+        # tensor_ela = transTensor(ela_image)
+        # tensor_mask = transTensor(mask_image)
 
-        tensor_image = transNormalize(tensor_image)
+        # tensor_image = transNormalize(tensor_image)
+        # tensor_ela = transforms.functional.normalize(tensor_ela, mean=[0.0640, 0.05255, 0.0766], std=[0.0871, 0.0722, 0.1013])
         ########################################
 
-        # if self.transforms_normalize:
-        #     data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)
-        #     image = data["image"]
-        #     mask_image = data["mask"] / 255.0
-        #     ela_image = data["ela"]#.permute(2,0,1)
+        if self.transforms_normalize:
+            data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)
+            image = data["image"]
+            mask_image = data["mask"] / 255.0
+            ela_image = data["ela"]
         # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
 
-        # return {
-        #     "image": image,
-        #     "image_path" : image_path, 
-        #     "label": label, 
-        #     "mask": mask_image,
-        #     "ela" : ela_image ,
-        #     # "dft_dwt_vector" : dft_dwt_vector
-        #     # "attn_mask": attn_mask_image
-        # }
         return {
-            "image": tensor_image,
+            "image": image,
             "image_path" : image_path, 
             "label": label, 
-            "mask": tensor_mask,
-            "ela" : tensor_ela,
+            "mask": mask_image,
+            "ela" : ela_image ,
+            # "dft_dwt_vector" : dft_dwt_vector
+            # "attn_mask": attn_mask_image
         }
 
 
