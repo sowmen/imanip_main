@@ -43,22 +43,28 @@ def ELA(param, DIR_ROOT):
 
 def main():
 
-    df = pd.read_csv('cmfd_64.csv')
+    df = pd.read_csv('coverage_extend.csv')
     DIR_ROOT = "Image_Manipulation_Dataset"
 
     params = []
-    # for idx, row in df.iterrows():
-    #     params.append({"img_path": row["image_patch"], "ela_path": row["ela"], "root_dir": row["root_dir"]})
-
-    print("Gathering rows....")
     for idx, row in df.iterrows():
         params.append(
-        {
-            "img_path": os.path.join(row["image"],row["image_patch"]), 
-            "ela_path": os.path.join(row["image"],row["ela"]), 
-            "root_dir": row["data_root"]
-        }
-    )
+            {
+                "img_path": row["image_patch"], 
+                "ela_path": row["ela"], 
+                "root_dir": row["root_dir"]
+            }
+        )
+
+    # print("Gathering rows....")
+    # for idx, row in df.iterrows():
+    #     params.append(
+    #         {
+    #             "img_path": os.path.join(row["image"],row["image_patch"]), 
+    #             "ela_path": os.path.join(row["image"],row["ela"]), 
+    #             "root_dir": row["data_root"]
+    #         }
+    #     )
     print(f"Total: {len(params)}")
 
     
