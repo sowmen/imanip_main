@@ -33,18 +33,18 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 20,
-    "valid_batch_size": 32,
+    "train_batch_size": 44,
+    "valid_batch_size": 64,
     "optimizer": "adam",
-    "learning_rate": 0.00001,
-    "weight_decay": 0.00005,
+    "learning_rate": 0.0005,
+    "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
     "model": "ChangedClass",
     "attn_map_weight": 0,
 }
 
-TEST_FOLD = -1
+TEST_FOLD = 1
 
 def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     now = datetime.now()
@@ -61,11 +61,11 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     model = SRM_Classifer()
     SRM_FLAG = 1 # Set for SRM extraction layers
 
-    for name_, param in model.named_parameters():
-        if 'classifier' in name_:
-            continue
-        else:
-            param.requires_grad = False
+    # for name_, param in model.named_parameters():
+    #     if 'classifier' in name_:
+    #         continue
+    #     else:
+    #         param.requires_grad = False
 
     print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))    
     
@@ -92,7 +92,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
                     iaa.LinearContrast((0.5, 2.0), per_channel=0.5), # improve or worsen the contrast
                     # # either change the brightness of the whole image (sometimes
                     # # per channel) or change the brightness of subareas
-                    iaa.Sometimes(0.6,
+                    iaa.Sometimes(0.5,
                         iaa.OneOf([
                             iaa.Multiply((0.5, 1.5), per_channel=0.5),
                             iaa.MultiplyAndAddToBrightness(mul=(0.5, 2.5), add=(-10,10)),
@@ -183,8 +183,8 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     )
 
     model = nn.DataParallel(model).to(device)
-    print(model.load_state_dict(torch.load('best_weights/Changed classifier+COMBO_ALL_FULLSRM+ELA_[08|03_21|22|09].h5')))
-    print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))
+    # print(model.load_state_dict(torch.load('best_weights/Changed classifier+COMBO_ALL_FULLSRM+ELA_[08|03_21|22|09].h5')))
+    # print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
     criterion = nn.BCEWithLogitsLoss()
     attn_map_criterion = nn.L1Loss()
@@ -217,7 +217,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         valid_metrics = valid_epoch(
             model, valid_loader, criterion, attn_map_criterion, config.attn_map_weight, epoch
         )
-        scheduler.step(train_metrics['train_loss'])
+        scheduler.step(valid_metrics['valid_loss'])
 
         print(
             f"TRAIN_ACC = {train_metrics['train_acc_05']}, TRAIN_LOSS = {train_metrics['train_loss']}"
@@ -227,7 +227,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         )
         print("New LR", optimizer.param_groups[0]['lr'])
         es(
-            train_metrics['train_loss'],
+            valid_metrics['valid_loss'],
             model,
             model_path=os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"),
         )
@@ -247,10 +247,10 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         print(model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))))
         print("LOADED FOR TEST")
 
-    # test_metrics = test(model, test_loader, criterion, attn_map_criterion, config.attn_map_weight)
+    test_metrics = test(model, test_loader, criterion, attn_map_criterion, config.attn_map_weight)
     wandb.save(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))
 
-    # return test_metrics
+    return test_metrics
 
 
 def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, attn_map_weight, epoch, SRM_FLAG):
@@ -422,7 +422,7 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels, _ = model(images, elas)#, dft_dwt_vector)
+            out_labels, _, _ = model(images, elas)#, dft_dwt_vector)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -494,8 +494,14 @@ def expand_prediction(arr):
 if __name__ == "__main__":
     patch_size = 'FULL'
 
-    df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
-    nist_full = df[df['root_dir'].str.contains('NIST')]
+    # df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
+    # nist_full = df[df['root_dir'].str.contains('NIST')]
+
+    combo_all_df = pd.read_csv('combo_all_FULL.csv').sample(frac=1.0, random_state=123)
+    nist_extend_sample = pd.read_csv('nist_extend_sample.csv').sample(frac=1.0, random_state=123)
+    coverage_extend_sample = pd.read_csv('coverage_extend_sample.csv').sample(frac=1.0, random_state=123)
+
+    df = pd.concat([combo_all_df, nist_extend_sample, coverage_extend_sample])
 
     acc = AverageMeter()
     f1 = AverageMeter()
@@ -504,18 +510,18 @@ if __name__ == "__main__":
     for i in range(1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(ELAnormal)COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(extended)COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
             resume=False
         )
-    #     acc.update(test_metrics['test_acc_05'])
-    #     f1.update(test_metrics['test_f1_05'])
-    #     loss.update(test_metrics['test_loss'])
-    #     auc.update(test_metrics['test_auc'])
+        acc.update(test_metrics['test_acc_05'])
+        f1.update(test_metrics['test_f1_05'])
+        loss.update(test_metrics['test_loss'])
+        auc.update(test_metrics['test_auc'])
     
-    # print(f'FINAL ACCURACY : {acc.avg}')
-    # print(f'FINAL F1 : {f1.avg}')
-    # print(f'FINAL LOSS : {loss.avg}')
-    # print(f'FINAL AUC : {auc.avg}')
+    print(f'FINAL ACCURACY : {acc.avg}')
+    print(f'FINAL F1 : {f1.avg}')
+    print(f'FINAL LOSS : {loss.avg}')
+    print(f'FINAL AUC : {auc.avg}')

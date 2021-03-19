@@ -17,7 +17,7 @@ from dft_dwt import generate_dft_dwt_vector
 
 class DATASET(Dataset):
     def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, resize, combo=True, imgaug_augment=None,
-                 transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False
+                 transforms_normalize=None, geo_augment=None, equal_sample=False, segment=True
     ):
 
         super().__init__()
@@ -146,12 +146,14 @@ class DATASET(Dataset):
             
         # attn_mask_image = copy.deepcopy(mask_image)
 
+        # if('NIST' not in root_dir and 'COVERAGE' not in root_dir):
         if self.imgaug_augment:
             try :
                 image = self.imgaug_augment.augment_image(image)
             except Exception as e:
                 print(image_path, e) 
-        
+    
+    
         if self.geo_augment:
             data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
             image = data["image"]
