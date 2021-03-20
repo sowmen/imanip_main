@@ -22,27 +22,28 @@ class SRM_Classifer(nn.Module):
         self.bayer_conv = nn.Conv2d(self.in_channels, out_channels=3, kernel_size=5, padding=2, bias=False)
         nn.init.xavier_uniform_(self.bayer_conv.weight)
         
+        # self.rgb_conv = nn.Conv2d(self.in_channels, out_channels=16, kernel_size=5, padding=1, bias=False)
         self.rgb_conv = nn.Sequential(
-            nn.Conv2d(self.in_channels, out_channels=16, kernel_size=3, padding=1, bias=False),
-            # nn.BatchNorm2d(32),
-            # nn.ReLU(inplace=True),
-            nn.Conv2d(16, out_channels=16, kernel_size=3, padding=1, bias=False),
-            # nn.BatchNorm2d(32),
+            nn.Conv2d(self.in_channels, out_channels=16, kernel_size=5, padding=1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, out_channels=16, kernel_size=5, padding=1, bias=False),
+            nn.BatchNorm2d(32),
             nn.ReLU(inplace=True)
         )
         nn.init.xavier_uniform_(self.rgb_conv[0].weight)
-        nn.init.xavier_uniform_(self.rgb_conv[1].weight)
+        nn.init.xavier_uniform_(self.rgb_conv[3].weight)
         
         self.ela_net = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, padding=1, bias=False),
-            # nn.BatchNorm2d(32),
-            # nn.ReLU(inplace=True),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1, bias=False),
-            # nn.BatchNorm2d(32),
+            nn.Conv2d(3, 32, kernel_size=5, padding=1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 32, kernel_size=5, padding=1, bias=False),
+            nn.BatchNorm2d(32),
             nn.ReLU(inplace=True)
         )
         nn.init.xavier_uniform_(self.ela_net[0].weight)
-        nn.init.xavier_uniform_(self.ela_net[1].weight)
+        nn.init.xavier_uniform_(self.ela_net[3].weight)
 
         # self.dft_net = nn.Sequential(
         #     nn.Conv2d(18, 32, kernel_size=3, padding=1, bias=False),
@@ -58,20 +59,20 @@ class SRM_Classifer(nn.Module):
 
         base_model = EfficientNet(in_channels=54)
         self.encoder = base_model.encoder
-        # self.classifier = base_model.classifier
+        self.classifier = base_model.classifier
 
-        self.classifier = nn.Sequential(
-            SelectAdaptivePool2d(pool_type="avg", flatten=True),
-            nn.Dropout(0.3),
-            nn.Linear(1792, 512),
-            nn.ReLU(inplace=True),
-            nn.Linear(512, 256),
-            nn.ReLU(inplace=True),
-            nn.Linear(256, 1)
-        )
-        nn.init.xavier_uniform_(self.classifier[2].weight)
-        nn.init.xavier_uniform_(self.classifier[4].weight)
-        nn.init.xavier_uniform_(self.classifier[6].weight)
+        # self.classifier = nn.Sequential(
+        #     SelectAdaptivePool2d(pool_type="avg", flatten=True),
+        #     nn.Dropout(0.3),
+        #     nn.Linear(1792, 512),
+        #     nn.ReLU(inplace=True),
+        #     nn.Linear(512, 256),
+        #     nn.ReLU(inplace=True),
+        #     nn.Linear(256, 1)
+        # )
+        # nn.init.xavier_uniform_(self.classifier[2].weight)
+        # nn.init.xavier_uniform_(self.classifier[4].weight)
+        # nn.init.xavier_uniform_(self.classifier[6].weight)
 
         del base_model
         gc.collect()
@@ -81,13 +82,13 @@ class SRM_Classifer(nn.Module):
         if encoder_checkpoint:
             self.load_weights(encoder_checkpoint)
 
-        self.dense_feat = []
-        def hook(module, input, output):
-            self.dense_feat.append(output)
-        self.classifier[4].register_forward_hook(hook)
+        # self.dense_feat = []
+        # def hook(module, input, output):
+        #     self.dense_feat.append(output)
+        # self.classifier[4].register_forward_hook(hook)
         
     def forward(self, im, ela):#, dft_dwt):
-        self.dense_feat.clear()
+        # self.dense_feat.clear()
 
         x1 = self.srm_conv(im)
         x2 = self.bayer_conv(im)
@@ -103,8 +104,8 @@ class SRM_Classifer(nn.Module):
         enc_out, (start, end), _ = self.encoder(_merged_input)
         x = self.classifier(enc_out)
         
-        return x, self.dense_feat[-1], (_merged_input, enc_out, start, end)
-        # return x, (_merged_input, enc_out, start, end)
+        # return x, self.dense_feat[-1], (_merged_input, enc_out, start, end)
+        return x, (_merged_input, enc_out, start, end)
     
     def freeze(self):
         for param in super().parameters():
