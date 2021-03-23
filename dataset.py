@@ -13,11 +13,12 @@ from albumentations import augmentations
 from torchvision import transforms
 
 from dft_dwt import generate_dft_dwt_vector
+from utils import get_ela
 
 
 class DATASET(Dataset):
     def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, resize, combo=True, imgaug_augment=None,
-                 transforms_normalize=None, geo_augment=None, equal_sample=False, segment=True
+                 transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False
     ):
 
         super().__init__()
@@ -125,7 +126,10 @@ class DATASET(Dataset):
         ela_image = cv2.imread(ela_path, cv2.IMREAD_COLOR)
 
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
         ela_image = cv2.cvtColor(ela_image, cv2.COLOR_BGR2RGB)
+        
+        # ela_image = get_ela(image, 25)
 
         if not isinstance(mask_patch, str) and np.isnan(mask_patch):
             mask_image = np.zeros((image.shape[0], image.shape[1])).astype('uint8')
@@ -138,7 +142,9 @@ class DATASET(Dataset):
             if(not os.path.exists(mask_path)):
                 print(f"Mask Not Found : {mask_path}")
             mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-
+            
+            
+            
             # ----- For NIST16 Invert Mask Here ----- #
             if('NIST' in root_dir):
                 mask_image = 255 - mask_image
@@ -162,44 +168,43 @@ class DATASET(Dataset):
         
 
         image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
-        mask_image = augmentations.geometric.functional.resize(mask_image, self.resize, self.resize, cv2.INTER_AREA)
         ela_image = augmentations.geometric.functional.resize(ela_image, self.resize, self.resize, cv2.INTER_AREA)
-
+        mask_image = augmentations.geometric.functional.resize(mask_image, self.resize, self.resize, cv2.INTER_AREA)
 
         ###--- Generate DFT DWT Vector -----------------
         # dft_dwt_vector = generate_dft_dwt_vector(image)
         # dft_dwt_vector = torch.from_numpy(dft_dwt_vector).float()
 
         ##########------Normalize-----##########
-        # image_normalize = {
-        #     "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
-        #     "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
-        # }
-        # transNormalize = transforms.Normalize(mean=image_normalize['mean'], std=image_normalize['std'])
-        # transTensor = transforms.ToTensor()
+        image_normalize = {
+            "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
+            "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
+        }
+        transNormalize = transforms.Normalize(mean=image_normalize['mean'], std=image_normalize['std'])
+        transTensor = transforms.ToTensor()
 
-        # tensor_image = transTensor(image)
-        # tensor_ela = transTensor(ela_image)
-        # tensor_mask = transTensor(mask_image)
+        tensor_image = transTensor(image)
+        tensor_ela = transTensor(ela_image)
+        tensor_mask = transTensor(mask_image)
 
-        # tensor_image = transNormalize(tensor_image)
-        # tensor_ela = transforms.functional.normalize(tensor_ela, mean=[0.0640, 0.05255, 0.0766], std=[0.0871, 0.0722, 0.1013])
+        tensor_image = transNormalize(tensor_image)
+        tensor_ela = transNormalize(tensor_ela)
         ########################################
 
-        if self.transforms_normalize:
-            data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)
-            image = data["image"]
-            mask_image = data["mask"] / 255.0
-            ela_image = data["ela"]
+        # if self.transforms_normalize:
+        #     data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)
+        #     tensor_image = data["image"]
+        #     tensor_mask = data["mask"] / 255.0
+        #     tensor_ela = data["ela"]
         # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
 
         return {
-            "image": image,
+            "image": tensor_image,
             "image_path" : image_path, 
             "label": label, 
-            "mask": mask_image,
-            "ela" : ela_image ,
+            "mask": tensor_mask,
+            "ela" : tensor_ela,
             # "dft_dwt_vector" : dft_dwt_vector
             # "attn_mask": attn_mask_image
         }

@@ -470,7 +470,7 @@ def expand_prediction(arr):
 
 
 if __name__ == "__main__":
-    patch_size = "FULL"
+    patch_size = "64"
 
     df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
     dice = AverageMeter()
@@ -483,7 +483,7 @@ if __name__ == "__main__":
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
-            resume=False
+            resume=False,
         )
         dice.update(test_metrics['test_dice'])
         jaccard.update(test_metrics['test_jaccard'])

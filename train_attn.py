@@ -33,10 +33,10 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 44,
+    "train_batch_size": 40,
     "valid_batch_size": 64,
     "optimizer": "adam",
-    "learning_rate": 0.0005,
+    "learning_rate": 0.0007,
     "weight_decay": 0.0005,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
@@ -273,7 +273,7 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         optimizer.zero_grad()
         
         # out_labels, attn_map = model(images)
-        out_labels, _, _ = model(images, elas)#, dft_dwt_vector)
+        out_labels, _ = model(images, elas)#, dft_dwt_vector)
 
         loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
         # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -346,7 +346,7 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels, _, _ = model(images, elas)#, dft_dwt_vector)
+            out_labels, _ = model(images, elas)#, dft_dwt_vector)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -422,7 +422,7 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
             # attn_gt = batch["attn_mask"].to(device)
 
             # out_labels, attn_map = model(images)
-            out_labels, _, _ = model(images, elas)#, dft_dwt_vector)
+            out_labels, _ = model(images, elas)#, dft_dwt_vector)
 
             loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
             # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
@@ -494,14 +494,14 @@ def expand_prediction(arr):
 if __name__ == "__main__":
     patch_size = 'FULL'
 
-    # df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
-    # nist_full = df[df['root_dir'].str.contains('NIST')]
+    df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
+    # # nist_full = df[df['root_dir'].str.contains('NIST')]
 
-    combo_all_df = pd.read_csv('combo_all_FULL.csv').sample(frac=1.0, random_state=123)
-    nist_extend_sample = pd.read_csv('nist_extend_sample.csv').sample(frac=1.0, random_state=123)
-    coverage_extend_sample = pd.read_csv('coverage_extend_sample.csv').sample(frac=1.0, random_state=123)
+    # combo_all_df = pd.read_csv('combo_all_FULL.csv').sample(frac=1.0, random_state=123)
+    # nist_extend_sample = pd.read_csv('nist_extend_sample.csv').sample(frac=1.0, random_state=123)
+    # coverage_extend_sample = pd.read_csv('coverage_extend_sample.csv').sample(frac=1.0, random_state=123)
 
-    df = pd.concat([combo_all_df, nist_extend_sample, coverage_extend_sample])
+    # df = pd.concat([combo_all_df, nist_extend_sample, coverage_extend_sample])
 
     acc = AverageMeter()
     f1 = AverageMeter()
@@ -510,7 +510,7 @@ if __name__ == "__main__":
     for i in range(1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(extended)COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(W&D)COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
