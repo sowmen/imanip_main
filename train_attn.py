@@ -38,9 +38,9 @@ config_defaults = {
     "optimizer": "adam",
     "learning_rate": 0.0007,
     "weight_decay": 0.0005,
-    "schedule_patience": 3,
+    "schedule_patience": 5,
     "schedule_factor": 0.25,
-    "model": "ChangedClass",
+    "model": "",
     "attn_map_weight": 0,
 }
 
@@ -128,7 +128,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
         "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
     }
-
     transforms_normalize = albumentations.Compose(
         [
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
@@ -510,7 +509,7 @@ if __name__ == "__main__":
     for i in range(1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(W&D)COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(old net, torchvision)COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
