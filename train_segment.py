@@ -483,7 +483,7 @@ if __name__ == "__main__":
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
-            resume=False
+            resume=False,
         )
         dice.update(test_metrics['test_dice'])
         jaccard.update(test_metrics['test_jaccard'])

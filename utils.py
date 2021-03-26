@@ -3,8 +3,8 @@ import torch
 import torch_optimizer
 from torch import optim
 import wandb
-
-# import apex
+import cv2
+import time    
 
 
 class EarlyStopping:
@@ -121,18 +121,32 @@ def get_optimizer(model, optimizer, learning_rate, weight_decay):
 def image2np(image: torch.Tensor) -> np.ndarray:
     "Convert from torch style `image` to numpy/matplotlib style."
     res = image.cpu().permute(1, 2, 0).numpy()
-    return res[..., 0] if res.shape[2] == 1 else res
+    return res[..., 0] if res.shape[2] == 1 else res                                            
 
 
+def measure_time(f):
 
-from albumentations.augmentations.functional import image_compression
+    def timed(*args, **kw):
+        ts = time.time()
+        result = f(*args, **kw)
+        te = time.time()
+
+        print('%r, %2.2f sec' % (f.__name__, te-ts))
+        return result
+
+    return timed
+
+
+from io import BytesIO
 from PIL import Image, ImageChops
 
+# @measure_time
 def get_ela(image, scale):
-    compressed_img = image_compression(image, 90, '.jpg')
-
+    
     pil_ori_image = Image.fromarray(image)
-    pil_compressed_image = Image.fromarray(compressed_img)
+    output = BytesIO()
+    pil_ori_image.save(output, format="JPEG", quality=90)
+    pil_compressed_image = Image.open(output)
     diff = ImageChops.difference(pil_ori_image, pil_compressed_image)
     d = diff.load()
     WIDTH, HEIGHT = diff.size
@@ -140,6 +154,6 @@ def get_ela(image, scale):
         for y in range(HEIGHT):
             d[x, y] = tuple(k * scale for k in d[x, y])
 
-    ela = np.array(diff)
+    ela = np.array(diff).astype('uint8')
 
     return ela

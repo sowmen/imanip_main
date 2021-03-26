@@ -54,7 +54,7 @@ class UnetPP(nn.Module):
     def forward(self, inp, ela):
         batch_size, C, H, W = inp.shape
         
-        _, (_merged_input, _, start, end) = self.encoder(inp, ela)
+        _, _, (_merged_input, _, start, end) = self.encoder(inp, ela)
         if self.layer == 'start':
             layer = start
         else:
