@@ -33,8 +33,8 @@ OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 16,
-    "valid_batch_size": 32,
+    "train_batch_size": 8,
+    "valid_batch_size": 16,
     "optimizer": "adam",
     "learning_rate": 0.0001,
     "weight_decay": 0.0005,
@@ -218,8 +218,8 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        # if epoch == 2:
-        #     model.module.encoder.unfreeze()
+        if epoch == 4:
+            model.module.encoder.unfreeze()
 
         train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG)
 
@@ -470,16 +470,16 @@ def expand_prediction(arr):
 
 
 if __name__ == "__main__":
-    patch_size = "FULL"
+    patch_size = "64"
 
-    df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
+    df = pd.read_csv(f"dataset_csv/coverage_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
     dice = AverageMeter()
     jaccard = AverageMeter()
     loss = AverageMeter()
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(DICE+BCE)InvCClass_COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(coverage)InvCClass_COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,

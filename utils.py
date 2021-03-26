@@ -122,3 +122,24 @@ def image2np(image: torch.Tensor) -> np.ndarray:
     "Convert from torch style `image` to numpy/matplotlib style."
     res = image.cpu().permute(1, 2, 0).numpy()
     return res[..., 0] if res.shape[2] == 1 else res
+
+
+
+from albumentations.augmentations.functional import image_compression
+from PIL import Image, ImageChops
+
+def get_ela(image, scale):
+    compressed_img = image_compression(image, 90, '.jpg')
+
+    pil_ori_image = Image.fromarray(image)
+    pil_compressed_image = Image.fromarray(compressed_img)
+    diff = ImageChops.difference(pil_ori_image, pil_compressed_image)
+    d = diff.load()
+    WIDTH, HEIGHT = diff.size
+    for x in range(WIDTH):
+        for y in range(HEIGHT):
+            d[x, y] = tuple(k * scale for k in d[x, y])
+
+    ela = np.array(diff)
+
+    return ela

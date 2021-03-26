@@ -24,26 +24,26 @@ class SRM_Classifer(nn.Module):
         
         # self.rgb_conv = nn.Conv2d(self.in_channels, out_channels=16, kernel_size=5, padding=1, bias=False)
         self.rgb_conv = nn.Sequential(
-            nn.Conv2d(self.in_channels, out_channels=16, kernel_size=5, padding=1, bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(16, out_channels=16, kernel_size=5, padding=1, bias=False),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(self.in_channels, out_channels=16, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
+            # nn.ReLU(inplace=True),
+            nn.Conv2d(16, out_channels=16, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
             nn.ReLU(inplace=True)
         )
         nn.init.xavier_uniform_(self.rgb_conv[0].weight)
-        nn.init.xavier_uniform_(self.rgb_conv[3].weight)
+        nn.init.xavier_uniform_(self.rgb_conv[1].weight)
         
         self.ela_net = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=5, padding=1, bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(32, 32, kernel_size=5, padding=1, bias=False),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(3, 32, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
+            # nn.ReLU(inplace=True),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
             nn.ReLU(inplace=True)
         )
         nn.init.xavier_uniform_(self.ela_net[0].weight)
-        nn.init.xavier_uniform_(self.ela_net[3].weight)
+        nn.init.xavier_uniform_(self.ela_net[1].weight)
 
         # self.dft_net = nn.Sequential(
         #     nn.Conv2d(18, 32, kernel_size=3, padding=1, bias=False),
@@ -59,20 +59,20 @@ class SRM_Classifer(nn.Module):
 
         base_model = EfficientNet(in_channels=54)
         self.encoder = base_model.encoder
-        self.classifier = base_model.classifier
+        # self.classifier = base_model.classifier
 
-        # self.classifier = nn.Sequential(
-        #     SelectAdaptivePool2d(pool_type="avg", flatten=True),
-        #     nn.Dropout(0.3),
-        #     nn.Linear(1792, 512),
-        #     nn.ReLU(inplace=True),
-        #     nn.Linear(512, 256),
-        #     nn.ReLU(inplace=True),
-        #     nn.Linear(256, 1)
-        # )
-        # nn.init.xavier_uniform_(self.classifier[2].weight)
-        # nn.init.xavier_uniform_(self.classifier[4].weight)
-        # nn.init.xavier_uniform_(self.classifier[6].weight)
+        self.classifier = nn.Sequential(
+            SelectAdaptivePool2d(pool_type="avg", flatten=True),
+            nn.Dropout(0.3),
+            nn.Linear(1792, 512),
+            nn.ReLU(inplace=True),
+            nn.Linear(512, 256),
+            nn.ReLU(inplace=True),
+            nn.Linear(256, 1)
+        )
+        nn.init.xavier_uniform_(self.classifier[2].weight)
+        nn.init.xavier_uniform_(self.classifier[4].weight)
+        nn.init.xavier_uniform_(self.classifier[6].weight)
 
         del base_model
         gc.collect()
