@@ -22,19 +22,19 @@ class SRM_Classifer(nn.Module):
         self.bayer_conv = nn.Conv2d(self.in_channels, out_channels=3, kernel_size=5, padding=2, bias=False)
         nn.init.xavier_uniform_(self.bayer_conv.weight)
         
-        self.rgb_conv = nn.Conv2d(self.in_channels, out_channels=16, kernel_size=3, padding=1, bias=False)
-        nn.init.xavier_uniform_(self.rgb_conv.weight)
+        # self.rgb_conv = nn.Conv2d(self.in_channels, out_channels=16, kernel_size=3, padding=1, bias=False)
+        # nn.init.xavier_uniform_(self.rgb_conv.weight)
 
-        # self.rgb_conv = nn.Sequential(
-        #     nn.Conv2d(self.in_channels, out_channels=16, kernel_size=3, padding=1, bias=False),
-        #     # nn.BatchNorm2d(32),
-        #     # nn.ReLU(inplace=True),
-        #     nn.Conv2d(16, out_channels=16, kernel_size=3, padding=1, bias=False),
-        #     # nn.Conv2d(32, out_channels=32, kernel_size=3, padding=1, bias=False),
-        #     # nn.BatchNorm2d(32),
-        #     nn.ReLU(inplace=True)
-        # )
-        # nn.init.xavier_uniform_(self.rgb_conv[0].weight)
+        self.rgb_conv = nn.Sequential(
+            nn.Conv2d(self.in_channels, out_channels=32, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
+            # nn.ReLU(inplace=True),
+            # nn.Conv2d(32, out_channels=32, kernel_size=3, padding=1, bias=False),
+            # nn.Conv2d(32, out_channels=32, kernel_size=3, padding=1, bias=False),
+            # nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True)
+        )
+        nn.init.xavier_uniform_(self.rgb_conv[0].weight)
         # nn.init.xavier_uniform_(self.rgb_conv[1].weight)
         # nn.init.xavier_uniform_(self.rgb_conv[2].weight)
         
@@ -61,22 +61,22 @@ class SRM_Classifer(nn.Module):
         # nn.init.xavier_uniform_(self.dft_net[3].weight)
 
 
-        base_model = EfficientNet(in_channels=54)
+        base_model = EfficientNet(in_channels=70)
         self.encoder = base_model.encoder
         # self.classifier = base_model.classifier
 
         self.reducer = nn.Sequential(
             SelectAdaptivePool2d(pool_type="avg", flatten=True),
-            nn.Dropout(0.2),
+            nn.Dropout(0.3),
             nn.Linear(1792, 448),
             nn.ReLU(inplace=True),
-            # nn.Linear(448, 256),
-            # nn.ReLU(inplace=True),
+            nn.Linear(448, 256),
+            nn.ReLU(inplace=True),
         )
         nn.init.xavier_uniform_(self.reducer[2].weight)
-        # nn.init.xavier_uniform_(self.reducer[4].weight)
+        nn.init.xavier_uniform_(self.reducer[4].weight)
         
-        self.classifier = nn.Linear(448, 1)
+        self.classifier = nn.Linear(256, 1)
         nn.init.xavier_uniform_(self.classifier.weight)
 
         del base_model
