@@ -225,6 +225,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             f"VALID_ACC = {valid_metrics['valid_acc_05']}, VALID_LOSS = {valid_metrics['valid_loss']}"
         )
         print("New LR", optimizer.param_groups[0]['lr'])
+        os.makedirs('weights', exist_ok=True)
         es(
             valid_metrics['valid_loss'],
             model,
@@ -240,6 +241,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             'optimizer_state_dict' : optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
         }
+        os.makedirs('checkpoint', exist_ok=True)
         torch.save(checkpoint, os.path.join('checkpoint', f"{name}_[{dt_string}].pt"))
 
     if os.path.exists(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")):
