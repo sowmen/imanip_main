@@ -137,17 +137,16 @@ def measure_time(f):
     return timed
 
 
-from albumentations.augmentations.functional import image_compression
+from io import BytesIO
 from PIL import Image, ImageChops
 
 # @measure_time
 def get_ela(image, scale):
-    compressed_img = image_compression(image, 85, '.jpg')
-    # _, encoded_img = cv2.imencode('.jpg', image, (int(cv2.IMWRITE_JPEG_QUALITY), 90))
-    # compressed_img = cv2.imdecode(encoded_img, cv2.IMREAD_UNCHANGED)
-
+    
     pil_ori_image = Image.fromarray(image)
-    pil_compressed_image = Image.fromarray(compressed_img)
+    output = BytesIO()
+    pil_ori_image.save(output, format="JPEG", quality=90)
+    pil_compressed_image = Image.open(output)
     diff = ImageChops.difference(pil_ori_image, pil_compressed_image)
     d = diff.load()
     WIDTH, HEIGHT = diff.size

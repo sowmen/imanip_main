@@ -33,12 +33,12 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 40,
+    "train_batch_size": 44,
     "valid_batch_size": 64,
     "optimizer": "adam",
     "learning_rate": 0.0007,
     "weight_decay": 0.0005,
-    "schedule_patience": 5,
+    "schedule_patience": 3,
     "schedule_factor": 0.25,
     "model": "",
     "attn_map_weight": 0,
@@ -148,7 +148,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         imgaug_augment=train_imgaug,
         geo_augment=train_geo_aug
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=False)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -159,7 +159,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         resize=256,
         transforms_normalize=transforms_normalize,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=False)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -170,7 +170,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         resize=256,
         transforms_normalize=transforms_normalize,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=False)
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
@@ -509,7 +509,7 @@ if __name__ == "__main__":
     for i in range(1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(old net, torchvision)COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(ela test, netfixed)COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
