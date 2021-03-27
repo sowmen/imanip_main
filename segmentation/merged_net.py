@@ -3,19 +3,18 @@ sys.path.append('../image_manipulation/')
 
 import torch
 from torch import nn
-import timm
 from timm.models.layers.adaptive_avgmax_pool import SelectAdaptivePool2d
 from segmentation.srm_kernel import setup_srm_layer
 from segmentation.timm_efficientnet import EfficientNet
 import gc
-import copy
 from collections import OrderedDict
 
 class SRM_Classifer(nn.Module):
-    def __init__(self, in_channels=3, encoder_checkpoint="", freeze_encoder=False):
+    def __init__(self, in_channels=3, encoder_checkpoint="", freeze_encoder=False, num_classes=1):
         super(SRM_Classifer, self).__init__()
         
         self.in_channels = in_channels
+        self.num_classes = num_classes
         
         self.srm_conv = setup_srm_layer(self.in_channels)
         
@@ -26,16 +25,16 @@ class SRM_Classifer(nn.Module):
         # nn.init.xavier_uniform_(self.rgb_conv.weight)
 
         self.rgb_conv = nn.Sequential(
-            nn.Conv2d(self.in_channels, out_channels=32, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(self.in_channels, out_channels=16, kernel_size=3, padding=1, bias=False),
             # nn.BatchNorm2d(32),
             # nn.ReLU(inplace=True),
-            # nn.Conv2d(32, out_channels=32, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(16, out_channels=16, kernel_size=3, padding=1, bias=False),
             # nn.Conv2d(32, out_channels=32, kernel_size=3, padding=1, bias=False),
             # nn.BatchNorm2d(32),
             nn.ReLU(inplace=True)
         )
         nn.init.xavier_uniform_(self.rgb_conv[0].weight)
-        # nn.init.xavier_uniform_(self.rgb_conv[1].weight)
+        nn.init.xavier_uniform_(self.rgb_conv[1].weight)
         # nn.init.xavier_uniform_(self.rgb_conv[2].weight)
         
         self.ela_net = nn.Sequential(
@@ -61,7 +60,7 @@ class SRM_Classifer(nn.Module):
         # nn.init.xavier_uniform_(self.dft_net[3].weight)
 
 
-        base_model = EfficientNet(in_channels=70)
+        base_model = EfficientNet(in_channels=54)
         self.encoder = base_model.encoder
         # self.classifier = base_model.classifier
 
@@ -76,7 +75,7 @@ class SRM_Classifer(nn.Module):
         nn.init.xavier_uniform_(self.reducer[2].weight)
         nn.init.xavier_uniform_(self.reducer[4].weight)
         
-        self.classifier = nn.Linear(256, 1)
+        self.classifier = nn.Linear(256, self.num_classes)
         nn.init.xavier_uniform_(self.classifier.weight)
 
         del base_model
