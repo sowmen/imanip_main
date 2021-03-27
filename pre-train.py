@@ -23,18 +23,16 @@ import torchmetrics
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
-    "epochs": 100,
-    "train_batch_size": 20,
+    "epochs": 30,
+    "train_batch_size": 26,
     "valid_batch_size": 32,
-    "optimizer": "adamw",
+    "optimizer": "adam",
     "learning_rate": 0.0009,
     "weight_decay": 0.0001,
     "schedule_patience": 5,
     "schedule_factor": 0.25,
     "model": "",
 }
-
-TEST_FOLD = 1
 
 def train(name, df, resume=False):
     now = datetime.now()
@@ -178,10 +176,10 @@ def train(name, df, resume=False):
         scheduler.step(valid_metrics['valid_loss'])
 
         print(
-            f"TRAIN_ACC = {train_metrics['train_acc_05']}, TRAIN_LOSS = {train_metrics['train_loss']}"
+            f"TRAIN_ACC = {train_metrics['train_acc5_manual']}, TRAIN_LOSS = {train_metrics['train_loss']}"
         )
         print(
-            f"VALID_ACC = {valid_metrics['valid_acc_05']}, VALID_LOSS = {valid_metrics['valid_loss']}"
+            f"VALID_ACC = {valid_metrics['valid_acc5_manual']}, VALID_LOSS = {valid_metrics['valid_loss']}"
         )
         print("New LR", optimizer.param_groups[0]['lr'])
 
@@ -233,7 +231,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         
         out_logits, _ = model(images, elas)
 
-        loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
+        loss = criterion(out_logits, target_labels)
         
         loss.backward()
         optimizer.step()
@@ -252,13 +250,16 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         
         # Metric
         with torch.no_grad():
-            topk = topk_accuracy(out_logits.cpu().detach(), target_labels, topk=(1,5))
+            out_logits = out_logits.cpu().detach()
+            target_labels = target_labels.cpu().detach()
+
+            topk = topk_accuracy(out_logits, target_labels, topk=(1,5))
             manual_top1.update(topk[0].item(), train_loader.batch_size)
             manual_top5.update(topk[1].item(), train_loader.batch_size)
 
-            torch_top1.update(torch.softmax(out_logits.cpu().detach(), dim=-1), target_labels)
-            torch_top5.update(torch.softmax(out_logits.cpu().detach(), dim=-1), target_labels)
-            torch_f1.update(torch.softmax(out_logits.cpu().detach(), dim=-1), target_labels)
+            torch_top1.update(torch.softmax(out_logits, dim=-1), target_labels)
+            torch_top5.update(torch.softmax(out_logits, dim=-1), target_labels)
+            torch_f1.update(torch.softmax(out_logits, dim=-1), target_labels)
     
         
     train_metrics = {
@@ -294,20 +295,23 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             
             out_logits, _ = model(images, elas)
 
-            loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
+            loss = criterion(out_logits, target_labels)
             
             #---------------------Batch Loss Update-------------------------
             total_loss.update(loss.item(), valid_loader.batch_size)
                     
             # Metric
             with torch.no_grad():
-                topk = topk_accuracy(out_logits.cpu().detach(), target_labels, topk=(1,5))
+                out_logits = out_logits.cpu().detach()
+                target_labels = target_labels.cpu().detach()
+
+                topk = topk_accuracy(out_logits, target_labels, topk=(1,5))
                 manual_top1.update(topk[0].item(), valid_loader.batch_size)
                 manual_top5.update(topk[1].item(), valid_loader.batch_size)
 
-                torch_top1.update(torch.softmax(out_logits.cpu().detach(), dim=-1), target_labels)
-                torch_top5.update(torch.softmax(out_logits.cpu().detach(), dim=-1), target_labels)
-                torch_f1.update(torch.softmax(out_logits.cpu().detach(), dim=-1), target_labels)
+                torch_top1.update(torch.softmax(out_logits, dim=-1), target_labels)
+                torch_top5.update(torch.softmax(out_logits, dim=-1), target_labels)
+                torch_f1.update(torch.softmax(out_logits, dim=-1), target_labels)
 
 
     valid_metrics = {
@@ -343,20 +347,23 @@ def test(model, test_loader, criterion):
             
             out_logits, _ = model(images, elas)
 
-            loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
+            loss = criterion(out_logits, target_labels)
             
             #---------------------Batch Loss Update-------------------------
             total_loss.update(loss.item(), test_loader.batch_size)
                     
             # Metric
             with torch.no_grad():
-                topk = topk_accuracy(out_logits.cpu().detach(), target_labels, topk=(1,5))
+                out_logits = out_logits.cpu().detach()
+                target_labels = target_labels.cpu().detach()
+
+                topk = topk_accuracy(out_logits, target_labels, topk=(1,5))
                 manual_top1.update(topk[0].item(), test_loader.batch_size)
                 manual_top5.update(topk[1].item(), test_loader.batch_size)
 
-                torch_top1.update(torch.softmax(out_logits.cpu().detach(), dim=-1), target_labels)
-                torch_top5.update(torch.softmax(out_logits.cpu().detach(), dim=-1), target_labels)
-                torch_f1.update(torch.softmax(out_logits.cpu().detach(), dim=-1), target_labels)
+                torch_top1.update(torch.softmax(out_logits, dim=-1), target_labels)
+                torch_top5.update(torch.softmax(out_logits, dim=-1), target_labels)
+                torch_f1.update(torch.softmax(out_logits, dim=-1), target_labels)
 
 
     test_metrics = {
