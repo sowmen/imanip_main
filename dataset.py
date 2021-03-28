@@ -12,6 +12,7 @@ import torch
 from torch.utils.data import Dataset
 from albumentations import augmentations
 from torchvision import transforms
+from utils import get_ela
 
 from dft_dwt import generate_dft_dwt_vector
 from utils import get_ela
@@ -53,6 +54,7 @@ class DATASET(Dataset):
             cmfd_128_fake_sample = cmfd_128[cmfd_128['label'] == 1].sample(n=7000, random_state=123)
             self.dataframe = pd.concat([df_without_cmfd_128, cmfd_128_real_sample, cmfd_128_fake_sample])
         
+
         if self.patch_size == 64 and self.combo:
             df_without = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD|CASIA|IMD')]
 
@@ -87,6 +89,7 @@ class DATASET(Dataset):
 
         if self.equal_sample:
             rows = self._equalize(rows)
+            
         if self.segment:
             rows = self._segment(rows)
 
