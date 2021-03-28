@@ -33,10 +33,10 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 40,
+    "train_batch_size": 36,
     "valid_batch_size": 64,
     "optimizer": "adamw",
-    "learning_rate": 0.0009,
+    "learning_rate": 0.0007,
     "weight_decay": 0.001,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
@@ -112,7 +112,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         [
             albumentations.HorizontalFlip(p=0.5),
             albumentations.VerticalFlip(p=0.5),
-            albumentations.RandomRotate90(p=0.1),
+            albumentations.RandomRotate90(p=0.3),
             albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
             # albumentations.OneOf([
             #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),

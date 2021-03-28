@@ -26,16 +26,16 @@ class SRM_Classifer(nn.Module):
         # nn.init.xavier_uniform_(self.rgb_conv.weight)
 
         self.rgb_conv = nn.Sequential(
-            nn.Conv2d(self.in_channels, out_channels=32, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(self.in_channels, out_channels=16, kernel_size=3, padding=1, bias=False),
             # nn.BatchNorm2d(32),
             # nn.ReLU(inplace=True),
-            # nn.Conv2d(32, out_channels=32, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(16, out_channels=16, kernel_size=3, padding=1, bias=False),
             # nn.Conv2d(32, out_channels=32, kernel_size=3, padding=1, bias=False),
             # nn.BatchNorm2d(32),
             nn.ReLU(inplace=True)
         )
         nn.init.xavier_uniform_(self.rgb_conv[0].weight)
-        # nn.init.xavier_uniform_(self.rgb_conv[1].weight)
+        nn.init.xavier_uniform_(self.rgb_conv[1].weight)
         # nn.init.xavier_uniform_(self.rgb_conv[2].weight)
         
         self.ela_net = nn.Sequential(
@@ -61,7 +61,7 @@ class SRM_Classifer(nn.Module):
         # nn.init.xavier_uniform_(self.dft_net[3].weight)
 
 
-        base_model = EfficientNet(in_channels=70)
+        base_model = EfficientNet(in_channels=54)
         self.encoder = base_model.encoder
         # self.classifier = base_model.classifier
 

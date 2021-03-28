@@ -125,13 +125,12 @@ class DATASET(Dataset):
             print(f"Image Not Found : {image_path}")
 
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
-        # ela_image = cv2.imread(ela_path, cv2.IMREAD_COLOR)
+        ela_image = cv2.imread(ela_path, cv2.IMREAD_COLOR)
 
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
-        # ela_image = cv2.cvtColor(ela_image, cv2.COLOR_BGR2RGB)
+        ela_image = cv2.cvtColor(ela_image, cv2.COLOR_BGR2RGB)
         
-        ela_image = get_ela(image, 25)
+        # ela_image = get_ela(image, 20)
 
         if not isinstance(mask_patch, str) and np.isnan(mask_patch):
             mask_image = np.zeros((image.shape[0], image.shape[1])).astype('uint8')
@@ -169,8 +168,8 @@ class DATASET(Dataset):
             ela_image = data["ela"]
         
 
-        # image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
-        # ela_image = augmentations.geometric.functional.resize(ela_image, self.resize, self.resize, cv2.INTER_AREA)
+        image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
+        ela_image = augmentations.geometric.functional.resize(ela_image, self.resize, self.resize, cv2.INTER_AREA)
         mask_image = augmentations.geometric.functional.resize(mask_image, self.resize, self.resize, cv2.INTER_AREA)
 
         ###--- Generate DFT DWT Vector -----------------
