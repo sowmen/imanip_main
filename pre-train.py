@@ -23,9 +23,9 @@ import torchmetrics
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
-    "epochs": 30,
-    "train_batch_size": 26,
-    "valid_batch_size": 32,
+    "epochs": 50,
+    "train_batch_size": 44,
+    "valid_batch_size": 64,
     "optimizer": "adam",
     "learning_rate": 0.0009,
     "weight_decay": 0.0001,
@@ -159,7 +159,7 @@ def train(name, df, resume=False):
 
     start_epoch = 0
     if resume:
-        checkpoint = torch.load('checkpoint/COMBO_ALL_64ChangedClass_[10|03_22|35|18].pt')
+        checkpoint = torch.load('checkpoint/pretrain_[28|03_21|47|58].pt')
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -183,6 +183,15 @@ def train(name, df, resume=False):
         )
         print("New LR", optimizer.param_groups[0]['lr'])
 
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict' : optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+        }
+        os.makedirs('checkpoint', exist_ok=True)
+        torch.save(checkpoint, os.path.join('checkpoint', f"{name}_[{dt_string}].pt"))
+
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         es(
             valid_metrics['valid_loss'],
@@ -192,15 +201,6 @@ def train(name, df, resume=False):
         if es.early_stop:
             print("Early stopping")
             break
-
-        checkpoint = {
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict' : optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
-        }
-        os.makedirs('checkpoint', exist_ok=True)
-        torch.save(checkpoint, os.path.join('checkpoint', f"{name}_[{dt_string}].pt"))
 
     if os.path.exists(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")):
         print(model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))))
@@ -387,7 +387,7 @@ if __name__ == "__main__":
     test_metrics = train(
         name=f"pretrain" + config_defaults["model"],
         df=df,
-        resume=False
+        resume=True
     )
     
     print(test_metrics)

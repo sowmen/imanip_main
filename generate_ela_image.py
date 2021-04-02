@@ -43,7 +43,7 @@ def ELA(param, DIR_ROOT):
 
 def main():
 
-    df = pd.read_csv('nist_extend.csv')
+    df = pd.read_csv('coverage_extend.csv')
     DIR_ROOT = "Image_Manipulation_Dataset"
 
     params = []

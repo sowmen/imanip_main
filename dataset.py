@@ -19,7 +19,7 @@ from utils import get_ela
 
 
 class DATASET(Dataset):
-    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, resize, combo=True, imgaug_augment=None,
+    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, combo=True, imgaug_augment=None,
                  transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False
     ):
 
@@ -29,7 +29,7 @@ class DATASET(Dataset):
         self.val_fold = val_fold
         self.test_fold = test_fold
         self.patch_size = patch_size
-        self.resize = resize
+        self.resize = 256
         self.combo = combo
         self.imgaug_augment = imgaug_augment
         self.geo_augment = geo_augment
@@ -39,13 +39,6 @@ class DATASET(Dataset):
         self.segment = segment # Returns only fake rows for segmentation
         self.root_folder = "Image_Manipulation_Dataset"
 
-        # self.attn_mask_transforms = albumentations.Compose([
-        #     augmentations.transforms.Resize(
-        #         32, 32, interpolation=cv2.INTER_LANCZOS4, always_apply=True, p=1
-        #     ),
-        #     albumentations.Normalize(mean=self.normalize['mean'], std=self.normalize['std'], p=1, always_apply=True),
-        #     albumentations.pytorch.ToTensor()
-        # ])
 
         if self.patch_size == 128 and self.combo:
             df_without_cmfd_128 = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD')]
@@ -148,27 +141,22 @@ class DATASET(Dataset):
             mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
             
             
-            
             # ----- For NIST16 Invert Mask Here ----- #
             if('NIST' in root_dir):
                 mask_image = 255 - mask_image
             ##########################################
             
-        # attn_mask_image = copy.deepcopy(mask_image)
 
-        # if('NIST' not in root_dir and 'COVERAGE' not in root_dir):
         if self.imgaug_augment:
-            try :
-                image = self.imgaug_augment.augment_image(image)
-            except Exception as e:
-                print(image_path, e) 
+            image = self.imgaug_augment.augment_image(image) 
     
-    
-        if self.geo_augment:
-            data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
-            image = data["image"]
-            mask_image = data["mask"]
-            ela_image = data["ela"]
+
+        if(('NIST' not in root_dir) and ('COVERAGE' not in root_dir)):
+            if self.geo_augment:
+                data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
+                image = data["image"]
+                mask_image = data["mask"]
+                ela_image = data["ela"]
         
 
         image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
@@ -210,7 +198,6 @@ class DATASET(Dataset):
             "mask": tensor_mask,
             "ela" : tensor_ela,
             # "dft_dwt_vector" : dft_dwt_vector
-            # "attn_mask": attn_mask_image
         }
 
 
