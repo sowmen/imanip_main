@@ -12,7 +12,6 @@ import torch
 from torch.utils.data import Dataset
 from albumentations import augmentations
 from torchvision import transforms
-from utils import get_ela
 
 from dft_dwt import generate_dft_dwt_vector
 from utils import get_ela
@@ -39,6 +38,13 @@ class DATASET(Dataset):
         self.segment = segment # Returns only fake rows for segmentation
         self.root_folder = "Image_Manipulation_Dataset"
 
+        # self.attn_mask_transforms = albumentations.Compose([
+        #     augmentations.transforms.Resize(
+        #         32, 32, interpolation=cv2.INTER_LANCZOS4, always_apply=True, p=1
+        #     ),
+        #     albumentations.Normalize(mean=self.normalize['mean'], std=self.normalize['std'], p=1, always_apply=True),
+        #     albumentations.pytorch.ToTensor()
+        # ])
 
         if self.patch_size == 128 and self.combo:
             df_without_cmfd_128 = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD')]
@@ -47,7 +53,6 @@ class DATASET(Dataset):
             cmfd_128_fake_sample = cmfd_128[cmfd_128['label'] == 1].sample(n=7000, random_state=123)
             self.dataframe = pd.concat([df_without_cmfd_128, cmfd_128_real_sample, cmfd_128_fake_sample])
         
-
         if self.patch_size == 64 and self.combo:
             df_without = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD|CASIA|IMD')]
 
@@ -82,7 +87,6 @@ class DATASET(Dataset):
 
         if self.equal_sample:
             rows = self._equalize(rows)
-            
         if self.segment:
             rows = self._segment(rows)
 
@@ -126,7 +130,6 @@ class DATASET(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         ela_image = cv2.cvtColor(ela_image, cv2.COLOR_BGR2RGB)
         
-        # ela_image = get_ela(image, 20)
 
         if not isinstance(mask_patch, str) and np.isnan(mask_patch):
             mask_image = np.zeros((image.shape[0], image.shape[1])).astype('uint8')
@@ -140,23 +143,23 @@ class DATASET(Dataset):
                 print(f"Mask Not Found : {mask_path}")
             mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
             
-            
             # ----- For NIST16 Invert Mask Here ----- #
             if('NIST' in root_dir):
                 mask_image = 255 - mask_image
             ##########################################
-            
 
         if self.imgaug_augment:
-            image = self.imgaug_augment.augment_image(image) 
+            try :
+                image = self.imgaug_augment.augment_image(image)
+            except Exception as e:
+                print(image_path, e) 
     
-
-        if(('NIST' not in root_dir) and ('COVERAGE' not in root_dir)):
-            if self.geo_augment:
-                data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
-                image = data["image"]
-                mask_image = data["mask"]
-                ela_image = data["ela"]
+        # if('NIST' not in root_dir and 'COVERAGE' not in root_dir):
+        if self.geo_augment:
+            data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
+            image = data["image"]
+            mask_image = data["mask"]
+            ela_image = data["ela"]
         
 
         image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
@@ -198,6 +201,7 @@ class DATASET(Dataset):
             "mask": tensor_mask,
             "ela" : tensor_ela,
             # "dft_dwt_vector" : dft_dwt_vector
+            # "attn_mask": attn_mask_image
         }
 
 

@@ -32,7 +32,7 @@ config_defaults = {
     "valid_batch_size": 64,
     "optimizer": "adamw",
     "learning_rate": 0.0007,
-    "weight_decay": 0.001,
+    "weight_decay": 0.0001,
     "schedule_patience": 3,
     "schedule_factor": 0.25,
     "model": "",
@@ -103,9 +103,9 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         [
             albumentations.HorizontalFlip(p=0.5),
             albumentations.VerticalFlip(p=0.5),
-            albumentations.RandomRotate90(p=0.5),
-            albumentations.ShiftScaleRotate(shift_limit=0.04, scale_limit=0.08, rotate_limit=60, p=0.3),
-            augmentations.transforms.RandomGridShuffle(p=0.25),
+            albumentations.RandomRotate90(p=0.3),
+            albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
+            # augmentations.transforms.RandomGridShuffle(p=0.15),
             # albumentations.OneOf([
             #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
             #     albumentations.GridDistortion(p=0.5),
@@ -138,7 +138,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         imgaug_augment=train_imgaug,
         geo_augment=train_geo_aug
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=False)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=10, pin_memory=True, drop_last=False)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -148,7 +148,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         patch_size=patch_size,
         transforms_normalize=transforms_normalize,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=False)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=10, pin_memory=True, drop_last=False)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -158,7 +158,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         patch_size=patch_size,
         transforms_normalize=transforms_normalize,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=12, pin_memory=True, drop_last=False)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=10, pin_memory=True, drop_last=False)
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
@@ -202,17 +202,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             f"VALID_ACC = {valid_metrics['valid_acc_05']}, VALID_LOSS = {valid_metrics['valid_loss']}"
         )
         print("New LR", optimizer.param_groups[0]['lr'])
-        
-        checkpoint = {
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict' : optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
-        }
-        os.makedirs('checkpoint', exist_ok=True)
-        torch.save(checkpoint, os.path.join('checkpoint', f"{name}_[{dt_string}].pt"))
-
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        os.makedirs('weights', exist_ok=True)
         es(
             valid_metrics['valid_loss'],
             model,
@@ -221,6 +211,15 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         if es.early_stop:
             print("Early stopping")
             break
+
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict' : optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+        }
+        os.makedirs('checkpoint', exist_ok=True)
+        torch.save(checkpoint, os.path.join('checkpoint', f"{name}_[{dt_string}].pt"))
 
     if os.path.exists(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")):
         print(model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))))
@@ -410,14 +409,29 @@ def test(model, test_loader, criterion):
 if __name__ == "__main__":
     patch_size = 'FULL'
 
-    # df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
-    # # nist_full = df[df['root_dir'].str.contains('NIST')]
+    df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
 
-    combo_all_df = pd.read_csv('combo_all_FULL.csv').sample(frac=1.0, random_state=123)
-    nist_extend = pd.read_csv('nist_extend.csv').sample(frac=1.0, random_state=123)
-    coverage_extend = pd.read_csv('coverage_extend.csv').sample(frac=1.0, random_state=123)
-
-    df = pd.concat([combo_all_df, nist_extend, coverage_extend])
+    # combo_all_df = pd.read_csv('combo_all_FULL.csv').sample(frac=1.0, random_state=123)
+    
+    # df_without_cmfd = combo_all_df[~combo_all_df['root_dir'].str.contains('CMFD')]
+    
+    # cmfd = combo_all_df[combo_all_df['root_dir'].str.contains('CMFD')]
+    # cmfd_real = cmfd[cmfd['label'] == 0].sample(n=1000, random_state=123)
+    # cmfd_fake = cmfd[cmfd['label'] == 1].sample(n=1200, random_state=123)
+    # cmfd = pd.concat([cmfd_real, cmfd_fake]).sample(frac=1.0, random_state=123)
+    
+    # nist_extend = pd.read_csv('nist_extend.csv').sample(frac=1.0, random_state=123)
+    # nist_extend_real = nist_extend[nist_extend['label'] == 0].sample(n=800, random_state=123)
+    # nist_extend_fake = nist_extend[nist_extend['label'] == 1].sample(n=1200, random_state=123)
+    # nist_extend = pd.concat([nist_extend_real, nist_extend_fake]).sample(frac=1.0, random_state=123)
+    
+    # coverage_extend = pd.read_csv('coverage_extend.csv').sample(frac=1.0, random_state=123)
+    # coverage_extend_real = coverage_extend[coverage_extend['label'] == 0].sample(n=600, random_state=123)
+    # coverage_extend_fake = coverage_extend[coverage_extend['label'] == 1].sample(n=800, random_state=123)
+    # coverage_extend = pd.concat([coverage_extend_real, coverage_extend_fake]).sample(frac=1.0, random_state=123)
+            
+    # df = pd.concat([df_without_cmfd, cmfd, nist_extend, coverage_extend])
+    print(df.groupby('root_dir').label.value_counts())
 
     acc = AverageMeter()
     f1 = AverageMeter()
@@ -426,7 +440,7 @@ if __name__ == "__main__":
     for i in range(1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(extended)COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
