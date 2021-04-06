@@ -24,7 +24,7 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 30,
-    "train_batch_size": 26,
+    "train_batch_size": 24,
     "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0009,
@@ -159,7 +159,7 @@ def train(name, df, resume=False):
 
     start_epoch = 0
     if resume:
-        checkpoint = torch.load('checkpoint/COMBO_ALL_64ChangedClass_[10|03_22|35|18].pt')
+        checkpoint = torch.load('checkpoint/pretrain_[28|03_11|34|53].pt')
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -176,10 +176,10 @@ def train(name, df, resume=False):
         scheduler.step(valid_metrics['valid_loss'])
 
         print(
-            f"TRAIN_ACC = {train_metrics['train_acc5_manual']}, TRAIN_LOSS = {train_metrics['train_loss']}"
+            "TRAIN_ACC = %.5f, TRAIN_LOSS = %.5f" % (train_metrics['train_acc5_manual'], train_metrics['train_loss'])
         )
         print(
-            f"VALID_ACC = {valid_metrics['valid_acc5_manual']}, VALID_LOSS = {valid_metrics['valid_loss']}"
+            "VALID_ACC = %.5f, VALID_LOSS = %.5f" % (valid_metrics['valid_acc5_manual'], valid_metrics['valid_loss'])
         )
         print("New LR", optimizer.param_groups[0]['lr'])
 
@@ -205,9 +205,10 @@ def train(name, df, resume=False):
     if os.path.exists(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")):
         print(model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))))
         print("LOADED FOR TEST")
+        wandb.save(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))
 
     test_metrics = test(model, test_loader, criterion)
-    wandb.save(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))
+    
 
     return test_metrics
 
@@ -266,9 +267,9 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         "train_loss" : total_loss.avg,
         "train_acc1_manual": manual_top1.avg,
         "train_acc5_manual": manual_top5.avg,
-        "train_acc1_torch": torch_top1.compute(),
-        "train_acc_5_torch": torch_top5.compute(),
-        "train_f1": torch_f1.compute(),
+        "train_acc1_torch": torch_top1.compute().item(),
+        "train_acc_5_torch": torch_top5.compute().item(),
+        "train_f1": torch_f1.compute().item(),
         "epoch" : epoch
     }
     wandb.log(train_metrics)
@@ -318,9 +319,9 @@ def valid_epoch(model, valid_loader, criterion, epoch):
         "valid_loss": total_loss.avg,
         "valid_acc1_manual": manual_top1.avg,
         "valid_acc5_manual": manual_top5.avg,
-        "valid_acc1_torch": torch_top1.compute(),
-        "valid_acc_5_torch": torch_top5.compute(),
-        "valid_f1": torch_f1.compute(),
+        "valid_acc1_torch": torch_top1.compute().item(),
+        "valid_acc_5_torch": torch_top5.compute().item(),
+        "valid_f1": torch_f1.compute().item(),
         "epoch": epoch
     }
     wandb.log(valid_metrics)
@@ -370,9 +371,9 @@ def test(model, test_loader, criterion):
         "test_loss": total_loss.avg,
         "test_acc1_manual": manual_top1.avg,
         "test_acc5_manual": manual_top5.avg,
-        "test_acc1_torch": torch_top1.compute(),
-        "test_acc_5_torch": torch_top5.compute(),
-        "test_f1": torch_f1.compute(),
+        "test_acc1_torch": torch_top1.compute().item(),
+        "test_acc_5_torch": torch_top5.compute().item(),
+        "test_f1": torch_f1.compute().item(),
     }
     wandb.log(test_metrics)
 
@@ -387,7 +388,7 @@ if __name__ == "__main__":
     test_metrics = train(
         name=f"pretrain" + config_defaults["model"],
         df=df,
-        resume=False
+        resume=True
     )
     
     print(test_metrics)
