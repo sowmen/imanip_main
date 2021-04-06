@@ -154,12 +154,12 @@ class DATASET(Dataset):
             except Exception as e:
                 print(image_path, e) 
     
-        # if('NIST' not in root_dir and 'COVERAGE' not in root_dir):
-        if self.geo_augment:
-            data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
-            image = data["image"]
-            mask_image = data["mask"]
-            ela_image = data["ela"]
+        if('extend' not in root_dir):
+            if self.geo_augment:
+                data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
+                image = data["image"]
+                mask_image = data["mask"]
+                ela_image = data["ela"]
         
 
         image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
