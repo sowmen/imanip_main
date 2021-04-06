@@ -121,9 +121,5 @@ class SRM_Classifer(nn.Module):
         encoder_dict = OrderedDict()
         for item in checkpoint.items():
             key = item[0].split('.',1)[-1]
-            if('base_model' in key):
-                s = key.replace('base_model.','')
-                encoder_dict[s] = item[1]
-            else:
-                encoder_dict[key] = item[1]
+            encoder_dict[key] = item[1]
         print(super().load_state_dict(encoder_dict))

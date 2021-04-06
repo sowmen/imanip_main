@@ -12,14 +12,13 @@ import torch
 from torch.utils.data import Dataset
 from albumentations import augmentations
 from torchvision import transforms
-from utils import get_ela
 
 from dft_dwt import generate_dft_dwt_vector
 from utils import get_ela
 
 
 class DATASET(Dataset):
-    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, resize, combo=True, imgaug_augment=None,
+    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, combo=True, imgaug_augment=None,
                  transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False
     ):
 
@@ -29,7 +28,7 @@ class DATASET(Dataset):
         self.val_fold = val_fold
         self.test_fold = test_fold
         self.patch_size = patch_size
-        self.resize = resize
+        self.resize = 256
         self.combo = combo
         self.imgaug_augment = imgaug_augment
         self.geo_augment = geo_augment
@@ -54,7 +53,6 @@ class DATASET(Dataset):
             cmfd_128_fake_sample = cmfd_128[cmfd_128['label'] == 1].sample(n=7000, random_state=123)
             self.dataframe = pd.concat([df_without_cmfd_128, cmfd_128_real_sample, cmfd_128_fake_sample])
         
-
         if self.patch_size == 64 and self.combo:
             df_without = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD|CASIA|IMD')]
 
@@ -89,7 +87,6 @@ class DATASET(Dataset):
 
         if self.equal_sample:
             rows = self._equalize(rows)
-            
         if self.segment:
             rows = self._segment(rows)
 
@@ -128,13 +125,11 @@ class DATASET(Dataset):
             print(f"Image Not Found : {image_path}")
 
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
-        # ela_image = cv2.imread(ela_path, cv2.IMREAD_COLOR)
+        ela_image = cv2.imread(ela_path, cv2.IMREAD_COLOR)
 
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
-        # ela_image = cv2.cvtColor(ela_image, cv2.COLOR_BGR2RGB)
+        ela_image = cv2.cvtColor(ela_image, cv2.COLOR_BGR2RGB)
         
-        ela_image = get_ela(image, 25)
 
         if not isinstance(mask_patch, str) and np.isnan(mask_patch):
             mask_image = np.zeros((image.shape[0], image.shape[1])).astype('uint8')
@@ -148,32 +143,27 @@ class DATASET(Dataset):
                 print(f"Mask Not Found : {mask_path}")
             mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
             
-            
-            
             # ----- For NIST16 Invert Mask Here ----- #
             if('NIST' in root_dir):
                 mask_image = 255 - mask_image
             ##########################################
-            
-        # attn_mask_image = copy.deepcopy(mask_image)
 
-        # if('NIST' not in root_dir and 'COVERAGE' not in root_dir):
         if self.imgaug_augment:
             try :
                 image = self.imgaug_augment.augment_image(image)
             except Exception as e:
                 print(image_path, e) 
     
-    
-        if self.geo_augment:
-            data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
-            image = data["image"]
-            mask_image = data["mask"]
-            ela_image = data["ela"]
+        if('extend' not in root_dir):
+            if self.geo_augment:
+                data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
+                image = data["image"]
+                mask_image = data["mask"]
+                ela_image = data["ela"]
         
 
-        # image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
-        # ela_image = augmentations.geometric.functional.resize(ela_image, self.resize, self.resize, cv2.INTER_AREA)
+        image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
+        ela_image = augmentations.geometric.functional.resize(ela_image, self.resize, self.resize, cv2.INTER_AREA)
         mask_image = augmentations.geometric.functional.resize(mask_image, self.resize, self.resize, cv2.INTER_AREA)
 
         ###--- Generate DFT DWT Vector -----------------
