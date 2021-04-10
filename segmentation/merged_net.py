@@ -106,21 +106,25 @@ class SRM_Classifer(nn.Module):
         return x, (reduced_feat, _merged_input, enc_out, start, end)
     
     def freeze(self):
-        for param in super().parameters():
+        for param in self.parameters():
             param.requires_grad = False
         print('--------- SRM Frozen -----------')
             
     def unfreeze(self):
-        for param in super().parameters():
+        for param in self.parameters():
             param.requires_grad = True
         print('--------- SRM Opened -----------')
     
     def load_weights(self, checkpoint=""):
         print(f'--------- Loaded Checkpoint: {checkpoint} ----------')
-        checkpoint = torch.load(checkpoint)
+        pretrained_dict = torch.load(checkpoint)
+        del pretrained_dict['module.classifier.weight']
+        del pretrained_dict['module.classifier.bias']
+        
         encoder_dict = OrderedDict()
-        for item in checkpoint.items():
+        for item in pretrained_dict.items():
             key = item[0].split('.',1)[-1]
             encoder_dict[key] = item[1]
-
-        print(super().load_state_dict(encoder_dict))
+        
+        print(self.load_state_dict(encoder_dict, strict=False))
+        

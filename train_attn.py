@@ -30,10 +30,10 @@ config_defaults = {
     "epochs": 100,
     "train_batch_size": 40,
     "valid_batch_size": 64,
-    "optimizer": "adamw",
-    "learning_rate": 0.0007,
-    "weight_decay": 0.001,
-    "schedule_patience": 3,
+    "optimizer": "adam",
+    "learning_rate": 0.0001,
+    "weight_decay": 0.0001,
+    "schedule_patience": 5,
     "schedule_factor": 0.25,
     "model": "",
 }
@@ -51,7 +51,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     )
     config = wandb.config
 
-    model = SRM_Classifer(num_classes=1)
+    model = SRM_Classifer(num_classes=1, encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5')
 
     # for name_, param in model.named_parameters():
     #     if 'classifier' in name_:
@@ -101,16 +101,18 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     )
     train_geo_aug = albumentations.Compose(
         [
+            # augmentations.geometric.resize.Resize(512, 512, always_apply=True),
             albumentations.HorizontalFlip(p=0.5),
             albumentations.VerticalFlip(p=0.5),
             albumentations.RandomRotate90(p=0.3),
             albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
-            # augmentations.transforms.RandomGridShuffle(p=0.15),
+            # augmentations.transforms.RandomGridShuffle(p=0.45),
+            augmentations.transforms.Cutout(num_holes=8, max_h_size=12, max_w_size=12),
             # albumentations.OneOf([
             #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
             #     albumentations.GridDistortion(p=0.5),
             #     albumentations.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
-            # ], p=0.7),
+            # ], p=0.4),
         ],
         additional_targets={'ela':'image'}
     )
@@ -170,7 +172,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     )
 
     model = nn.DataParallel(model).to(device)
-    # print(model.load_state_dict(torch.load('best_weights/Changed classifier+COMBO_ALL_FULLSRM+ELA_[08|03_21|22|09].h5')))
+    print(model.load_state_dict(torch.load('weights/(using pretrain)COMBO_ALL_FULL_[08|04_04|54|58].h5')))
     # print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
     criterion = nn.BCEWithLogitsLoss()
@@ -413,24 +415,29 @@ if __name__ == "__main__":
 
     combo_all_df = pd.read_csv('combo_all_FULL.csv').sample(frac=1.0, random_state=123)
     
-    df_without_cmfd = combo_all_df[~combo_all_df['root_dir'].str.contains('CMFD')]
+    # df_without_cmfd = combo_all_df[~combo_all_df['root_dir'].str.contains('CMFD')]
     
-    cmfd = combo_all_df[combo_all_df['root_dir'].str.contains('CMFD')]
-    cmfd_real = cmfd[cmfd['label'] == 0].sample(n=1000, random_state=123)
-    cmfd_fake = cmfd[cmfd['label'] == 1].sample(n=1800, random_state=123)
-    cmfd = pd.concat([cmfd_real, cmfd_fake]).sample(frac=1.0, random_state=123)
+    # cmfd = combo_all_df[combo_all_df['root_dir'].str.contains('CMFD')]
+    # cmfd_real = cmfd[cmfd['label'] == 0].sample(n=1000, random_state=123)
+    # cmfd_fake = cmfd[cmfd['label'] == 1].sample(n=1800, random_state=123)
+    # cmfd = pd.concat([cmfd_real, cmfd_fake]).sample(frac=1.0, random_state=123)
     
     nist_extend = pd.read_csv('nist_extend.csv').sample(frac=1.0, random_state=123)
-    # nist_extend_real = nist_extend[nist_extend['label'] == 0].sample(n=1000, random_state=123)
-    # nist_extend_fake = nist_extend[nist_extend['label'] == 1].sample(n=1500, random_state=123)
-    # nist_extend = pd.concat([nist_extend_real, nist_extend_fake]).sample(frac=1.0, random_state=123)
+    # # nist_extend_real = nist_extend[nist_extend['label'] == 0].sample(n=1000, random_state=123)
+    # # nist_extend_fake = nist_extend[nist_extend['label'] == 1].sample(n=1500, random_state=123)
+    # # nist_extend = pd.concat([nist_extend_real, nist_extend_fake]).sample(frac=1.0, random_state=123)
     
     coverage_extend = pd.read_csv('coverage_extend.csv').sample(frac=1.0, random_state=123)
-    # coverage_extend_real = coverage_extend[coverage_extend['label'] == 0].sample(n=800, random_state=123)
-    # coverage_extend_fake = coverage_extend[coverage_extend['label'] == 1].sample(n=800, random_state=123)
-    # coverage_extend = pd.concat([coverage_extend_real, coverage_extend_fake]).sample(frac=1.0, random_state=123)
+    # # coverage_extend_real = coverage_extend[coverage_extend['label'] == 0].sample(n=800, random_state=123)
+    # # coverage_extend_fake = coverage_extend[coverage_extend['label'] == 1].sample(n=800, random_state=123)
+    # # coverage_extend = pd.concat([coverage_extend_real, coverage_extend_fake]).sample(frac=1.0, random_state=123)
             
-    df = pd.concat([df_without_cmfd, cmfd, nist_extend, coverage_extend])
+    df_full = pd.concat([combo_all_df, nist_extend, coverage_extend])
+    df_full.insert(0, 'image', -1)
+
+    df_128 = pd.read_csv('combo_all_128.csv').sample(frac=1.0, random_state=123)
+
+    df = pd.concat([df_full, df_128])
     print(df.groupby('root_dir').label.value_counts())
 
     acc = AverageMeter()
@@ -440,7 +447,7 @@ if __name__ == "__main__":
     for i in range(1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(new extend)COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(using pretrain)COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,

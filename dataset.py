@@ -19,7 +19,7 @@ from utils import get_ela
 
 class DATASET(Dataset):
     def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, combo=True, imgaug_augment=None,
-                 transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False
+                 transforms_normalize=None, geo_augment=None, equal_sample=True, segment=False
     ):
 
         super().__init__()
@@ -46,33 +46,33 @@ class DATASET(Dataset):
         #     albumentations.pytorch.ToTensor()
         # ])
 
-        if self.patch_size == 128 and self.combo:
-            df_without_cmfd_128 = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD')]
-            cmfd_128 = self.dataframe[self.dataframe['root_dir'].str.contains('CMFD')]
-            cmfd_128_real_sample = cmfd_128[cmfd_128['label'] == 0].sample(n=7000, random_state=123)
-            cmfd_128_fake_sample = cmfd_128[cmfd_128['label'] == 1].sample(n=7000, random_state=123)
-            self.dataframe = pd.concat([df_without_cmfd_128, cmfd_128_real_sample, cmfd_128_fake_sample])
+        # if self.patch_size == 128 and self.combo:
+        #     df_without_cmfd_128 = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD')]
+        #     cmfd_128 = self.dataframe[self.dataframe['root_dir'].str.contains('CMFD')]
+        #     cmfd_128_real_sample = cmfd_128[cmfd_128['label'] == 0].sample(n=7000, random_state=123)
+        #     cmfd_128_fake_sample = cmfd_128[cmfd_128['label'] == 1].sample(n=7000, random_state=123)
+        #     self.dataframe = pd.concat([df_without_cmfd_128, cmfd_128_real_sample, cmfd_128_fake_sample])
         
-        if self.patch_size == 64 and self.combo:
-            df_without = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD|CASIA|IMD')]
+        # if self.patch_size == 64 and self.combo:
+        #     df_without = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD|CASIA|IMD')]
 
-            df_without_cmfd_64 = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD')]
-            cmfd_64 = self.dataframe[self.dataframe['root_dir'].str.contains('CMFD')]
-            cmfd_64_real_sample = cmfd_64[cmfd_64['label'] == 0].sample(n=10000, random_state=123)
-            cmfd_64_fake_sample = cmfd_64[cmfd_64['label'] == 1].sample(n=10000, random_state=123)
+        #     df_without_cmfd_64 = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD')]
+        #     cmfd_64 = self.dataframe[self.dataframe['root_dir'].str.contains('CMFD')]
+        #     cmfd_64_real_sample = cmfd_64[cmfd_64['label'] == 0].sample(n=10000, random_state=123)
+        #     cmfd_64_fake_sample = cmfd_64[cmfd_64['label'] == 1].sample(n=10000, random_state=123)
 
-            df_without_casia_64 = self.dataframe[~self.dataframe['root_dir'].str.contains('CASIA')]
-            casia_64 = self.dataframe[self.dataframe['root_dir'].str.contains('CASIA')]
-            casia_64_real_sample = casia_64[casia_64['label'] == 0].sample(n=15000, random_state=123)
-            casia_64_fake_sample = casia_64[casia_64['label'] == 1].sample(n=15000, random_state=123)
+        #     df_without_casia_64 = self.dataframe[~self.dataframe['root_dir'].str.contains('CASIA')]
+        #     casia_64 = self.dataframe[self.dataframe['root_dir'].str.contains('CASIA')]
+        #     casia_64_real_sample = casia_64[casia_64['label'] == 0].sample(n=15000, random_state=123)
+        #     casia_64_fake_sample = casia_64[casia_64['label'] == 1].sample(n=15000, random_state=123)
 
-            df_without_imd_64 = self.dataframe[~self.dataframe['root_dir'].str.contains('IMD')]
-            imd_64 = self.dataframe[self.dataframe['root_dir'].str.contains('IMD')]
-            imd_64_real_sample = imd_64[imd_64['label'] == 0].sample(n=15000, random_state=123)
-            imd_64_fake_sample = imd_64[imd_64['label'] == 1].sample(n=15000, random_state=123)
+        #     df_without_imd_64 = self.dataframe[~self.dataframe['root_dir'].str.contains('IMD')]
+        #     imd_64 = self.dataframe[self.dataframe['root_dir'].str.contains('IMD')]
+        #     imd_64_real_sample = imd_64[imd_64['label'] == 0].sample(n=15000, random_state=123)
+        #     imd_64_fake_sample = imd_64[imd_64['label'] == 1].sample(n=15000, random_state=123)
 
-            self.dataframe = pd.concat([df_without, cmfd_64_real_sample, cmfd_64_fake_sample, casia_64_real_sample,\
-                         casia_64_fake_sample, imd_64_real_sample, imd_64_fake_sample])
+        #     self.dataframe = pd.concat([df_without, cmfd_64_real_sample, cmfd_64_fake_sample, casia_64_real_sample,\
+        #                  casia_64_fake_sample, imd_64_real_sample, imd_64_fake_sample])
 
 
         if self.mode == "train":
@@ -104,15 +104,15 @@ class DATASET(Dataset):
 
     def __getitem__(self, index: int):
 
-        if self.patch_size == 'FULL':
-            image_patch, mask_patch, label, _, ela, root_dir = self.data[index]
+        if '128' not in self.data[index][-1]: #self.patch_size == 'FULL':
+            _, image_patch, mask_patch, label, _, ela, root_dir = self.data[index]
         else:
             image_name, image_patch, mask_patch, label, _, ela, root_dir = self.data[index]
 
         if self.label_smoothing:
             label = np.clip(label, self.label_smoothing, 1 - self.label_smoothing)
 
-        if self.patch_size == 'FULL':
+        if '128' not in root_dir: #self.patch_size == 'FULL':
             image_path = os.path.join(self.root_folder, root_dir, image_patch)
             ela_path = os.path.join(self.root_folder, root_dir, ela)
         else:
@@ -134,7 +134,7 @@ class DATASET(Dataset):
         if not isinstance(mask_patch, str) and np.isnan(mask_patch):
             mask_image = np.zeros((image.shape[0], image.shape[1])).astype('uint8')
         else:
-            if self.patch_size == 'FULL':
+            if '128' not in root_dir: #self.patch_size == 'FULL':
                 mask_path = os.path.join(self.root_folder, root_dir, mask_patch)
             else:
                 mask_path = os.path.join(self.root_folder, root_dir, image_name, mask_patch)
@@ -154,12 +154,12 @@ class DATASET(Dataset):
             except Exception as e:
                 print(image_path, e) 
     
-        if('extend' not in root_dir):
-            if self.geo_augment:
-                data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
-                image = data["image"]
-                mask_image = data["mask"]
-                ela_image = data["ela"]
+        # if('extend' not in root_dir):
+        if self.geo_augment:
+            data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
+            image = data["image"]
+            mask_image = data["mask"]
+            ela_image = data["ela"]
         
 
         image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
