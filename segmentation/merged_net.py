@@ -122,4 +122,5 @@ class SRM_Classifer(nn.Module):
         for item in checkpoint.items():
             key = item[0].split('.',1)[-1]
             encoder_dict[key] = item[1]
+
         print(super().load_state_dict(encoder_dict))

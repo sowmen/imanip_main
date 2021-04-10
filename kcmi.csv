@@ -1,4 +1,4 @@
-path,class,label
+image_path,class_id,label
 Image_Manipulation_Dataset/sp-society-camera-model-identification/train/train/HTC-1-M7/(HTC-1-M7)1.jpg,HTC-1-M7,0
 Image_Manipulation_Dataset/sp-society-camera-model-identification/train/train/HTC-1-M7/(HTC-1-M7)10.jpg,HTC-1-M7,0
 Image_Manipulation_Dataset/sp-society-camera-model-identification/train/train/HTC-1-M7/(HTC-1-M7)100.jpg,HTC-1-M7,0
