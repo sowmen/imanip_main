@@ -140,7 +140,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         imgaug_augment=train_imgaug,
         geo_augment=train_geo_aug
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=6, pin_memory=True, drop_last=False)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -150,7 +150,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         patch_size=patch_size,
         transforms_normalize=transforms_normalize,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=6, pin_memory=True, drop_last=False)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -160,7 +160,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         patch_size=patch_size,
         transforms_normalize=transforms_normalize,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=6, pin_memory=True, drop_last=False)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
@@ -181,7 +181,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
 
     start_epoch = 0
     if resume:
-        checkpoint = torch.load('checkpoint/COMBO_ALL_64ChangedClass_[10|03_22|35|18].pt')
+        checkpoint = torch.load('checkpoint/(using pretrain)COMBO_ALL_FULL_[09|04_12|46|35].pt')
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
