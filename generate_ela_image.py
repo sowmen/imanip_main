@@ -43,24 +43,30 @@ def ELA(param, DIR_ROOT):
 
 def main():
 
-    df = pd.read_csv('dataset_csv/nist16_FULL.csv')
+    df = pd.read_csv('nist_extend.csv')
     DIR_ROOT = "Image_Manipulation_Dataset"
 
     params = []
     for idx, row in df.iterrows():
-        params.append({"img_path": row["image_patch"], "ela_path": row["ela"], "root_dir": row["root_dir"]})
+        params.append(
+            {
+                "img_path": row["image_patch"], 
+                "ela_path": row["ela"], 
+                "root_dir": row["root_dir"]
+            }
+        )
+
+    # print("Gathering rows....")
+    # for idx, row in df.iterrows():
+    #     params.append(
+    #         {
+    #             "img_path": os.path.join(row["image"],row["image_patch"]), 
+    #             "ela_path": os.path.join(row["image"],row["ela"]), 
+    #             "root_dir": row["data_root"]
+    #         }
+    #     )
     print(f"Total: {len(params)}")
 
-    # rows64 = df.values
-    # for row in tqdm(rows64):
-    #     # image, image_patch, mask_patch, label, fold, ela, root_dir = row
-    #     # impath = os.path.join(image, image_patch)
-    #     # ela_path = os.path.join(image, ela)
-    #     image_patch, mask_patch, label, fold, ela, root_dir = row
-    #     impath = image_patch
-    #     ela_path = ela
-    #     root = os.path.join(DIR_ROOT, root_dir)
-    #     ELA((impath, ela_path), root)
     
     with Pool(processes=os.cpu_count()) as p:
         with tqdm(total=len(params)) as pbar:

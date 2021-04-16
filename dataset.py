@@ -6,21 +6,20 @@ import cv2
 import math
 import copy
 import gc
+from tqdm import tqdm
 
 import torch
 from torch.utils.data import Dataset
-from albumentations.pytorch.functional import img_to_tensor
-import albumentations
 from albumentations import augmentations
-from albumentations.augmentations import functional
-import imgaug
+from torchvision import transforms
 
-iaa = imgaug.augmenters.Sequential([])
+from dft_dwt import generate_dft_dwt_vector
+from utils import get_ela
 
 
 class DATASET(Dataset):
-    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, imgaug_augment=None,
-                 transforms=None, equal_sample=False, segment=False
+    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, combo=True, imgaug_augment=None,
+                 transforms_normalize=None, geo_augment=None, equal_sample=True, segment=False
     ):
 
         super().__init__()
@@ -29,8 +28,11 @@ class DATASET(Dataset):
         self.val_fold = val_fold
         self.test_fold = test_fold
         self.patch_size = patch_size
+        self.resize = 256
+        self.combo = combo
         self.imgaug_augment = imgaug_augment
-        self.transforms = transforms
+        self.geo_augment = geo_augment
+        self.transforms_normalize = transforms_normalize
         self.label_smoothing = 0.1
         self.equal_sample = equal_sample
         self.segment = segment # Returns only fake rows for segmentation
@@ -43,6 +45,35 @@ class DATASET(Dataset):
         #     albumentations.Normalize(mean=self.normalize['mean'], std=self.normalize['std'], p=1, always_apply=True),
         #     albumentations.pytorch.ToTensor()
         # ])
+
+        # if self.patch_size == 128 and self.combo:
+        #     df_without_cmfd_128 = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD')]
+        #     cmfd_128 = self.dataframe[self.dataframe['root_dir'].str.contains('CMFD')]
+        #     cmfd_128_real_sample = cmfd_128[cmfd_128['label'] == 0].sample(n=7000, random_state=123)
+        #     cmfd_128_fake_sample = cmfd_128[cmfd_128['label'] == 1].sample(n=7000, random_state=123)
+        #     self.dataframe = pd.concat([df_without_cmfd_128, cmfd_128_real_sample, cmfd_128_fake_sample])
+        
+        # if self.patch_size == 64 and self.combo:
+        #     df_without = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD|CASIA|IMD')]
+
+        #     df_without_cmfd_64 = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD')]
+        #     cmfd_64 = self.dataframe[self.dataframe['root_dir'].str.contains('CMFD')]
+        #     cmfd_64_real_sample = cmfd_64[cmfd_64['label'] == 0].sample(n=10000, random_state=123)
+        #     cmfd_64_fake_sample = cmfd_64[cmfd_64['label'] == 1].sample(n=10000, random_state=123)
+
+        #     df_without_casia_64 = self.dataframe[~self.dataframe['root_dir'].str.contains('CASIA')]
+        #     casia_64 = self.dataframe[self.dataframe['root_dir'].str.contains('CASIA')]
+        #     casia_64_real_sample = casia_64[casia_64['label'] == 0].sample(n=15000, random_state=123)
+        #     casia_64_fake_sample = casia_64[casia_64['label'] == 1].sample(n=15000, random_state=123)
+
+        #     df_without_imd_64 = self.dataframe[~self.dataframe['root_dir'].str.contains('IMD')]
+        #     imd_64 = self.dataframe[self.dataframe['root_dir'].str.contains('IMD')]
+        #     imd_64_real_sample = imd_64[imd_64['label'] == 0].sample(n=15000, random_state=123)
+        #     imd_64_fake_sample = imd_64[imd_64['label'] == 1].sample(n=15000, random_state=123)
+
+        #     self.dataframe = pd.concat([df_without, cmfd_64_real_sample, cmfd_64_fake_sample, casia_64_real_sample,\
+        #                  casia_64_fake_sample, imd_64_real_sample, imd_64_fake_sample])
+
 
         if self.mode == "train":
             rows = self.dataframe[~self.dataframe["fold"].isin([self.val_fold, self.test_fold])]
@@ -64,6 +95,7 @@ class DATASET(Dataset):
                 len(rows[rows["label"] == 0]), len(rows[rows["label"] == 1]), self.mode
             )
         )
+
         self.data = rows.values
         np.random.shuffle(self.data)
 
@@ -72,15 +104,15 @@ class DATASET(Dataset):
 
     def __getitem__(self, index: int):
 
-        if self.patch_size == 'FULL':
-            image_patch, mask_patch, label, _, ela, root_dir = self.data[index]
+        if '128' not in self.data[index][-1]: #self.patch_size == 'FULL':
+            _, image_patch, mask_patch, label, _, ela, root_dir = self.data[index]
         else:
             image_name, image_patch, mask_patch, label, _, ela, root_dir = self.data[index]
 
         if self.label_smoothing:
             label = np.clip(label, self.label_smoothing, 1 - self.label_smoothing)
 
-        if self.patch_size == 'FULL':
+        if '128' not in root_dir: #self.patch_size == 'FULL':
             image_path = os.path.join(self.root_folder, root_dir, image_patch)
             ela_path = os.path.join(self.root_folder, root_dir, ela)
         else:
@@ -97,11 +129,12 @@ class DATASET(Dataset):
 
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         ela_image = cv2.cvtColor(ela_image, cv2.COLOR_BGR2RGB)
+        
 
         if not isinstance(mask_patch, str) and np.isnan(mask_patch):
             mask_image = np.zeros((image.shape[0], image.shape[1])).astype('uint8')
         else:
-            if self.patch_size == 'FULL':
+            if '128' not in root_dir: #self.patch_size == 'FULL':
                 mask_path = os.path.join(self.root_folder, root_dir, mask_patch)
             else:
                 mask_path = os.path.join(self.root_folder, root_dir, image_name, mask_patch)
@@ -109,53 +142,68 @@ class DATASET(Dataset):
             if(not os.path.exists(mask_path)):
                 print(f"Mask Not Found : {mask_path}")
             mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-
-            # ----- For NIST16 Invert Mask Here ----- #
-
-            ##########################################
             
-        # attn_mask_image = copy.deepcopy(mask_image)
+            # ----- For NIST16 Invert Mask Here ----- #
+            if('NIST' in root_dir):
+                mask_image = 255 - mask_image
+            ##########################################
 
         if self.imgaug_augment:
             try :
-                # temp_image = copy.deepcopy(image)
                 image = self.imgaug_augment.augment_image(image)
             except Exception as e:
                 print(image_path, e) 
-                # image = temp_image
-                # del(temp_image)
-                # gc.collect()
-        
-        # print("--- bfr ---")
-        # print(image.shape, image.dtype)
-        # print(ela_image.shape, ela_image.dtype)
-        # print(mask_image.shape, mask_image.dtype)
-        # print("-------")
-        if self.transforms:
-            data = self.transforms(image=image, mask=mask_image, ela=ela_image)
+    
+        # if('extend' not in root_dir):
+        if self.geo_augment:
+            data = self.geo_augment(image=image, mask=mask_image, ela=ela_image)
             image = data["image"]
             mask_image = data["mask"]
-            ela_image = data["ela"]#.permute(2,0,1)
+            ela_image = data["ela"]
+        
+
+        image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
+        ela_image = augmentations.geometric.functional.resize(ela_image, self.resize, self.resize, cv2.INTER_AREA)
+        mask_image = augmentations.geometric.functional.resize(mask_image, self.resize, self.resize, cv2.INTER_AREA)
+
+        ###--- Generate DFT DWT Vector -----------------
+        # dft_dwt_vector = generate_dft_dwt_vector(image)
+        # dft_dwt_vector = torch.from_numpy(dft_dwt_vector).float()
+
+        ##########------Normalize-----##########
+        image_normalize = {
+            "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
+            "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
+        }
+        transNormalize = transforms.Normalize(mean=image_normalize['mean'], std=image_normalize['std'])
+        transTensor = transforms.ToTensor()
+
+        tensor_image = transTensor(image)
+        tensor_ela = transTensor(ela_image)
+        tensor_mask = transTensor(mask_image)
+
+        tensor_image = transNormalize(tensor_image)
+        tensor_ela = transNormalize(tensor_ela)
+        ########################################
+
+        # if self.transforms_normalize:
+        #     data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)
+        #     tensor_image = data["image"]
+        #     tensor_mask = data["mask"] / 255.0
+        #     tensor_ela = data["ela"]
         # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
-        # print("--- afr ---")
-        # print(image.shape, image.type())
-        # print(ela_image.shape, ela_image.type())
-        # print(mask_image.shape, mask_image.type())
-        # print("-------")
 
-        # image = img_to_tensor(image, self.normalize)
-        # mask_image = img_to_tensor(mask_image).unsqueeze(0)
-        # attn_mask_image = img_to_tensor(attn_mask_image).unsqueeze(0)
-        # print("LOADED DATA")
         return {
-            "image": image,
+            "image": tensor_image,
             "image_path" : image_path, 
             "label": label, 
-            "mask": mask_image,
-            "ela" : ela_image 
+            "mask": tensor_mask,
+            "ela" : tensor_ela,
+            # "dft_dwt_vector" : dft_dwt_vector
             # "attn_mask": attn_mask_image
         }
+
 
     def _equalize(self, rows: pd.DataFrame) -> pd.DataFrame:
         """
@@ -172,6 +220,7 @@ class DATASET(Dataset):
         else:
             fakes = fakes.sample(n=num_real, replace=False)
         return pd.concat([real, fakes])
+
 
     def _segment(self, rows: pd.DataFrame) -> pd.DataFrame:
         """

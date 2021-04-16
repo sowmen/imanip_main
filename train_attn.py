@@ -1,35 +1,25 @@
 import os
-import random
 import numpy as np
 import pandas as pd
-import cv2
+
 from tqdm import tqdm
 from datetime import datetime
-import pickle as pkl
 from sklearn import metrics
 import gc
-import timm
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+import wandb
 
 import albumentations
 from albumentations import augmentations
-# from albumentations import *
 import imgaug.augmenters as iaa
 import albumentations.pytorch
 
 torch.backends.cudnn.benchmark = True
 
-import wandb
-# import neptune
-# from neptunecontrib.monitoring.metrics import *
-
-# from apex import amp
-
 from utils import *
-from effb4_attention import Efficient_Attention
-from segmentation.timm_efficientnet import EfficientNet
 from dataset import DATASET
 from segmentation.merged_net import SRM_Classifer
 
@@ -37,16 +27,15 @@ from segmentation.merged_net import SRM_Classifer
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
-    "epochs": 150,
+    "epochs": 100,
     "train_batch_size": 40,
     "valid_batch_size": 64,
     "optimizer": "adam",
-    "learning_rate": 0.0007,
-    "weight_decay": 0.0005,
+    "learning_rate": 0.0001,
+    "weight_decay": 0.0001,
     "schedule_patience": 5,
     "schedule_factor": 0.25,
-    "model": "SRM+ELA",
-    "attn_map_weight": 0,
+    "model": "",
 }
 
 TEST_FOLD = 1
@@ -62,25 +51,20 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     )
     config = wandb.config
 
-    # neptune.init("sowmen/imanip")
-    # neptune.create_experiment(name=f"{name},val_fold:{VAL_FOLD},run{run}")
+    model = SRM_Classifer(num_classes=1, encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5')
 
-    # model = Efficient_Attention()
-    # model = EfficientNet().to(device)
-    model = SRM_Classifer().to(device)
-    SRM_FLAG = 1 # Set for SRM extraction layers
+    # for name_, param in model.named_parameters():
+    #     if 'classifier' in name_:
+    #         continue
+    #     else:
+    #         param.requires_grad = False
 
-    print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))
-    # model = Classifier2(1792).to(device)
+    print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))    
     
-    
-    # wandb.watch(model)
+    wandb.save('segmentation/merged_net.py')
+    wandb.save('dataset.py')
 
-    normalize = {
-        "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
-        "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
-    }
-    
+    #####################################################################################################################
     train_imgaug  = iaa.Sequential(
         [
             iaa.SomeOf((0, 5),
@@ -99,7 +83,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
                     iaa.LinearContrast((0.5, 2.0), per_channel=0.5), # improve or worsen the contrast
                     # # either change the brightness of the whole image (sometimes
                     # # per channel) or change the brightness of subareas
-                    iaa.Sometimes(0.6,
+                    iaa.Sometimes(0.5,
                         iaa.OneOf([
                             iaa.Multiply((0.5, 1.5), per_channel=0.5),
                             iaa.MultiplyAndAddToBrightness(mul=(0.5, 2.5), add=(-10,10)),
@@ -115,44 +99,48 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             )
         ], random_order=True
     )
-    train_aug = albumentations.Compose(
+    train_geo_aug = albumentations.Compose(
         [
+            # augmentations.geometric.resize.Resize(512, 512, always_apply=True),
             albumentations.HorizontalFlip(p=0.5),
             albumentations.VerticalFlip(p=0.5),
-            albumentations.RandomRotate90(p=0.1),
+            albumentations.RandomRotate90(p=0.3),
             albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
+            # augmentations.transforms.RandomGridShuffle(p=0.45),
+            augmentations.transforms.Cutout(num_holes=8, max_h_size=12, max_w_size=12),
             # albumentations.OneOf([
             #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
             #     albumentations.GridDistortion(p=0.5),
             #     albumentations.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
-            # ], p=0.65),
-            augmentations.geometric.resize.Resize(256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
-            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.transforms.ToTensorV2()
+            # ], p=0.4),
         ],
         additional_targets={'ela':'image'}
     )
-    valid_aug = albumentations.Compose(
+    ####################################################################################################################
+    normalize = {
+        "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
+        "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
+    }
+    transforms_normalize = albumentations.Compose(
         [
-            augmentations.geometric.resize.Resize(256, 256, interpolation=cv2.INTER_AREA, always_apply=True, p=1),
             albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
             albumentations.pytorch.transforms.ToTensorV2()
         ],
         additional_targets={'ela':'image'}
     )
 
-    # -------------------------------- CREATE DATASET and DATALOADER --------------------------
+    # ######################---------- CREATE DATASET and DATALOADER---------------------- ##############################
     train_dataset = DATASET(
         dataframe=df,
         mode="train",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         patch_size=patch_size,
-        equal_sample=False,
-        transforms=train_aug,
-        imgaug_augment=train_imgaug
+        transforms_normalize=transforms_normalize,
+        imgaug_augment=train_imgaug,
+        geo_augment=train_geo_aug
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -160,10 +148,9 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         patch_size=patch_size,
-        equal_sample=False,
-        transforms=valid_aug,
+        transforms_normalize=transforms_normalize,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -171,31 +158,30 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         patch_size=patch_size,
-        equal_sample=False,
-        transforms=valid_aug,
+        transforms_normalize=transforms_normalize,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
-
-    # model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
-    model = nn.DataParallel(model)
-
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         patience=config.schedule_patience,
         mode="min",
         factor=config.schedule_factor,
     )
-    criterion = nn.BCEWithLogitsLoss()
-    attn_map_criterion = nn.L1Loss()
 
-    es = EarlyStopping(patience=30, mode="min")
+    model = nn.DataParallel(model).to(device)
+    print(model.load_state_dict(torch.load('weights/(using pretrain)COMBO_ALL_FULL_[08|04_04|54|58].h5')))
+    # print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))
+
+    criterion = nn.BCEWithLogitsLoss()
+
+    es = EarlyStopping(patience=15, mode="min")
 
     start_epoch = 0
     if resume:
-        checkpoint = torch.load('checkpoint/COMBO_ALL_FULLSRM+ELA_[05|03_02|37|25].pt')
+        checkpoint = torch.load('checkpoint/(using pretrain)COMBO_ALL_FULL_[09|04_12|46|35].pt')
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -206,20 +192,10 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        train_metrics = train_epoch(
-            model,
-            train_loader,
-            optimizer,
-            criterion,
-            attn_map_criterion,
-            config.attn_map_weight,
-            epoch,
-            SRM_FLAG
-        )
-        valid_metrics = valid_epoch(
-            model, valid_loader, criterion, attn_map_criterion, config.attn_map_weight, epoch
-        )
-        scheduler.step(valid_metrics["valid_loss"])
+        train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
+        valid_metrics = valid_epoch(model, valid_loader, criterion, epoch)
+        
+        scheduler.step(valid_metrics['valid_loss'])
 
         print(
             f"TRAIN_ACC = {train_metrics['train_acc_05']}, TRAIN_LOSS = {train_metrics['train_loss']}"
@@ -228,8 +204,9 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             f"VALID_ACC = {valid_metrics['valid_acc_05']}, VALID_LOSS = {valid_metrics['valid_loss']}"
         )
         print("New LR", optimizer.param_groups[0]['lr'])
+        os.makedirs('weights', exist_ok=True)
         es(
-            valid_metrics["valid_loss"],
+            valid_metrics['valid_loss'],
             model,
             model_path=os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"),
         )
@@ -243,23 +220,22 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             'optimizer_state_dict' : optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
         }
+        os.makedirs('checkpoint', exist_ok=True)
         torch.save(checkpoint, os.path.join('checkpoint', f"{name}_[{dt_string}].pt"))
 
     if os.path.exists(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")):
         print(model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))))
         print("LOADED FOR TEST")
 
-    test_metrics = test(model, test_loader, criterion, attn_map_criterion, config.attn_map_weight)
+    test_metrics = test(model, test_loader, criterion)
     wandb.save(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))
 
     return test_metrics
 
 
-def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, attn_map_weight, epoch, SRM_FLAG):
+def train_epoch(model, train_loader, optimizer, criterion, epoch):
     model.train()
 
-    # classification_loss = AverageMeter()
-    # attn_map_loss = AverageMeter()
     total_loss = AverageMeter()
     
     predictions = []
@@ -269,36 +245,31 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         images = batch["image"].to(device)
         elas = batch["ela"].to(device)
         target_labels = batch["label"].to(device)
-        # attn_gt = batch["attn_mask"].to(device)
-        # print("GOTTEM")
+        # dft_dwt_vector = batch["dft_dwt_vector"].to(device)
+        
         optimizer.zero_grad()
         
-        # out_labels, attn_map = model(images)
-        out_labels, _ = model(images, elas)
+        out_logits, _ = model(images, elas)#, dft_dwt_vector)
 
-        loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
-        # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
-        loss = loss_classification  #+ attn_map_weight * loss_attn_map
+        loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
         loss.backward()
-        # with amp.scale_loss(loss, optimizer) as scaled_loss:
-        #     scaled_loss.backward()
+
         optimizer.step()
 
-        if SRM_FLAG == 1:
-            bayer_mask = torch.zeros(3,3,5,5).cuda()
-            bayer_mask[:,:,5//2, 5//2] = 1
-            bayer_weight = model.module.bayer_conv.weight * (1-bayer_mask)
-            bayer_weight = (bayer_weight / torch.sum(bayer_weight, dim=(2,3), keepdim=True)) + 1e-7
-            bayer_weight -= bayer_mask
-            model.module.bayer_conv.weight = nn.Parameter(bayer_weight)
+        ############## SRM Step ###########
+        bayer_mask = torch.zeros(3,3,5,5).cuda()
+        bayer_mask[:,:,5//2, 5//2] = 1
+        bayer_weight = model.module.bayer_conv.weight * (1-bayer_mask)
+        bayer_weight = (bayer_weight / torch.sum(bayer_weight, dim=(2,3), keepdim=True)) + 1e-7
+        bayer_weight -= bayer_mask
+        model.module.bayer_conv.weight = nn.Parameter(bayer_weight)
+        ###################################
 
         #---------------------Batch Loss Update-------------------------
-        # classification_loss.update(loss_classification.item(), train_loader.batch_size)
-        # attn_map_loss.update(loss_attn_map.item(), train_loader.batch_size)
         total_loss.update(loss.item(), train_loader.batch_size)
         
         targets.append((target_labels.view(-1, 1).cpu() >= 0.5) * 1.0)
-        predictions.append(torch.sigmoid(out_labels).cpu().detach().numpy())
+        predictions.append(torch.sigmoid(out_logits).cpu().detach().numpy())
 
         gc.collect()
 
@@ -313,8 +284,6 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
         train_balanced_acc_05 = metrics.balanced_accuracy_score(targets, (predictions >= 0.5) * 1)
         
     train_metrics = {
-        # "train_loss_classification": classification_loss.avg,
-        # "train_loss_attn_map": attn_map_loss.avg,
         "train_loss" : total_loss.avg,
         "train_auc": train_auc,
         "train_f1_05": train_f1_05,
@@ -327,11 +296,9 @@ def train_epoch(model, train_loader, optimizer, criterion, attn_map_criterion, a
     return train_metrics
 
 
-def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_weight, epoch):
+def valid_epoch(model, valid_loader, criterion, epoch):
     model.eval()
 
-    # classification_loss = AverageMeter()
-    # attn_map_loss = AverageMeter()
     total_loss = AverageMeter()
     
     predictions = []
@@ -343,22 +310,17 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             target_labels = batch["label"].to(device)
-            # attn_gt = batch["attn_mask"].to(device)
+            # dft_dwt_vector = batch["dft_dwt_vector"].to(device)
 
-            # out_labels, attn_map = model(images)
-            out_labels, _ = model(images, elas)
+            out_logits, _ = model(images, elas)#, dft_dwt_vector)
 
-            loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
-            # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
-            loss = loss_classification  #+ attn_map_weight * loss_attn_map
+            loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
             
             #---------------------Batch Loss Update-------------------------
-            # classification_loss.update(loss_classification.item(), valid_loader.batch_size)
-            # attn_map_loss.update(loss_attn_map.item(), valid_loader.batch_size)
             total_loss.update(loss.item(), valid_loader.batch_size)
             
             batch_targets = (target_labels.view(-1, 1).cpu() >= 0.5) * 1.0
-            batch_preds = torch.sigmoid(out_labels).cpu()          
+            batch_preds = torch.sigmoid(out_logits).cpu()          
             
             targets.append(batch_targets)
             predictions.append(batch_preds)
@@ -388,8 +350,6 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
     valid_balanced_acc_05 = metrics.balanced_accuracy_score(targets, (predictions >= 0.5) * 1)
 
     valid_metrics = {
-        # "valid_loss_classification": classification_loss.avg,
-        # "valid_loss_attn_map": attn_map_loss.avg,
         "valid_loss": total_loss.avg,
         "valid_auc": valid_auc,
         "valid_f1_05": valid_f1_05,
@@ -403,11 +363,9 @@ def valid_epoch(model, valid_loader, criterion, attn_map_criterion, attn_map_wei
     return valid_metrics
 
 
-def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
+def test(model, test_loader, criterion):
     model.eval()
 
-    # classification_loss = AverageMeter()
-    # attn_map_loss = AverageMeter()
     total_loss = AverageMeter()
     
     predictions = []
@@ -418,22 +376,17 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             target_labels = batch["label"].to(device)
-            # attn_gt = batch["attn_mask"].to(device)
+            # dft_dwt_vector = batch["dft_dwt_vector"].to(device)
 
-            # out_labels, attn_map = model(images)
-            out_labels, _ = model(images, elas)
+            out_logits, _ = model(images, elas)#, dft_dwt_vector)
 
-            loss_classification = criterion(out_labels, target_labels.view(-1, 1).type_as(out_labels))
-            # loss_attn_map = attn_map_criterion(attn_map, attn_gt)
-            loss = loss_classification  #+ attn_map_weight * loss_attn_map
+            loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
             
             #---------------------Batch Loss Update-------------------------
-            # classification_loss.update(loss_classification.item(), test_loader.batch_size)
-            # attn_map_loss.update(loss_attn_map.item(), test_loader.batch_size)
             total_loss.update(loss.item(), test_loader.batch_size)
             
             targets.append((target_labels.view(-1, 1).cpu() >= 0.5) * 1.0)
-            predictions.append(torch.sigmoid(out_labels).cpu() )
+            predictions.append(torch.sigmoid(out_logits).cpu() )
 
     # Logging
     targets = np.vstack((targets)).ravel()
@@ -445,8 +398,6 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
     test_balanced_acc_05 = metrics.balanced_accuracy_score(targets, (predictions >= 0.5) * 1)
 
     test_metrics = {
-        # "test_loss_classification": classification_loss.avg,
-        # "test_loss_attn_map": attn_map_loss.avg,
         "test_loss": total_loss.avg,
         "test_auc": test_auc,
         "test_f1_05": test_f1_05,
@@ -456,51 +407,47 @@ def test(model, test_loader, criterion, attn_map_criterion, attn_map_weight):
     wandb.log(test_metrics)
     return test_metrics
 
-    #region TEST LOG
-    # wandb.log(
-    #     {
-    #         "test_roc_auc_curve": skplt.metrics.plot_roc(
-    #             targets, expand_prediction(correct_predictions)
-    #         ),
-    #         "test_precision_recall_curve": skplt.metrics.plot_precision_recall(
-    #             targets, expand_prediction(correct_predictions)
-    #         ),
-    #     }
-    # )
-
-    # y_test = targets
-    # y_test_pred = expand_prediction(correct_predictions)
-    # log_confusion_matrix(y_test, y_test_pred[:, 1] > 0.5)
-    # log_classification_report(y_test, y_test_pred[:, 1] > 0.5)
-    # log_class_metrics(y_test, y_test_pred[:, 1] > 0.5)
-    # log_roc_auc(y_test, y_test_pred)
-    # log_precision_recall_auc(y_test, y_test_pred)
-    # log_brier_loss(y_test, y_test_pred[:, 1])
-    # log_log_loss(y_test, y_test_pred)
-    # log_ks_statistic(y_test, y_test_pred)
-    # log_cumulative_gain(y_test, y_test_pred)
-    # log_lift_curve(y_test, y_test_pred)
-    # log_prediction_distribution(y_test, y_test_pred[:, 1])
-    # log_class_metrics_by_threshold(y_test, y_test_pred[:, 1])
-    #endregion
-
-def expand_prediction(arr):
-    arr_reshaped = arr.reshape(-1, 1)
-    return np.clip(np.concatenate((1.0 - arr_reshaped, arr_reshaped), axis=1), 0.0, 1.0)
-
 
 if __name__ == "__main__":
     patch_size = 'FULL'
 
-    df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1).reset_index(drop=True)
+    # df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
+
+    combo_all_df = pd.read_csv('combo_all_FULL.csv').sample(frac=1.0, random_state=123)
+    
+    # df_without_cmfd = combo_all_df[~combo_all_df['root_dir'].str.contains('CMFD')]
+    
+    # cmfd = combo_all_df[combo_all_df['root_dir'].str.contains('CMFD')]
+    # cmfd_real = cmfd[cmfd['label'] == 0].sample(n=1000, random_state=123)
+    # cmfd_fake = cmfd[cmfd['label'] == 1].sample(n=1800, random_state=123)
+    # cmfd = pd.concat([cmfd_real, cmfd_fake]).sample(frac=1.0, random_state=123)
+    
+    nist_extend = pd.read_csv('nist_extend.csv').sample(frac=1.0, random_state=123)
+    # # nist_extend_real = nist_extend[nist_extend['label'] == 0].sample(n=1000, random_state=123)
+    # # nist_extend_fake = nist_extend[nist_extend['label'] == 1].sample(n=1500, random_state=123)
+    # # nist_extend = pd.concat([nist_extend_real, nist_extend_fake]).sample(frac=1.0, random_state=123)
+    
+    coverage_extend = pd.read_csv('coverage_extend.csv').sample(frac=1.0, random_state=123)
+    # # coverage_extend_real = coverage_extend[coverage_extend['label'] == 0].sample(n=800, random_state=123)
+    # # coverage_extend_fake = coverage_extend[coverage_extend['label'] == 1].sample(n=800, random_state=123)
+    # # coverage_extend = pd.concat([coverage_extend_real, coverage_extend_fake]).sample(frac=1.0, random_state=123)
+            
+    df_full = pd.concat([combo_all_df, nist_extend, coverage_extend])
+    df_full.insert(0, 'image', -1)
+
+    df_128 = pd.read_csv('combo_all_128.csv').sample(frac=1.0, random_state=123)
+
+    df = pd.concat([df_full, df_128])
+    print(df.groupby('root_dir').label.value_counts())
+
     acc = AverageMeter()
     f1 = AverageMeter()
     loss = AverageMeter()
     auc = AverageMeter()
-    for i in [0]:
+    for i in range(1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"RESUME[05|03_02|37|25]_COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(using pretrain)COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
@@ -515,4 +462,3 @@ if __name__ == "__main__":
     print(f'FINAL F1 : {f1.avg}')
     print(f'FINAL LOSS : {loss.avg}')
     print(f'FINAL AUC : {auc.avg}')
-

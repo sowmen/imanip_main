@@ -1,21 +1,13 @@
-import os
-import random
 import numpy as np
 import pandas as pd
-import cv2
-import math
+from tqdm import tqdm
 
 import torch
 from torch.utils.data import Dataset
-from albumentations.pytorch.functional import img_to_tensor
-import albumentations
-from albumentations import augmentations
 
-from segmentation.timm_efficientnet import EfficientNet
-from image_ensemble import ensemble
 
 class Classifier_Dataset(Dataset):
-    def __init__(self, dataframe, mode, val_fold, test_fold, root_dir, 
+    def __init__(self, dataframe, mode, val_fold, test_fold, 
                  label_smoothing=0.1, equal_sample=False
     ):
 
@@ -24,7 +16,6 @@ class Classifier_Dataset(Dataset):
         self.mode = mode
         self.val_fold = val_fold
         self.test_fold = test_fold
-        self.root_dir = root_dir
         self.label_smoothing = label_smoothing
         self.equal_sample = equal_sample
 
@@ -39,29 +30,36 @@ class Classifier_Dataset(Dataset):
         if self.equal_sample:
             rows = self._equalize(rows)
 
+        self.data = []
+
+        for row in tqdm(rows.values):
+            _, label, _, _, _, feature = row
+
+            feature_array = torch.load(feature)
+            self.data.append((feature_array, label))
+
+        np.random.shuffle(self.data)
+
         print(
-            "real:{}, fakes:{}, mode = {}".format(
+            "\n\nreal:{}, fakes:{}, mode = {}".format(
                 len(rows[rows["label"] == 0]), len(rows[rows["label"] == 1]), self.mode
             )
         )
-        self.data = rows.values
-        np.random.shuffle(self.data)
         
     def __len__(self):
         return len(self.data)
 
+
     def __getitem__(self, index: int):
-        fname, label, fold = self.data[index]
+        feat_tensor, label = self.data[index]
  
         if self.label_smoothing:
             label = np.clip(label, self.label_smoothing, 1 - self.label_smoothing)
 
-        tensor = torch.load(os.path.join(self.root_dir, fname)).cpu()
-        B,C,H,W = tensor.shape
-        # tensor = tensor.view(-1,H,W)
-        tensor = torch.nn.functional.adaptive_avg_pool2d(tensor, 1).squeeze()
+        feat_tensor = feat_tensor.view(-1)
         
-        return {"tensor": tensor, "label": label}
+        return {"tensor": feat_tensor, "label": label}
+
 
     def _equalize(self, rows: pd.DataFrame) -> pd.DataFrame:
         """
@@ -73,8 +71,8 @@ class Classifier_Dataset(Dataset):
         num_fake = fakes["label"].count()
         num_real = real["label"].count()
 
-        if int(num_fake * 1.5) <= num_real:
-            real = real.sample(n=int(num_fake * 1.5), replace=False)
-        else:
+        if num_fake < num_real:
             real = real.sample(n=num_fake, replace=False)
+        else:
+            fakes = fakes.sample(n=num_real, replace=False)
         return pd.concat([real, fakes])
