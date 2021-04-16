@@ -19,7 +19,7 @@ def optimize_hyperparams(X, y, params):
     """
     # Optimize hyper-parameters
     model = svm.SVC()
-    model_grid_search = GridSearchCV(model, params, cv=10, iid=False, n_jobs=-1, verbose=10)
+    model_grid_search = GridSearchCV(model, params, cv=10, n_jobs=-1, verbose=10)
     model_grid_search.fit(X, y)
     print("Optimal hyper-parameters: ", model_grid_search.best_params_)
     print("Accuracy :", model_grid_search.best_score_)
