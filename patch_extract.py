@@ -223,7 +223,6 @@ def extract_tampered(param, increment, root_dir, out_dir, **kwargs):
     # print("Number of patches and masks: " + str(len(Images)) + " " + str(len(Masks)) + " " + dir)
     if(len(patches) > 50):
         patches = random.sample(patches, 50)
-
     for i, (im, ms) in enumerate(patches):
         # print(i, (float(cv2.countNonZero(ms) / (ms.shape[0] * ms.shape[1]))* 100.0))
         cv2.imwrite(os.path.join(dir, f"{i}.png"), im)

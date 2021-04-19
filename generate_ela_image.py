@@ -17,7 +17,7 @@ def ELA(param, DIR_ROOT):
 
     ROOT = os.path.join(DIR_ROOT, root_dir)
     
-    TEMP = os.path.join(ROOT, img_path[:-4]+'ela_' + 'temp.jpg')
+    TEMP = os.path.join(ROOT, ela_path[:-4]+'_' + 'temp.jpg')
     SCALE = 25
     original = Image.open(os.path.join(ROOT, img_path))
     try:
@@ -43,7 +43,7 @@ def ELA(param, DIR_ROOT):
 
 def main():
 
-    df = pd.read_csv('nist_extend.csv')
+    df = pd.read_csv('dataset_csv/defacto_inpainting.csv')
     DIR_ROOT = "Image_Manipulation_Dataset"
 
     params = []
