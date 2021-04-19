@@ -101,13 +101,14 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     )
     train_geo_aug = albumentations.Compose(
         [
-            # augmentations.geometric.resize.Resize(512, 512, always_apply=True),
+            augmentations.geometric.resize.Resize(512, 512, always_apply=True),
             albumentations.HorizontalFlip(p=0.5),
             albumentations.VerticalFlip(p=0.5),
             albumentations.RandomRotate90(p=0.3),
             albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
-            # augmentations.transforms.RandomGridShuffle(p=0.45),
+            augmentations.geometric.transforms.Perspective(p=0.3),
             augmentations.transforms.Cutout(num_holes=8, max_h_size=12, max_w_size=12),
+            augmentations.transforms.RandomGridShuffle(p=0.35),            
             # albumentations.OneOf([
             #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
             #     albumentations.GridDistortion(p=0.5),
@@ -140,7 +141,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         imgaug_augment=train_imgaug,
         geo_augment=train_geo_aug
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=6, pin_memory=True, drop_last=False)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -150,7 +151,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         patch_size=patch_size,
         transforms_normalize=transforms_normalize,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=6, pin_memory=True, drop_last=False)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -160,7 +161,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         patch_size=patch_size,
         transforms_normalize=transforms_normalize,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=6, pin_memory=True, drop_last=False)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
@@ -447,7 +448,7 @@ if __name__ == "__main__":
     for i in range(1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(using pretrain)COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(full+128)COMBO_ALL_{patch_size}" + config_defaults["model"],
             df=df,
             patch_size=patch_size,
             VAL_FOLD=i,
