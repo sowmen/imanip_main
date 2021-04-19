@@ -47,14 +47,14 @@ TEST_FOLD = 1
 
 
 def train(name, df, patch_size, VAL_FOLD=0, resume=False):
-    now = datetime.now()
-    dt_string = now.strftime("%d|%m_%H|%M|%S")
+    dt_string = datetime.now().strftime("%d|%m_%H|%M|%S")
     print("Starting -->", dt_string)
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    wandb.init(
-        project="imanip", config=config_defaults, name=f"{name},{dt_string}",
-    )
+    os.makedirs('checkpoint', exist_ok=True)
+    run = f"{name}_[{dt_string}]"
+    
+    wandb.init(project="imanip", config=config_defaults, name=run)
     config = wandb.config
 
 
@@ -62,10 +62,9 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     
     encoder = SRM_Classifer(encoder_checkpoint='weights/Changed classifier+COMBO_ALL_FULLSRM+ELA_[08|03_21|22|09].h5', freeze_encoder=True)
     model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
-    
+    print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     
     SRM_FLAG=1
-    print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     
 
     wandb.save('segmentation/merged_net.py')
@@ -73,69 +72,9 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     wandb.save('dataset.py')
     
     
-    #####################################################################################################################
-    train_imgaug  = iaa.Sequential(
-        [
-            iaa.SomeOf((0, 5),
-                [   
-                    iaa.OneOf([
-                        iaa.JpegCompression(compression=(10, 60)),
-                        iaa.GaussianBlur((0, 1.75)), # blur images with a sigma between 0 and 3.0
-                        iaa.AverageBlur(k=(2, 7)), # blur image using local means with kernel sizes between 2 and 7
-                        iaa.MedianBlur(k=(3, 7)), # blur image using local medians with kernel sizes between 2 and 7
-                    ]),
-                    iaa.Sharpen(alpha=(0, 1.0), lightness=(0.75, 1.5)), # sharpen images
-                    iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5), # add gaussian noise to images
-                    # iaa.Sometimes(0.3, iaa.Invert(0.05, per_channel=True)), # invert color channels
-                    # iaa.Add((-10, 10), per_channel=0.5), # change brightness of images (by -10 to 10 of original value)
-                    iaa.AddToHueAndSaturation((-20, 20)), # change hue and saturation
-                    iaa.LinearContrast((0.5, 2.0), per_channel=0.5), # improve or worsen the contrast
-                    # # either change the brightness of the whole image (sometimes
-                    # # per channel) or change the brightness of subareas
-                    iaa.Sometimes(0.6,
-                        iaa.OneOf([
-                            iaa.Multiply((0.5, 1.5), per_channel=0.5),
-                            iaa.MultiplyAndAddToBrightness(mul=(0.5, 2.5), add=(-10,10)),
-                            iaa.MultiplyHueAndSaturation(),
-                            # iaa.BlendAlphaFrequencyNoise(
-                            #     exponent=(-4, 0),
-                            #     foreground=iaa.Multiply((0.5, 1.5), per_channel=True),
-                            #     background=iaa.LinearContrast((0.5, 2.0))
-                            # )
-                        ])
-                    ),
-                ], random_order=True
-            )
-        ], random_order=True
-    )
-    train_geo_aug = albumentations.Compose(
-        [
-            albumentations.HorizontalFlip(p=0.5),
-            albumentations.VerticalFlip(p=0.5),
-            albumentations.RandomRotate90(p=0.1),
-            albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
-            # albumentations.OneOf([
-            #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
-            #     albumentations.GridDistortion(p=0.5),
-            #     albumentations.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
-            # ], p=0.7),
-        ],
-        additional_targets={'ela':'image'}
-    )
-    ####################################################################################################################
-
-    normalize = {
-        "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
-        "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
-    }
-
-    transforms_normalize = albumentations.Compose(
-        [
-            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.transforms.ToTensorV2()
-        ],
-        additional_targets={'ela':'image'}
-    )
+    train_imgaug, train_geo_aug = get_train_transforms()
+    transforms_normalize = get_transforms_normalize()
+    
 
     #region SIMULATION
     # trans = transforms.Compose([
@@ -149,14 +88,13 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     # valid_loader = DataLoader(val_set, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
     #endregion
 
-    # -------------------------------- CREATE DATASET and DATALOADER --------------------------
+    #region ########################-- CREATE DATASET and DATALOADER --########################
     train_dataset = DATASET(
         dataframe=df,
         mode="train",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         patch_size=patch_size,
-        resize=256,
         transforms_normalize=transforms_normalize,
         imgaug_augment=train_imgaug,
         geo_augment=train_geo_aug
@@ -169,7 +107,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         patch_size=patch_size,
-        resize=256,
         transforms_normalize=transforms_normalize,
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
@@ -180,29 +117,26 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         patch_size=patch_size,
-        resize=256,
         transforms_normalize=transforms_normalize,
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
+    #endregion ######################################################################################
+
+
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
-
-    model = nn.DataParallel(model)
-    model.to(device)
-
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         patience=config.schedule_patience,
         mode="min",
         factor=config.schedule_factor,
     )
-
-    bce = nn.BCEWithLogitsLoss()
-    dice = losses.DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
-    criterion = losses.JointLoss(bce, dice)
-
+    criterion = get_lossfn()
     es = EarlyStopping(patience=20, mode="min")
 
+
+    model = nn.DataParallel(model).to(device)
+    
     # wandb.watch(model, log_freq=50, log='all')
 
     start_epoch = 0
@@ -218,12 +152,12 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        if epoch == 4:
-            model.module.encoder.unfreeze()
+        # if epoch == 4:
+        #     model.module.encoder.unfreeze()
 
         train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG)
-
         valid_metrics = valid_epoch(model, valid_loader, criterion,  epoch)
+        
         scheduler.step(valid_metrics["valid_loss_segmentation"])
 
         print(
@@ -240,7 +174,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         es(
             valid_metrics["valid_loss_segmentation"],
             model,
-            model_path=os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"),
+            model_path=os.path.join(OUTPUT_DIR, f"{run}.h5"),
         )
         if es.early_stop:
             print("Early stopping")
@@ -252,20 +186,21 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             'optimizer_state_dict' : optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
         }
-        torch.save(checkpoint, os.path.join('checkpoint', f"{name}_[{dt_string}].pt"))
+        torch.save(checkpoint, os.path.join('checkpoint', f"{run}.pt"))
 
-        gc.collect()
 
-    if os.path.exists(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5")):
-        print(model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))))
+    if os.path.exists(os.path.join(OUTPUT_DIR, f"{run}.h5")):
+        print(model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{run}.h5"))))
         print("LOADED FOR TEST")
 
     test_metrics = test(model, test_loader, criterion)
-    wandb.save(os.path.join(OUTPUT_DIR, f"{name}_[{dt_string}].h5"))
+    wandb.save(os.path.join(OUTPUT_DIR, f"{run}.h5"))
 
     return test_metrics
     
-def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
+    
+    
+def train_epoch(model, train_loader, optimizer, criterion, epoch):
     model.train()
 
     segmentation_loss = AverageMeter()
@@ -288,13 +223,14 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
 
         optimizer.step()
 
-        if SRM_FLAG == 1:
-            bayer_mask = torch.zeros(3,3,5,5).cuda()
-            bayer_mask[:,:,5//2, 5//2] = 1
-            bayer_weight = model.module.encoder.bayer_conv.weight * (1-bayer_mask)
-            bayer_weight = (bayer_weight / torch.sum(bayer_weight, dim=(2,3), keepdim=True)) + 1e-7
-            bayer_weight -= bayer_mask
-            model.module.encoder.bayer_conv.weight = nn.Parameter(bayer_weight)
+        ############## SRM Step ###########
+        bayer_mask = torch.zeros(3,3,5,5).cuda()
+        bayer_mask[:, :, 5//2, 5//2] = 1
+        bayer_weight = model.module.encoder.bayer_conv.weight * (1-bayer_mask)
+        bayer_weight = (bayer_weight / torch.sum(bayer_weight, dim=(2,3), keepdim=True)) + 1e-7
+        bayer_weight -= bayer_mask
+        model.module.encoder.bayer_conv.weight = nn.Parameter(bayer_weight)
+        ###################################
             
         # ---------------------Batch Loss Update-------------------------
         segmentation_loss.update(loss_segmentation.item(), train_loader.batch_size)
@@ -312,8 +248,6 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG):
 
             scores.update(gt, out_mask)
 
-        gc.collect()
-        # torch.cuda.empty_cache()
 
     dice2, dice_neg, dice_pos, iou2 = seg_metrics.epoch_score_log("TRAIN", scores)
     train_metrics = {
@@ -464,9 +398,78 @@ def test(model, test_loader, criterion):
     return test_metrics
     
 
-def expand_prediction(arr):
-    arr_reshaped = arr.reshape(-1, 1)
-    return np.clip(np.concatenate((1.0 - arr_reshaped, arr_reshaped), axis=1), 0.0, 1.0)
+def get_train_transforms():
+    train_imgaug  = iaa.Sequential(
+        [
+            iaa.SomeOf((0, 5),
+                [   
+                    iaa.OneOf([
+                        iaa.JpegCompression(compression=(10, 60)),
+                        iaa.GaussianBlur((0, 1.75)), # blur images with a sigma between 0 and 3.0
+                        iaa.AverageBlur(k=(2, 7)), # blur image using local means with kernel sizes between 2 and 7
+                        iaa.MedianBlur(k=(3, 7)), # blur image using local medians with kernel sizes between 2 and 7
+                    ]),
+                    iaa.Sharpen(alpha=(0, 1.0), lightness=(0.75, 1.5)), # sharpen images
+                    iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5), # add gaussian noise to images
+                    # iaa.Sometimes(0.3, iaa.Invert(0.05, per_channel=True)), # invert color channels
+                    # iaa.Add((-10, 10), per_channel=0.5), # change brightness of images (by -10 to 10 of original value)
+                    iaa.AddToHueAndSaturation((-20, 20)), # change hue and saturation
+                    iaa.LinearContrast((0.5, 2.0), per_channel=0.5), # improve or worsen the contrast
+                    # # either change the brightness of the whole image (sometimes
+                    # # per channel) or change the brightness of subareas
+                    iaa.Sometimes(0.6,
+                        iaa.OneOf([
+                            iaa.Multiply((0.5, 1.5), per_channel=0.5),
+                            iaa.MultiplyAndAddToBrightness(mul=(0.5, 2.5), add=(-10,10)),
+                            iaa.MultiplyHueAndSaturation(),
+                            # iaa.BlendAlphaFrequencyNoise(
+                            #     exponent=(-4, 0),
+                            #     foreground=iaa.Multiply((0.5, 1.5), per_channel=True),
+                            #     background=iaa.LinearContrast((0.5, 2.0))
+                            # )
+                        ])
+                    ),
+                ], random_order=True
+            )
+        ], random_order=True
+    )
+    train_geo_aug = albumentations.Compose(
+        [
+            albumentations.HorizontalFlip(p=0.5),
+            albumentations.VerticalFlip(p=0.5),
+            albumentations.RandomRotate90(p=0.1),
+            albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
+            # albumentations.OneOf([
+            #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
+            #     albumentations.GridDistortion(p=0.5),
+            #     albumentations.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
+            # ], p=0.7),
+        ],
+        additional_targets={'ela':'image'}
+    )
+    return train_imgaug, train_geo_aug
+
+def get_transforms_normalize():
+    normalize = {
+        "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
+        "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
+    }
+
+    transforms_normalize = albumentations.Compose(
+        [
+            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
+            albumentations.pytorch.transforms.ToTensorV2()
+        ],
+        additional_targets={'ela':'image'}
+    )
+    return transforms_normalize
+
+def get_lossfn():
+    bce = nn.BCEWithLogitsLoss()
+    dice = losses.DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
+    criterion = losses.JointLoss(bce, dice)
+    
+    return criterion
 
 
 if __name__ == "__main__":

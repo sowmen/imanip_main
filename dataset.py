@@ -104,49 +104,35 @@ class DATASET(Dataset):
 
     def __getitem__(self, index: int):
 
-        if '128' not in self.data[index][-1]: #self.patch_size == 'FULL':
-            _, image_patch, mask_patch, label, _, ela, root_dir = self.data[index]
-        else:
-            image_name, image_patch, mask_patch, label, _, ela, root_dir = self.data[index]
+        image_name, image_patch, mask_patch, label, _, ela, root_dir = self.data[index]
+        image_path = os.path.join(self.root_folder, root_dir, image_name, image_patch)
+        ela_path = os.path.join(self.root_folder, root_dir, image_name, ela)
 
         if self.label_smoothing:
             label = np.clip(label, self.label_smoothing, 1 - self.label_smoothing)
-
-        if '128' not in root_dir: #self.patch_size == 'FULL':
-            image_path = os.path.join(self.root_folder, root_dir, image_patch)
-            ela_path = os.path.join(self.root_folder, root_dir, ela)
-        else:
-            image_path = os.path.join(self.root_folder, root_dir, image_name, image_patch)
-            ela_path = os.path.join(self.root_folder, root_dir, image_name, ela)
-
-        if(not os.path.exists(ela_path)):
-            print(f"ELA Not Found : {ela_path}")
-        if(not os.path.exists(image_path)):
-            print(f"Image Not Found : {image_path}")
+            
+            
+        if(not os.path.exists(ela_path)): print(f"ELA Not Found : {ela_path}")
+        if(not os.path.exists(image_path)): print(f"Image Not Found : {image_path}")
 
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
-        ela_image = cv2.imread(ela_path, cv2.IMREAD_COLOR)
-
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
+        ela_image = cv2.imread(ela_path, cv2.IMREAD_COLOR)
         ela_image = cv2.cvtColor(ela_image, cv2.COLOR_BGR2RGB)
         
 
         if not isinstance(mask_patch, str) and np.isnan(mask_patch):
             mask_image = np.zeros((image.shape[0], image.shape[1])).astype('uint8')
         else:
-            if '128' not in root_dir: #self.patch_size == 'FULL':
-                mask_path = os.path.join(self.root_folder, root_dir, mask_patch)
-            else:
-                mask_path = os.path.join(self.root_folder, root_dir, image_name, mask_patch)
+            mask_path = os.path.join(self.root_folder, root_dir, image_name, mask_patch)
 
-            if(not os.path.exists(mask_path)):
-                print(f"Mask Not Found : {mask_path}")
-            mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+            if(not os.path.exists(mask_path)): print(f"Mask Not Found : {mask_path}")
             
-            # ----- For NIST16 Invert Mask Here ----- #
+            mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
             if('NIST' in root_dir):
                 mask_image = 255 - mask_image
-            ##########################################
+
 
         if self.imgaug_augment:
             try :
