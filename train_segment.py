@@ -64,8 +64,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     
-    SRM_FLAG=1
-    
 
     wandb.save('segmentation/merged_net.py')
     wandb.save('segmentation/timm_srm_unetpp.py')
@@ -206,8 +204,9 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
     segmentation_loss = AverageMeter()
     dice = AverageMeter()
     jaccard = AverageMeter()
+    pixel_auc = AverageMeter()
 
-    scores = seg_metrics.DiceMeter()
+    scores = seg_metrics.SegMeter()
 
     for batch in tqdm(train_loader):
         images = batch["image"].to(device)
@@ -246,7 +245,10 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
             batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
             jaccard.update(batch_jaccard, train_loader.batch_size)
 
-            scores.update(gt, out_mask)
+            scores.update(out_mask, gt)
+
+            batch_pixel_auc = seg_metrics.batch_pixel_auc(out_mask, gt)
+            pixel_auc.update(batch_pixel_auc, train_loader.batch_size)
 
 
     dice2, dice_neg, dice_pos, iou2 = seg_metrics.epoch_score_log("TRAIN", scores)
@@ -258,7 +260,8 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         "train_dice2" : dice2,
         "train_dice_pos" : dice_pos,
         "train_dice_neg" : dice_neg,
-        "train_iou2" : iou2
+        "train_iou2" : iou2,
+        "train_pixel_auc" : pixel_auc.avg
     }
     wandb.log(train_metrics)
 
@@ -271,7 +274,8 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     segmentation_loss = AverageMeter()
     dice = AverageMeter()
     jaccard = AverageMeter()
-    scores = seg_metrics.DiceMeter()
+    pixel_auc = AverageMeter()
+    scores = seg_metrics.SegMeter()
 
     example_images = []
     
@@ -314,7 +318,10 @@ def valid_epoch(model, valid_loader, criterion, epoch):
                     "worst_gt" : gt[worst_dice_idx],
                 })
             
-            scores.update(gt, out_mask)
+            scores.update(out_mask, gt)
+
+            batch_pixel_auc = seg_metrics.batch_pixel_auc(out_mask, gt)
+            pixel_auc.update(batch_pixel_auc, train_loader.batch_size)
 
             gc.collect()
 
@@ -341,7 +348,8 @@ def valid_epoch(model, valid_loader, criterion, epoch):
         "valid_dice2" : dice2,
         "valid_dice_pos" : dice_pos,
         "valid_dice_neg" : dice_neg,
-        "valid_iou2" : iou2
+        "valid_iou2" : iou2,
+        "valid_pixel_auc" : pixel_auc.avg
     }
     wandb.log(valid_metrics)
 
@@ -354,7 +362,8 @@ def test(model, test_loader, criterion):
     segmentation_loss = AverageMeter()
     dice = AverageMeter()
     jaccard = AverageMeter()
-    scores = seg_metrics.DiceMeter()
+    pixel_auc = AverageMeter()
+    scores = seg_metrics.SegMeter()
 
     with torch.no_grad():
         for batch in tqdm(test_loader):
@@ -380,7 +389,10 @@ def test(model, test_loader, criterion):
             batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
             jaccard.update(batch_jaccard, test_loader.batch_size)
 
-            scores.update(gt, out_mask)
+            scores.update(out_mask, gt)
+
+            batch_pixel_auc = seg_metrics.batch_pixel_auc(out_mask, gt)
+            pixel_auc.update(batch_pixel_auc, train_loader.batch_size)
 
             gc.collect()
 
@@ -392,7 +404,8 @@ def test(model, test_loader, criterion):
         "test_dice2" : dice2,
         "test_dice_pos" : dice_pos,
         "test_dice_neg" : dice_neg,
-        "test_iou2" : iou2
+        "test_iou2" : iou2,
+        "test_pixel_auc" : pixel_auc.avg
     }
     wandb.log(test_metrics)
     return test_metrics
@@ -466,10 +479,10 @@ def get_transforms_normalize():
 
 def get_lossfn():
     bce = nn.BCEWithLogitsLoss()
-    dice = losses.DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
-    criterion = losses.JointLoss(bce, dice)
+    # dice = losses.DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
+    # criterion = losses.JointLoss(bce, dice)
     
-    return criterion
+    return bce #criterion
 
 
 if __name__ == "__main__":
