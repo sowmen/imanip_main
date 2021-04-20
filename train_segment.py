@@ -488,7 +488,23 @@ def get_lossfn():
 if __name__ == "__main__":
     patch_size = "64"
 
-    df = pd.read_csv(f"dataset_csv/coverage_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
+    combo_all_df = pd.read_csv('combo_all_FULL.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
+    nist_extend = pd.read_csv('nist_extend.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
+    coverage_extend = pd.read_csv('coverage_extend.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
+    defacto_cp = pd.read_csv('dataset_csv/defacto_copy_move.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
+    defacto_inpaint = pd.read_csv('dataset_csv/defacto_inpainting.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
+    defacto_s1 = pd.read_csv('dataset_csv/defacto_splicing1.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
+    defacto_s2 = pd.read_csv('dataset_csv/defacto_splicing2.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
+    defacto_s3 = pd.read_csv('dataset_csv/defacto_splicing3.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
+    
+
+    df = pd.concat([combo_all_df, nist_extend, coverage_extend, defacto_cp, 
+                    defacto_inpaint, defacto_s1, defacto_s2, defacto_s3])
+    df.insert(0, 'image', '')
+
+    print(df.groupby('root_dir').label.value_counts())
+
+
     dice = AverageMeter()
     jaccard = AverageMeter()
     loss = AverageMeter()
