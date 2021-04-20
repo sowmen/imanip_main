@@ -43,7 +43,7 @@ def ELA(param, DIR_ROOT):
 
 def main():
 
-    df = pd.read_csv('dataset_csv/defacto_inpainting.csv')
+    df = pd.read_csv('dataset_csv/defacto_splicing7.csv')
     DIR_ROOT = "Image_Manipulation_Dataset"
 
     params = []

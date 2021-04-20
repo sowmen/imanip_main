@@ -122,7 +122,7 @@ class DATASET(Dataset):
         ela_image = cv2.cvtColor(ela_image, cv2.COLOR_BGR2RGB)
         
 
-        if not isinstance(mask_patch, str) and np.isnan(mask_patch):
+        if mask_patch == '':
             mask_image = np.zeros((image.shape[0], image.shape[1])).astype('uint8')
         else:
             mask_path = os.path.join(self.root_folder, root_dir, image_name, mask_patch)
