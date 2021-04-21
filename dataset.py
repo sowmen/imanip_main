@@ -18,7 +18,7 @@ from utils import get_ela
 
 
 class DATASET(Dataset):
-    def __init__(self, dataframe, mode, val_fold, test_fold, patch_size, combo=True, imgaug_augment=None,
+    def __init__(self, dataframe, mode, val_fold, test_fold, imgaug_augment=None,
                  transforms_normalize=None, geo_augment=None, equal_sample=True, segment=False
     ):
 
@@ -27,9 +27,7 @@ class DATASET(Dataset):
         self.mode = mode
         self.val_fold = val_fold
         self.test_fold = test_fold
-        self.patch_size = patch_size
         self.resize = 256
-        self.combo = combo
         self.imgaug_augment = imgaug_augment
         self.geo_augment = geo_augment
         self.transforms_normalize = transforms_normalize

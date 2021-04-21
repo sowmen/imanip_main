@@ -46,7 +46,7 @@ config_defaults = {
 TEST_FOLD = 1
 
 
-def train(name, df, patch_size, VAL_FOLD=0, resume=False):
+def train(name, df, VAL_FOLD=0, resume=False):
     dt_string = datetime.now().strftime("%d|%m_%H|%M|%S")
     print("Starting -->", dt_string)
 
@@ -60,7 +60,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
 
     # model = smp.DeepLabV3('resnet34', classes=1, encoder_weights='imagenet')
     
-    encoder = SRM_Classifer(encoder_checkpoint='weights/Changed classifier+COMBO_ALL_FULLSRM+ELA_[08|03_21|22|09].h5', freeze_encoder=True)
+    encoder = SRM_Classifer(encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5', freeze_encoder=True)
     model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     
@@ -92,32 +92,29 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         mode="train",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
-        patch_size=patch_size,
         transforms_normalize=transforms_normalize,
         imgaug_augment=train_imgaug,
         geo_augment=train_geo_aug
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     valid_dataset = DATASET(
         dataframe=df,
         mode="val",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
-        patch_size=patch_size,
         transforms_normalize=transforms_normalize,
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     test_dataset = DATASET(
         dataframe=df,
         mode="test",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
-        patch_size=patch_size,
         transforms_normalize=transforms_normalize,
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
     #endregion ######################################################################################
 
 
@@ -486,24 +483,32 @@ def get_lossfn():
 
 
 if __name__ == "__main__":
-    patch_size = "64"
 
-    combo_all_df = pd.read_csv('combo_all_FULL.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
-    nist_extend = pd.read_csv('nist_extend.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
-    coverage_extend = pd.read_csv('coverage_extend.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
-    defacto_cp = pd.read_csv('dataset_csv/defacto_copy_move.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
-    defacto_inpaint = pd.read_csv('dataset_csv/defacto_inpainting.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
-    defacto_s1 = pd.read_csv('dataset_csv/defacto_splicing1.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
-    defacto_s2 = pd.read_csv('dataset_csv/defacto_splicing2.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
-    defacto_s3 = pd.read_csv('dataset_csv/defacto_splicing3.csv', keep_default_na=False).sample(frac=1.0, random_state=123)
+    # combo_all_df = get_dataframe('combo_all_FULL.csv', folds=None)
+    casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
+    imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
+    cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
+    nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
+    coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
+    
+    nist_extend = get_dataframe('nist_extend.csv', folds=12)
+    coverage_extend = get_dataframe('coverage_extend.csv', folds=12)
+    defacto_cp = get_dataframe('dataset_csv/defacto_copy_move.csv', folds=-1)
+    defacto_inpaint = get_dataframe('dataset_csv/defacto_inpainting.csv', folds=-1)
+    defacto_s1 = get_dataframe('dataset_csv/defacto_splicing1.csv', folds=-1)
+    defacto_s2 = get_dataframe('dataset_csv/defacto_splicing2.csv', folds=-1)
+    defacto_s3 = get_dataframe('dataset_csv/defacto_splicing3.csv', folds=-1)
     
 
-    df = pd.concat([combo_all_df, nist_extend, coverage_extend, defacto_cp, 
+    df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full, \
+                    nist_extend, coverage_extend, defacto_cp, \
                     defacto_inpaint, defacto_s1, defacto_s2, defacto_s3])
-    df.insert(0, 'image', '')
+    df_full.insert(0, 'image', '')
 
-    print(df.groupby('root_dir').label.value_counts())
-
+    # with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+    #     print(df_full.fold.value_counts())
+    #     print('------')
+    #     print(df_full.groupby('fold').root_dir.value_counts())
 
     dice = AverageMeter()
     jaccard = AverageMeter()
@@ -511,9 +516,8 @@ if __name__ == "__main__":
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(coverage)InvCClass_COMBO_ALL_{patch_size}" + config_defaults["model"],
-            df=df,
-            patch_size=patch_size,
+            name=f"defacto+pretrain" + config_defaults["model"],
+            df=df_full,
             VAL_FOLD=i,
             resume=False,
         )

@@ -131,7 +131,22 @@ def image2np(image: torch.Tensor) -> np.ndarray:
 
 
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold
+
+def get_dataframe(csv, folds=10):
+    df = pd.read_csv(csv, keep_default_na=False).sample(frac=1.0, random_state=123)
+    
+    if folds is not None:
+        df['fold'] = -1
+        
+        if folds > 0:
+            y = df.label.values
+            kf = StratifiedKFold(n_splits=folds)
+
+            for f, (t_, v_) in enumerate(kf.split(X=df, y=y)):
+                df.loc[v_, 'fold'] = f
+        
+    return df
 
 def stratified_train_val_test_split(df_input, stratify_colname='y',
                                     frac_train=0.8, frac_val=0.2, frac_test=0.2,
