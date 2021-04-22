@@ -2,6 +2,7 @@ import os
 import random
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 from datetime import datetime
 import gc
@@ -214,7 +215,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
 
     scores = seg_metrics.SegMeter()
 
-    for batch in tqdm(train_loader):
+    for batch in tqdm(train_loader, desc=f"Train epoch {epoch}"):
         images = batch["image"].to(device)
         elas = batch["ela"].to(device)
         gt = batch["mask"].to(device)
@@ -251,8 +252,6 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
             batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
             jaccard.update(batch_jaccard, train_loader.batch_size)
 
-            scores.update(out_mask, gt)
-
             try:
                 batch_pixel_auc = seg_metrics.batch_pixel_auc(out_mask, gt)
                 pixel_auc.update(batch_pixel_auc, train_loader.batch_size)
@@ -262,9 +261,12 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
                 for i, y in enumerate(gt):
                     yy = y.numpy().ravel() >= 0.5
                     if(np.count_nonzero(yy) == 0): 
-                        print(batch["mask_path"][i], y.shape)
+                        print(batch["mask_path"][i], torch.count_nonzero(y), y.shape, y.type())
+                        
                 exit()
-
+            
+            scores.update(out_mask, gt)
+            
 
     dice2, dice_neg, dice_pos, iou2 = seg_metrics.epoch_score_log("TRAIN", scores)
     train_metrics = {
@@ -295,7 +297,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     example_images = []
     
     with torch.no_grad():
-        for batch in tqdm(valid_loader):
+        for batch in tqdm(valid_loader, desc=f"Valid epoch {epoch}"):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)

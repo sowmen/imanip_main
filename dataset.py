@@ -124,6 +124,7 @@ class DATASET(Dataset):
         ela_image = augmentations.geometric.functional.resize(ela_image, self.resize, self.resize, cv2.INTER_CUBIC)
         mask_image = augmentations.geometric.functional.resize(mask_image, self.resize, self.resize, cv2.INTER_CUBIC)
 
+        
         ###--- Generate DFT DWT Vector -----------------
         # dft_dwt_vector = generate_dft_dwt_vector(image)
         # dft_dwt_vector = torch.from_numpy(dft_dwt_vector).float()
@@ -151,7 +152,9 @@ class DATASET(Dataset):
         #     tensor_ela = data["ela"]
         # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
-
+        # if(np.count_nonzero(tensor_image.numpy().ravel() >= 0.5) == 0): 
+        #     print(mask_path)
+        #     print("Before", np.count())
         return {
             "image": tensor_image,
             "image_path" : image_path,
