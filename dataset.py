@@ -120,9 +120,9 @@ class DATASET(Dataset):
             ela_image = data["ela"]
         
 
-        image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
-        ela_image = augmentations.geometric.functional.resize(ela_image, self.resize, self.resize, cv2.INTER_AREA)
-        mask_image = augmentations.geometric.functional.resize(mask_image, self.resize, self.resize, cv2.INTER_AREA)
+        image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_CUBIC)
+        ela_image = augmentations.geometric.functional.resize(ela_image, self.resize, self.resize, cv2.INTER_CUBIC)
+        mask_image = augmentations.geometric.functional.resize(mask_image, self.resize, self.resize, cv2.INTER_CUBIC)
 
         ###--- Generate DFT DWT Vector -----------------
         # dft_dwt_vector = generate_dft_dwt_vector(image)
@@ -189,7 +189,10 @@ class DATASET(Dataset):
     
     def _filter_mask(self, data, count):
         temp_data = []
+        
         removed_count = 0
+        if os.path.exists("filtermask50.txt"):
+            with open("filtermask50.txt", "r") as fp: lines = fp.read().splitlines()
         
         pbar = tqdm(data, desc="Filtering empty mask")
         for row in pbar:
@@ -199,13 +202,17 @@ class DATASET(Dataset):
                 mask_path = os.path.join(self.root_folder, root_dir, image_name, mask_patch)
                 if(not os.path.exists(mask_path)): print(f"Mask Not Found : {mask_path}")
                 
-                mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-                if('NIST' in root_dir):
-                    mask_image = 255 - mask_image
+                flag = 0
+                if len(lines) > 0:
+                    if mask_path in lines: flag = 1
+                else:
+                    mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+                    if('NIST' in root_dir): mask_image = 255 - mask_image
 
-                mask_image = augmentations.geometric.functional.resize(mask_image, 256, 256, cv2.INTER_CUBIC)
-
-                if(np.count_nonzero(mask_image) < count):
+                    mask_image = augmentations.geometric.functional.resize(mask_image, 256, 256, cv2.INTER_CUBIC)
+                    if(np.count_nonzero(mask_image) < count): flag = 1
+                
+                if flag:
                     removed_count += 1
                     pbar.set_postfix({'removed': removed_count})
                     continue
