@@ -18,8 +18,8 @@ from utils import get_ela
 
 
 class DATASET(Dataset):
-    def __init__(self, dataframe, mode, val_fold, test_fold, imgaug_augment=None,
-                 transforms_normalize=None, geo_augment=None, equal_sample=True, segment=False
+    def __init__(self, dataframe, mode, val_fold, test_fold, nonzero_filter=50, imgaug_augment=None,
+                 transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False
     ):
 
         super().__init__()
@@ -32,8 +32,6 @@ class DATASET(Dataset):
         self.geo_augment = geo_augment
         self.transforms_normalize = transforms_normalize
         self.label_smoothing = 0.1
-        self.equal_sample = equal_sample
-        self.segment = segment # Returns only fake rows for segmentation
         self.root_folder = "Image_Manipulation_Dataset"
 
         # self.attn_mask_transforms = albumentations.Compose([
@@ -43,13 +41,6 @@ class DATASET(Dataset):
         #     albumentations.Normalize(mean=self.normalize['mean'], std=self.normalize['std'], p=1, always_apply=True),
         #     albumentations.pytorch.ToTensor()
         # ])
-
-        # if self.patch_size == 128 and self.combo:
-        #     df_without_cmfd_128 = self.dataframe[~self.dataframe['root_dir'].str.contains('CMFD')]
-        #     cmfd_128 = self.dataframe[self.dataframe['root_dir'].str.contains('CMFD')]
-        #     cmfd_128_real_sample = cmfd_128[cmfd_128['label'] == 0].sample(n=7000, random_state=123)
-        #     cmfd_128_fake_sample = cmfd_128[cmfd_128['label'] == 1].sample(n=7000, random_state=123)
-        #     self.dataframe = pd.concat([df_without_cmfd_128, cmfd_128_real_sample, cmfd_128_fake_sample])
         
 
         if self.mode == "train":
@@ -62,9 +53,9 @@ class DATASET(Dataset):
         #---- For checking. Get all rows -------#
         # rows = self.dataframe 
 
-        if self.equal_sample:
+        if equal_sample:
             rows = self._equalize(rows)
-        if self.segment:
+        if segment:
             rows = self._segment(rows)
 
         print(
@@ -75,6 +66,8 @@ class DATASET(Dataset):
 
         self.data = rows.values
         np.random.shuffle(self.data)
+        
+        self.data = self._filter_mask(self.data, nonzero_filter)
 
     def __len__(self):
         return len(self.data)
@@ -109,8 +102,10 @@ class DATASET(Dataset):
             mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
             if('NIST' in root_dir):
                 mask_image = 255 - mask_image
-
-
+                
+            if(np.count_nonzero(mask_image) < 50):
+                return None
+                
         if self.imgaug_augment:
             try :
                 image = self.imgaug_augment.augment_image(image)
@@ -159,7 +154,8 @@ class DATASET(Dataset):
 
         return {
             "image": tensor_image,
-            "image_path" : image_path, 
+            "image_path" : image_path,
+            "mask_path" : mask_path, 
             "label": label, 
             "mask": tensor_mask,
             "ela" : tensor_ela,
@@ -190,3 +186,30 @@ class DATASET(Dataset):
             Returns only fake rows for segmentation
         """
         return rows[rows["label"] == 1]
+    
+    def _filter_mask(self, data, count):
+        temp_data = []
+        removed_count = 0
+        
+        pbar = tqdm(data, desc="Filtering empty mask")
+        for row in pbar:
+            image_name, _, mask_patch, _, _, _, root_dir = row
+
+            if mask_patch != '':
+                mask_path = os.path.join(self.root_folder, root_dir, image_name, mask_patch)
+                if(not os.path.exists(mask_path)): print(f"Mask Not Found : {mask_path}")
+                
+                mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+                if('NIST' in root_dir):
+                    mask_image = 255 - mask_image
+
+                mask_image = augmentations.geometric.functional.resize(mask_image, 256, 256, cv2.INTER_CUBIC)
+
+                if(np.count_nonzero(mask_image) < count):
+                    removed_count += 1
+                    pbar.set_postfix({'removed': removed_count})
+                    continue
+                
+            temp_data.append(row)
+                
+        return temp_data

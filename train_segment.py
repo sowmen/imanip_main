@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 from collections import OrderedDict
 
 import albumentations
+from albumentations import augmentations as A
 import imgaug.augmenters as iaa
 import albumentations.pytorch
 from torchvision import transforms
@@ -24,6 +25,8 @@ import seg_metrics
 from pytorch_toolbelt import losses
 from utils import *
 
+import traceback
+
 # import segmentation_models_pytorch as smp
 from segmentation.timm_srm_unetpp import UnetPP
 from segmentation.merged_net import SRM_Classifer 
@@ -32,7 +35,7 @@ from sim_dataset import SimDataset
 OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
-    "epochs": 100,
+    "epochs": 10,
     "train_batch_size": 8,
     "valid_batch_size": 16,
     "optimizer": "adam",
@@ -48,11 +51,12 @@ TEST_FOLD = 1
 
 def train(name, df, VAL_FOLD=0, resume=False):
     dt_string = datetime.now().strftime("%d|%m_%H|%M|%S")
-    print("Starting -->", dt_string)
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     os.makedirs('checkpoint', exist_ok=True)
     run = f"{name}_[{dt_string}]"
+    
+    print("Starting -->", run)
     
     wandb.init(project="imanip", config=config_defaults, name=run)
     config = wandb.config
@@ -81,9 +85,9 @@ def train(name, df, VAL_FOLD=0, resume=False):
     # ])
 
     # train_set = SimDataset(2000, transform = trans)
-    # train_loader = DataLoader(train_set, batch_size=config.train_batch_size, shuffle=True, num_workers=8)
+    # train_loader = DataLoader(train_set, batch_size=config.train_batch_size, shuffle=True, num_workers=4)
     # val_set = SimDataset(500, transform = trans)
-    # valid_loader = DataLoader(val_set, batch_size=config.valid_batch_size, shuffle=False, num_workers=8)
+    # valid_loader = DataLoader(val_set, batch_size=config.valid_batch_size, shuffle=False, num_workers=4)
     #endregion
 
     #region ########################-- CREATE DATASET and DATALOADER --########################
@@ -92,8 +96,9 @@ def train(name, df, VAL_FOLD=0, resume=False):
         mode="train",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
+        segment=True,
         transforms_normalize=transforms_normalize,
-        imgaug_augment=train_imgaug,
+        imgaug_augment=None,
         geo_augment=train_geo_aug
     )
     train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
@@ -101,6 +106,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
     valid_dataset = DATASET(
         dataframe=df,
         mode="val",
+        segment=True,
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         transforms_normalize=transforms_normalize,
@@ -110,6 +116,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
     test_dataset = DATASET(
         dataframe=df,
         mode="test",
+        segment=True,
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         transforms_normalize=transforms_normalize,
@@ -150,7 +157,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
         # if epoch == 4:
         #     model.module.encoder.unfreeze()
 
-        train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG)
+        train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
         valid_metrics = valid_epoch(model, valid_loader, criterion,  epoch)
         
         scheduler.step(valid_metrics["valid_loss_segmentation"])
@@ -158,12 +165,14 @@ def train(name, df, VAL_FOLD=0, resume=False):
         print(
             f"TRAIN_LOSS = {train_metrics['train_loss_segmentation']}, \
             TRAIN_DICE = {train_metrics['train_dice']}, \
-            TRAIN_JACCARD = {train_metrics['train_jaccard']},"
+            TRAIN_JACCARD = {train_metrics['train_jaccard']}, \
+            TRAIN_PIXEL_AUC = {train_metrics['train_pixel_auc']}"
         )
         print(
             f"VALID_LOSS = {valid_metrics['valid_loss_segmentation']}, \
             VALID_DICE = {valid_metrics['valid_dice']}, \
-            VALID_JACCARD = {valid_metrics['valid_jaccard']},"
+            VALID_JACCARD = {valid_metrics['valid_jaccard']}, \
+            VALID_PIXEL_AUC = {valid_metrics['valid_pixel_auc']}"
         )
 
         es(
@@ -208,7 +217,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
     for batch in tqdm(train_loader):
         images = batch["image"].to(device)
         elas = batch["ela"].to(device)
-        gt = batch["mask"].unsqueeze(1).to(device)
+        gt = batch["mask"].to(device)
 
         optimizer.zero_grad()
         out_mask = model(images, elas)
@@ -244,8 +253,17 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
 
             scores.update(out_mask, gt)
 
-            batch_pixel_auc = seg_metrics.batch_pixel_auc(out_mask, gt)
-            pixel_auc.update(batch_pixel_auc, train_loader.batch_size)
+            try:
+                batch_pixel_auc = seg_metrics.batch_pixel_auc(out_mask, gt)
+                pixel_auc.update(batch_pixel_auc, train_loader.batch_size)
+            except ValueError as e:
+                print(traceback.print_exc())
+                print(e)
+                for i, y in enumerate(gt):
+                    yy = y.numpy().ravel() >= 0.5
+                    if(np.count_nonzero(yy) == 0): 
+                        print(batch["mask_path"][i], y.shape)
+                exit()
 
 
     dice2, dice_neg, dice_pos, iou2 = seg_metrics.epoch_score_log("TRAIN", scores)
@@ -280,7 +298,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
         for batch in tqdm(valid_loader):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
-            gt = batch["mask"].unsqueeze(1).to(device)
+            gt = batch["mask"].to(device)
             
             out_mask = model(images, elas)
             # out_mask = model(images)
@@ -300,7 +318,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             batch_jaccard, (mx_iou, best_iou__idx), (worst_iou, worst_idx) = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
             jaccard.update(batch_jaccard, valid_loader.batch_size)
 
-            if(np.random.rand() < 0.5 and len(example_images) < 10):
+            if(np.random.rand() < 0.5 and len(example_images) < 20):
                 images = images.cpu().detach()
                 example_images.append({
                     "best_image" : images[best_dice_idx],
@@ -318,7 +336,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             scores.update(out_mask, gt)
 
             batch_pixel_auc = seg_metrics.batch_pixel_auc(out_mask, gt)
-            pixel_auc.update(batch_pixel_auc, train_loader.batch_size)
+            pixel_auc.update(batch_pixel_auc, valid_loader.batch_size)
 
             gc.collect()
 
@@ -366,7 +384,7 @@ def test(model, test_loader, criterion):
         for batch in tqdm(test_loader):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
-            gt = batch["mask"].unsqueeze(1).to(device)
+            gt = batch["mask"].to(device)
 
             out_mask = model(images, elas)
             # out_mask = model(images)
@@ -389,7 +407,7 @@ def test(model, test_loader, criterion):
             scores.update(out_mask, gt)
 
             batch_pixel_auc = seg_metrics.batch_pixel_auc(out_mask, gt)
-            pixel_auc.update(batch_pixel_auc, train_loader.batch_size)
+            pixel_auc.update(batch_pixel_auc, test_loader.batch_size)
 
             gc.collect()
 
@@ -427,7 +445,7 @@ def get_train_transforms():
                     iaa.LinearContrast((0.5, 2.0), per_channel=0.5), # improve or worsen the contrast
                     # # either change the brightness of the whole image (sometimes
                     # # per channel) or change the brightness of subareas
-                    iaa.Sometimes(0.6,
+                    iaa.Sometimes(0.4,
                         iaa.OneOf([
                             iaa.Multiply((0.5, 1.5), per_channel=0.5),
                             iaa.MultiplyAndAddToBrightness(mul=(0.5, 2.5), add=(-10,10)),
@@ -445,10 +463,11 @@ def get_train_transforms():
     )
     train_geo_aug = albumentations.Compose(
         [
-            albumentations.HorizontalFlip(p=0.5),
-            albumentations.VerticalFlip(p=0.5),
-            albumentations.RandomRotate90(p=0.1),
-            albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
+            A.transforms.HorizontalFlip(p=0.5),
+            A.transforms.VerticalFlip(p=0.5),
+            albumentations.RandomRotate90(p=0.5),
+            A.geometric.transforms.Perspective(p=0.4),
+            # albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
             # albumentations.OneOf([
             #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
             #     albumentations.GridDistortion(p=0.5),
@@ -505,10 +524,10 @@ if __name__ == "__main__":
                     defacto_inpaint, defacto_s1, defacto_s2, defacto_s3])
     df_full.insert(0, 'image', '')
 
-    # with pd.option_context('display.max_rows', None, 'display.max_columns', None):
-    #     print(df_full.fold.value_counts())
-    #     print('------')
-    #     print(df_full.groupby('fold').root_dir.value_counts())
+    with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+        print(df_full.root_dir.value_counts())
+        # print('------')
+        # print(df_full.groupby('fold').root_dir.value_counts())
 
     dice = AverageMeter()
     jaccard = AverageMeter()
@@ -516,7 +535,7 @@ if __name__ == "__main__":
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"defacto+pretrain" + config_defaults["model"],
+            name=f"(defacto+pretrain+BCE)" + config_defaults["model"],
             df=df_full,
             VAL_FOLD=i,
             resume=False,

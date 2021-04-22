@@ -96,7 +96,7 @@ class EfficientNet(nn.Module):
 
             feat = self.head(x)
 
-            return feat, (start_outputs, end_outputs), smp_outputs 
+            return feat, (start_outputs, end_outputs), smp_outputs # feat -> 1792x8x8
         
         def load_weights(self, checkpoint=""):
             # print(f'--------- Loaded Checkpoint: {checkpoint} ----------')
