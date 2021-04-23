@@ -37,12 +37,12 @@ OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
     "epochs": 10,
-    "train_batch_size": 8,
-    "valid_batch_size": 16,
+    "train_batch_size": 12,
+    "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0001,
     "weight_decay": 0.0005,
-    "schedule_patience": 3,
+    "schedule_patience": 5,
     "schedule_factor": 0.25,
     'sampling':'nearest',
     "model": "UnetPP",
@@ -252,18 +252,8 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
             batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
             jaccard.update(batch_jaccard, train_loader.batch_size)
 
-            try:
-                batch_pixel_auc = seg_metrics.batch_pixel_auc(out_mask, gt)
-                pixel_auc.update(batch_pixel_auc, train_loader.batch_size)
-            except ValueError as e:
-                print(traceback.print_exc())
-                print(e)
-                for i, y in enumerate(gt):
-                    yy = y.numpy().ravel() >= 0.5
-                    if(np.count_nonzero(yy) == 0): 
-                        print(batch["mask_path"][i], torch.count_nonzero(y), y.shape, y.type())
-                        
-                exit()
+            batch_pixel_auc = seg_metrics.batch_pixel_auc(out_mask, gt)
+            pixel_auc.update(batch_pixel_auc, train_loader.batch_size)
             
             scores.update(out_mask, gt)
             
