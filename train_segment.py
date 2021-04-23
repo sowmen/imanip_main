@@ -468,7 +468,7 @@ def get_train_transforms():
             A.transforms.HorizontalFlip(p=0.5),
             A.transforms.VerticalFlip(p=0.5),
             albumentations.RandomRotate90(p=0.5),
-            A.geometric.transforms.Perspective(p=0.4),
+            A.geometric.transforms.Perspective(p=0.3),
             # albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
             # albumentations.OneOf([
             #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
