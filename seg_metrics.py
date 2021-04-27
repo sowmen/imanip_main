@@ -1,6 +1,7 @@
 import torch
 from pytorch_toolbelt import losses
-import numpy as np    
+import numpy as np
+import traceback    
 
 
 def get_avg_batch_dice(outputs : torch.tensor, targets : torch.tensor): 
@@ -53,11 +54,19 @@ def get_avg_batch_jaccard(outputs : torch.tensor, targets : torch.tensor):
 
 from sklearn.metrics import roc_auc_score
 
-def batch_pixel_auc(outputs : torch.tensor, targets : torch.tensor):
-    sum = 0
-    for x, y in zip(outputs, targets):
-        sum += roc_auc_score(y.numpy().ravel() >= 0.5, x.numpy().ravel() >= 0.5)
-    return sum / len(outputs)
+def batch_pixel_auc(outputs : torch.tensor, targets : torch.tensor, paths):
+    i, sum = 0, 0
+    for x, y, path in zip(outputs, targets, paths):
+        try:
+            roc = roc_auc_score(y.numpy().ravel() >= 0.5, x.numpy().ravel() >= 0.5)
+            sum += roc
+            i += 1
+        except ValueError as e:
+            print(traceback.print_exc())
+            print(e)
+            print(path)
+        
+    return (sum / i), i
 
 
 def sensitivity(outputs, targets):

@@ -26,8 +26,6 @@ import seg_metrics
 from pytorch_toolbelt import losses
 from utils import *
 
-import traceback
-
 # import segmentation_models_pytorch as smp
 from segmentation.timm_srm_unetpp import UnetPP
 from segmentation.merged_net import SRM_Classifer 
@@ -36,7 +34,7 @@ from sim_dataset import SimDataset
 OUTPUT_DIR = "weights"
 device = 'cuda'
 config_defaults = {
-    "epochs": 10,
+    "epochs": 60,
     "train_batch_size": 12,
     "valid_batch_size": 32,
     "optimizer": "adam",
@@ -155,8 +153,8 @@ def train(name, df, VAL_FOLD=0, resume=False):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        # if epoch == 4:
-        #     model.module.encoder.unfreeze()
+        if epoch == 4:
+            model.module.encoder.unfreeze()
 
         train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
         valid_metrics = valid_epoch(model, valid_loader, criterion,  epoch)
@@ -252,8 +250,9 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
             batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
             jaccard.update(batch_jaccard, train_loader.batch_size)
 
-            batch_pixel_auc = seg_metrics.batch_pixel_auc(out_mask, gt)
-            pixel_auc.update(batch_pixel_auc, train_loader.batch_size)
+            
+            batch_pixel_auc, num = seg_metrics.batch_pixel_auc(out_mask, gt, batch["image_path"])
+            pixel_auc.update(batch_pixel_auc, num)
             
             scores.update(out_mask, gt)
             
@@ -327,7 +326,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             
             scores.update(out_mask, gt)
 
-            batch_pixel_auc = seg_metrics.batch_pixel_auc(out_mask, gt)
+            batch_pixel_auc, num = seg_metrics.batch_pixel_auc(out_mask, gt, batch["image_path"])
             pixel_auc.update(batch_pixel_auc, valid_loader.batch_size)
 
             gc.collect()
@@ -398,7 +397,7 @@ def test(model, test_loader, criterion):
 
             scores.update(out_mask, gt)
 
-            batch_pixel_auc = seg_metrics.batch_pixel_auc(out_mask, gt)
+            batch_pixel_auc, num = seg_metrics.batch_pixel_auc(out_mask, gt, batch["image_path"])
             pixel_auc.update(batch_pixel_auc, test_loader.batch_size)
 
             gc.collect()
@@ -458,7 +457,7 @@ def get_train_transforms():
             A.transforms.HorizontalFlip(p=0.5),
             A.transforms.VerticalFlip(p=0.5),
             albumentations.RandomRotate90(p=0.5),
-            A.geometric.transforms.Perspective(p=0.3),
+            # A.geometric.transforms.Perspective(p=0.3),
             # albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
             # albumentations.OneOf([
             #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
