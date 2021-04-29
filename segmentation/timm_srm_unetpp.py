@@ -54,7 +54,7 @@ class UnetPP(nn.Module):
     def forward(self, inp, ela):
         batch_size, C, H, W = inp.shape
         
-        x, (_, _merged_input, enc_out, start, end) = self.encoder(inp, ela)
+        cls_tensor, (_, _, _, start, end) = self.encoder(inp, ela)
         if self.layer == 'start':
             layer = start
         else:
@@ -90,5 +90,5 @@ class UnetPP(nn.Module):
         logit = self.mix[1]*logit1 + self.mix[2]*logit2 + self.mix[3]*logit3 + self.mix[4]*logit4
         logit = F.interpolate(logit, size=(H,W), mode='bilinear', align_corners=False)
         
-        return logit
+        return logit, cls_tensor
         

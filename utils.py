@@ -133,7 +133,7 @@ def image2np(image: torch.Tensor) -> np.ndarray:
 import pandas as pd
 from sklearn.model_selection import train_test_split, StratifiedKFold
 
-def get_dataframe(csv, folds=10):
+def get_dataframe(csv, folds=None):
     df = pd.read_csv(csv, keep_default_na=False).sample(frac=1.0, random_state=123)
     
     if folds is not None:
@@ -179,7 +179,9 @@ def stratified_train_val_test_split(df_input, stratify_colname='y',
     df_train, df_val, df_test :
         Dataframes containing the three splits.
     '''
-
+    if isinstance(df_input, str):
+        df_input = pd.read_csv(df_input)
+        
     if frac_train + frac_val + frac_test != 1.0:
         raise ValueError('fractions %f, %f, %f do not add up to 1.0' % \
                          (frac_train, frac_val, frac_test))
@@ -206,7 +208,7 @@ def stratified_train_val_test_split(df_input, stratify_colname='y',
                                                       random_state=random_state)
 
     assert len(df_input) == len(df_train) + len(df_val) + len(df_test)
-
+    
     return df_train, df_val, df_test
     
 

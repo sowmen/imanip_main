@@ -67,7 +67,8 @@ class DATASET(Dataset):
         self.data = rows.values
         np.random.shuffle(self.data)
         
-        self.data = self._filter_mask(self.data, nonzero_filter)
+        if nonzero_filter > 0:
+            self.data = self._filter_mask(self.data, nonzero_filter)
 
     def __len__(self):
         return len(self.data)

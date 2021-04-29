@@ -95,30 +95,33 @@ def train(name, df, VAL_FOLD=0, resume=False):
         mode="train",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
-        segment=True,
+        segment=False,
         transforms_normalize=transforms_normalize,
         imgaug_augment=None,
-        geo_augment=train_geo_aug
+        geo_augment=train_geo_aug,
+        nonzero_filter = 0
     )
     train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     valid_dataset = DATASET(
         dataframe=df,
         mode="val",
-        segment=True,
+        segment=False,
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         transforms_normalize=transforms_normalize,
+        nonzero_filter = 0
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     test_dataset = DATASET(
         dataframe=df,
         mode="test",
-        segment=True,
+        segment=False,
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         transforms_normalize=transforms_normalize,
+        nonzero_filter = 0
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
     #endregion ######################################################################################
@@ -209,7 +212,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
     segmentation_loss = AverageMeter()
     dice = AverageMeter()
     jaccard = AverageMeter()
-    pixel_auc = AverageMeter()
+    # pixel_auc = AverageMeter()
 
     scores = seg_metrics.SegMeter()
 
@@ -217,12 +220,13 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         images = batch["image"].to(device)
         elas = batch["ela"].to(device)
         gt = batch["mask"].to(device)
+        target_labels = batch["label"].to(device)
 
         optimizer.zero_grad()
-        out_mask = model(images, elas)
-        # out_mask = model(images)
+        pred_mask, label_tensor = model(images, elas)
+        # pred_mask = model(images)
 
-        loss_segmentation = criterion(out_mask, gt)
+        loss_segmentation = criterion(pred_mask, gt, label_tensor, target_labels.view(-1, 1))
         loss_segmentation.backward()
 
         optimizer.step()
@@ -240,21 +244,21 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         segmentation_loss.update(loss_segmentation.item(), train_loader.batch_size)
 
         with torch.no_grad():
-            out_mask = torch.sigmoid(out_mask)
-            out_mask = out_mask.cpu().detach()
+            pred_mask = torch.sigmoid(pred_mask)
+            pred_mask = pred_mask.cpu().detach()
             gt = gt.cpu().detach()
             
-            batch_dice, _, _ = seg_metrics.get_avg_batch_dice(out_mask, gt)
+            batch_dice, _, _ = seg_metrics.get_avg_batch_dice(pred_mask, gt)
             dice.update(batch_dice, train_loader.batch_size)
 
-            batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
+            batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(pred_mask, gt)
             jaccard.update(batch_jaccard, train_loader.batch_size)
 
             
-            batch_pixel_auc, num = seg_metrics.batch_pixel_auc(out_mask, gt, batch["image_path"])
-            pixel_auc.update(batch_pixel_auc, num)
+            # batch_pixel_auc, num = seg_metrics.batch_pixel_auc(pred_mask, gt, batch["image_path"])
+            # pixel_auc.update(batch_pixel_auc, num)
             
-            scores.update(out_mask, gt)
+            scores.update(pred_mask, gt)
             
 
     dice2, dice_neg, dice_pos, iou2 = seg_metrics.epoch_score_log("TRAIN", scores)
@@ -267,7 +271,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         "train_dice_pos" : dice_pos,
         "train_dice_neg" : dice_neg,
         "train_iou2" : iou2,
-        "train_pixel_auc" : pixel_auc.avg
+        # "train_pixel_auc" : pixel_auc.avg
     }
     wandb.log(train_metrics)
 
@@ -280,7 +284,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     segmentation_loss = AverageMeter()
     dice = AverageMeter()
     jaccard = AverageMeter()
-    pixel_auc = AverageMeter()
+    # pixel_auc = AverageMeter()
     scores = seg_metrics.SegMeter()
 
     example_images = []
@@ -290,23 +294,25 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
+            target_labels = batch["label"].to(device)
+                    
             
-            out_mask = model(images, elas)
-            # out_mask = model(images)
+            pred_mask, label_tensor = model(images, elas)
+            # pred_mask = model(images)
 
-            loss_segmentation = criterion(out_mask, gt)
+            loss_segmentation = criterion(pred_mask, gt, label_tensor, target_labels.view(-1, 1))
 
             # ---------------------Batch Loss Update-------------------------
             segmentation_loss.update(loss_segmentation.item(), valid_loader.batch_size)
 
-            out_mask = torch.sigmoid(out_mask)
-            out_mask = out_mask.cpu().detach()
+            pred_mask = torch.sigmoid(pred_mask)
+            pred_mask = pred_mask.cpu().detach()
             gt = gt.cpu().detach()
             
-            batch_dice, (mx_dice, best_dice_idx), (worst_dice, worst_dice_idx) = seg_metrics.get_avg_batch_dice(out_mask, gt)
+            batch_dice, (mx_dice, best_dice_idx), (worst_dice, worst_dice_idx) = seg_metrics.get_avg_batch_dice(pred_mask, gt)
             dice.update(batch_dice, valid_loader.batch_size)
 
-            batch_jaccard, (mx_iou, best_iou__idx), (worst_iou, worst_idx) = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
+            batch_jaccard, (mx_iou, best_iou__idx), (worst_iou, worst_idx) = seg_metrics.get_avg_batch_jaccard(pred_mask, gt)
             jaccard.update(batch_jaccard, valid_loader.batch_size)
 
             if(np.random.rand() < 0.5 and len(example_images) < 20):
@@ -315,19 +321,19 @@ def valid_epoch(model, valid_loader, criterion, epoch):
                     "best_image" : images[best_dice_idx],
                     "best_image_name" : batch["image_path"][best_dice_idx],
                     "best_dice" : mx_dice,
-                    "best_pred" : out_mask[best_dice_idx],
+                    "best_pred" : pred_mask[best_dice_idx],
                     "best_gt" : gt[best_dice_idx],
                     "worst_image" : images[worst_dice_idx],
                     "worst_image_name" : batch["image_path"][worst_dice_idx],
                     "worst_dice" : worst_dice,
-                    "worst_pred" : out_mask[worst_dice_idx],
+                    "worst_pred" : pred_mask[worst_dice_idx],
                     "worst_gt" : gt[worst_dice_idx],
                 })
             
-            scores.update(out_mask, gt)
+            scores.update(pred_mask, gt)
 
-            batch_pixel_auc, num = seg_metrics.batch_pixel_auc(out_mask, gt, batch["image_path"])
-            pixel_auc.update(batch_pixel_auc, valid_loader.batch_size)
+            # batch_pixel_auc, num = seg_metrics.batch_pixel_auc(pred_mask, gt, batch["image_path"])
+            # pixel_auc.update(batch_pixel_auc, valid_loader.batch_size)
 
             gc.collect()
 
@@ -355,7 +361,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
         "valid_dice_pos" : dice_pos,
         "valid_dice_neg" : dice_neg,
         "valid_iou2" : iou2,
-        "valid_pixel_auc" : pixel_auc.avg
+        # "valid_pixel_auc" : pixel_auc.avg
     }
     wandb.log(valid_metrics)
 
@@ -368,7 +374,7 @@ def test(model, test_loader, criterion):
     segmentation_loss = AverageMeter()
     dice = AverageMeter()
     jaccard = AverageMeter()
-    pixel_auc = AverageMeter()
+    # pixel_auc = AverageMeter()
     scores = seg_metrics.SegMeter()
 
     with torch.no_grad():
@@ -376,29 +382,31 @@ def test(model, test_loader, criterion):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
+            target_labels = batch["label"].to(device)
+                    
+            
+            pred_mask, label_tensor = model(images, elas)
+            # pred_mask = model(images)
 
-            out_mask = model(images, elas)
-            # out_mask = model(images)
-
-            loss_segmentation = criterion(out_mask, gt)
+            loss_segmentation = criterion(pred_mask, gt, label_tensor, target_labels.view(-1, 1))
 
             # ---------------------Batch Loss Update-------------------------
             segmentation_loss.update(loss_segmentation.item(), test_loader.batch_size)
 
-            out_mask = torch.sigmoid(out_mask)
-            out_mask = out_mask.cpu().detach()
+            pred_mask = torch.sigmoid(pred_mask)
+            pred_mask = pred_mask.cpu().detach()
             gt = gt.cpu().detach()
             
-            batch_dice, _, _ = seg_metrics.get_avg_batch_dice(out_mask, gt)
+            batch_dice, _, _ = seg_metrics.get_avg_batch_dice(pred_mask, gt)
             dice.update(batch_dice, test_loader.batch_size)
 
-            batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(out_mask, gt)
+            batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(pred_mask, gt)
             jaccard.update(batch_jaccard, test_loader.batch_size)
 
-            scores.update(out_mask, gt)
+            scores.update(pred_mask, gt)
 
-            batch_pixel_auc, num = seg_metrics.batch_pixel_auc(out_mask, gt, batch["image_path"])
-            pixel_auc.update(batch_pixel_auc, test_loader.batch_size)
+            # batch_pixel_auc, num = seg_metrics.batch_pixel_auc(pred_mask, gt, batch["image_path"])
+            # pixel_auc.update(batch_pixel_auc, test_loader.batch_size)
 
             gc.collect()
 
@@ -411,7 +419,7 @@ def test(model, test_loader, criterion):
         "test_dice_pos" : dice_pos,
         "test_dice_neg" : dice_neg,
         "test_iou2" : iou2,
-        "test_pixel_auc" : pixel_auc.avg
+        # "test_pixel_auc" : pixel_auc.avg
     }
     wandb.log(test_metrics)
     return test_metrics
@@ -484,39 +492,56 @@ def get_transforms_normalize():
     )
     return transforms_normalize
 
+
+
+from losses import DiceLoss, ImanipLoss
 def get_lossfn():
     bce = nn.BCEWithLogitsLoss()
-    # dice = losses.DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
-    # criterion = losses.JointLoss(bce, dice)
-    
-    return bce #criterion
+    dice = DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
+    criterion = ImanipLoss(bce, dice)
+    return criterion
 
+    
 
 if __name__ == "__main__":
 
+    #---------------------------------- FULL --------------------------------------#
     # combo_all_df = get_dataframe('combo_all_FULL.csv', folds=None)
-    casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
-    imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
-    cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
-    nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
-    coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
+    # casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
+    # imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
+    # cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
+    # nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
+    # coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
     
-    nist_extend = get_dataframe('nist_extend.csv', folds=12)
-    coverage_extend = get_dataframe('coverage_extend.csv', folds=12)
-    defacto_cp = get_dataframe('dataset_csv/defacto_copy_move.csv', folds=-1)
-    defacto_inpaint = get_dataframe('dataset_csv/defacto_inpainting.csv', folds=-1)
-    defacto_s1 = get_dataframe('dataset_csv/defacto_splicing1.csv', folds=-1)
-    defacto_s2 = get_dataframe('dataset_csv/defacto_splicing2.csv', folds=-1)
-    defacto_s3 = get_dataframe('dataset_csv/defacto_splicing3.csv', folds=-1)
+    # nist_extend = get_dataframe('nist_extend.csv', folds=12)
+    # coverage_extend = get_dataframe('coverage_extend.csv', folds=12)
+    # defacto_cp = get_dataframe('dataset_csv/defacto_copy_move.csv', folds=-1)
+    # defacto_inpaint = get_dataframe('dataset_csv/defacto_inpainting.csv', folds=-1)
+    # defacto_s1 = get_dataframe('dataset_csv/defacto_splicing1.csv', folds=-1)
+    # defacto_s2 = get_dataframe('dataset_csv/defacto_splicing2.csv', folds=-1)
+    # defacto_s3 = get_dataframe('dataset_csv/defacto_splicing3.csv', folds=-1)
     
 
-    df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full, \
-                    nist_extend, coverage_extend, defacto_cp, \
-                    defacto_inpaint, defacto_s1, defacto_s2, defacto_s3])
-    df_full.insert(0, 'image', '')
+    # df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full, \
+    #                 nist_extend, coverage_extend, defacto_cp, \
+    #                 defacto_inpaint, defacto_s1, defacto_s2, defacto_s3])
+    # df_full.insert(0, 'image', '')
+    # df = df_full
+    
+    
+    #---------------------------------- 128 ---------------------------------------#
 
+    casia128 = get_dataframe('dataset_csv/casia_128.csv', folds=41)
+    imd128 = get_dataframe('dataset_csv/imd_128.csv', folds=41)
+    cmfd128 = get_dataframe('dataset_csv/cmfd_128.csv', folds=-1)
+    coverage128 = get_dataframe('dataset_csv/coverage_128.csv', folds=12)
+    nist128 = get_dataframe('dataset_csv/nist16_128.csv', folds=15)
+
+    df_128 = pd.concat([casia128, imd128, cmfd128, nist128, coverage128])
+    df = df_128
+    
     with pd.option_context('display.max_rows', None, 'display.max_columns', None):
-        print(df_full.root_dir.value_counts())
+        print(df.root_dir.value_counts())
         # print('------')
         # print(df_full.groupby('fold').root_dir.value_counts())
 
@@ -527,7 +552,7 @@ if __name__ == "__main__":
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
             name=f"(defacto+pretrain+BCE)" + config_defaults["model"],
-            df=df_full,
+            df=df,
             VAL_FOLD=i,
             resume=False,
         )
