@@ -154,7 +154,7 @@ class DATASET(Dataset):
             # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
             if label == 1:
-                if(np.count_nonzero(tensor_mask.numpy().ravel() >= 0.5) < 50):
+                if(np.count_nonzero(tensor_mask.numpy().ravel() >= 0.5) < 100):
                     index = random.randint(0, len(self.data) - 1)
                     continue
                 

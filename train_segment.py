@@ -40,7 +40,7 @@ config_defaults = {
     "optimizer": "adam",
     "learning_rate": 0.0001,
     "weight_decay": 0.0005,
-    "schedule_patience": 5,
+    "schedule_patience": 4,
     "schedule_factor": 0.25,
     'sampling':'nearest',
     "model": "UnetPP",
@@ -155,7 +155,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        if epoch == 4:
+        if epoch == 6:
             model.module.encoder.unfreeze()
 
         train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
@@ -166,14 +166,12 @@ def train(name, df, VAL_FOLD=0, resume=False):
         print(
             f"TRAIN_LOSS = {train_metrics['train_loss_segmentation']}, \
             TRAIN_DICE = {train_metrics['train_dice']}, \
-            TRAIN_JACCARD = {train_metrics['train_jaccard']}, \
-            TRAIN_PIXEL_AUC = {train_metrics['train_pixel_auc']}"
+            TRAIN_JACCARD = {train_metrics['train_jaccard']}"
         )
         print(
             f"VALID_LOSS = {valid_metrics['valid_loss_segmentation']}, \
             VALID_DICE = {valid_metrics['valid_dice']}, \
-            VALID_JACCARD = {valid_metrics['valid_jaccard']}, \
-            VALID_PIXEL_AUC = {valid_metrics['valid_pixel_auc']}"
+            VALID_JACCARD = {valid_metrics['valid_jaccard']}"
         )
 
         es(
@@ -505,42 +503,46 @@ def get_lossfn():
 if __name__ == "__main__":
 
     #---------------------------------- FULL --------------------------------------#
-    # combo_all_df = get_dataframe('combo_all_FULL.csv', folds=None)
-    # casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
-    # imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
-    # cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
-    # nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
-    # coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
+    combo_all_df = get_dataframe('combo_all_FULL.csv', folds=None)
+    casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
+    imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
+    cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
+    nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
+    coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
     
-    # nist_extend = get_dataframe('nist_extend.csv', folds=12)
-    # coverage_extend = get_dataframe('coverage_extend.csv', folds=12)
-    # defacto_cp = get_dataframe('dataset_csv/defacto_copy_move.csv', folds=-1)
-    # defacto_inpaint = get_dataframe('dataset_csv/defacto_inpainting.csv', folds=-1)
-    # defacto_s1 = get_dataframe('dataset_csv/defacto_splicing1.csv', folds=-1)
-    # defacto_s2 = get_dataframe('dataset_csv/defacto_splicing2.csv', folds=-1)
-    # defacto_s3 = get_dataframe('dataset_csv/defacto_splicing3.csv', folds=-1)
+    nist_extend = get_dataframe('nist_extend.csv', folds=12)
+    coverage_extend = get_dataframe('coverage_extend.csv', folds=12)
+    defacto_cp = get_dataframe('dataset_csv/defacto_copy_move.csv', folds=-1)
+    defacto_inpaint = get_dataframe('dataset_csv/defacto_inpainting.csv', folds=-1)
+    defacto_s1 = get_dataframe('dataset_csv/defacto_splicing1.csv', folds=-1)
+    defacto_s2 = get_dataframe('dataset_csv/defacto_splicing2.csv', folds=-1)
+    defacto_s3 = get_dataframe('dataset_csv/defacto_splicing3.csv', folds=-1)
     
 
-    # df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full, \
-    #                 nist_extend, coverage_extend, defacto_cp, \
-    #                 defacto_inpaint, defacto_s1, defacto_s2, defacto_s3])
-    # df_full.insert(0, 'image', '')
-    # df = df_full
+    df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full,\
+                    nist_extend, coverage_extend, defacto_cp, \
+                    defacto_inpaint, defacto_s1, defacto_s2, defacto_s3])
+    df_full.insert(0, 'image', '')
+    
+    casia128 = get_dataframe('dataset_csv/casia_128.csv', folds=-1)
+    casia128_real = casia128[casia128['label'] == 0]
+    
+    df = pd.concat([df_full, casia128_real])
     
     
     #---------------------------------- 128 ---------------------------------------#
 
-    casia128 = get_dataframe('dataset_csv/casia_128.csv', folds=41)
-    imd128 = get_dataframe('dataset_csv/imd_128.csv', folds=41)
-    cmfd128 = get_dataframe('dataset_csv/cmfd_128.csv', folds=-1)
-    coverage128 = get_dataframe('dataset_csv/coverage_128.csv', folds=12)
-    nist128 = get_dataframe('dataset_csv/nist16_128.csv', folds=15)
+    # casia128 = get_dataframe('dataset_csv/casia_128.csv', folds=41)
+    # imd128 = get_dataframe('dataset_csv/imd_128.csv', folds=41)
+    # cmfd128 = get_dataframe('dataset_csv/cmfd_128.csv', folds=-1)
+    # coverage128 = get_dataframe('dataset_csv/coverage_128.csv', folds=12)
+    # nist128 = get_dataframe('dataset_csv/nist16_128.csv', folds=15)
 
-    df_128 = pd.concat([casia128, imd128, cmfd128, nist128, coverage128])
-    df = df_128
+    # df_128 = pd.concat([casia128, imd128, cmfd128, nist128, coverage128])
+    # df = df_128
     
     with pd.option_context('display.max_rows', None, 'display.max_columns', None):
-        print(df.root_dir.value_counts())
+        print(df.label.value_counts())
         # print('------')
         # print(df_full.groupby('fold').root_dir.value_counts())
 
@@ -550,7 +552,7 @@ if __name__ == "__main__":
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(defacto+pretrain+BCE)" + config_defaults["model"],
+            name=f"(defacto+customloss)" + config_defaults["model"],
             df=df,
             VAL_FOLD=i,
             resume=False,
