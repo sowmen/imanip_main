@@ -96,6 +96,7 @@ class DATASET(Dataset):
 
             if mask_patch == '':
                 mask_image = np.zeros((image.shape[0], image.shape[1])).astype('uint8')
+                mask_path = 'REAL'
             else:
                 mask_path = os.path.join(self.root_folder, root_dir, image_name, mask_patch)
 
@@ -104,9 +105,7 @@ class DATASET(Dataset):
                 mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
                 if('NIST' in root_dir):
                     mask_image = 255 - mask_image
-                    
-                if(np.count_nonzero(mask_image) < 50):
-                    return None
+    
                     
             if self.imgaug_augment:
                 try :
@@ -154,10 +153,10 @@ class DATASET(Dataset):
             #     tensor_ela = data["ela"]
             # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
-            
-            if(np.count_nonzero(tensor_mask.numpy().ravel() >= 0.5) < 50):
-                index = random.randint(0, len(self.data) - 1)
-                continue
+            if label == 1:
+                if(np.count_nonzero(tensor_mask.numpy().ravel() >= 0.5) < 50):
+                    index = random.randint(0, len(self.data) - 1)
+                    continue
                 
             return {
                 "image": tensor_image,
@@ -201,7 +200,7 @@ class DATASET(Dataset):
         if os.path.exists("filtermask50.txt"):
             with open("filtermask50.txt", "r") as fp: lines = fp.read().splitlines()
         
-        pbar = tqdm(data, desc="Filtering empty mask")
+        pbar = tqdm(data, desc="Filtering empty mask", dynamic_ncols=True, bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}')
         for row in pbar:
             image_name, _, mask_patch, _, _, _, root_dir = row
 

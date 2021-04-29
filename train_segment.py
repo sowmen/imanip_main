@@ -99,7 +99,6 @@ def train(name, df, VAL_FOLD=0, resume=False):
         transforms_normalize=transforms_normalize,
         imgaug_augment=None,
         geo_augment=train_geo_aug,
-        nonzero_filter = 0
     )
     train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
@@ -110,7 +109,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         transforms_normalize=transforms_normalize,
-        nonzero_filter = 0
+        equal_sample=True
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
@@ -121,7 +120,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         transforms_normalize=transforms_normalize,
-        nonzero_filter = 0
+        equal_sample=True
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
     #endregion ######################################################################################
@@ -216,7 +215,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
 
     scores = seg_metrics.SegMeter()
 
-    for batch in tqdm(train_loader, desc=f"Train epoch {epoch}"):
+    for batch in tqdm(train_loader, desc=f"Train epoch {epoch}", dynamic_ncols=True, bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}'):
         images = batch["image"].to(device)
         elas = batch["ela"].to(device)
         gt = batch["mask"].to(device)
@@ -290,7 +289,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     example_images = []
     
     with torch.no_grad():
-        for batch in tqdm(valid_loader, desc=f"Valid epoch {epoch}"):
+        for batch in tqdm(valid_loader, desc=f"Valid epoch {epoch}", dynamic_ncols=True, bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}'):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
@@ -378,7 +377,7 @@ def test(model, test_loader, criterion):
     scores = seg_metrics.SegMeter()
 
     with torch.no_grad():
-        for batch in tqdm(test_loader):
+        for batch in tqdm(test_loader, dynamic_ncols=True, bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}'):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
