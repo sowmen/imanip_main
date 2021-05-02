@@ -167,6 +167,7 @@ def predict(X, threshold):
 def metric(probability, truth, threshold=0.5, reduction='none'):
     '''Calculates dice of positive and negative images seperately'''
     '''probability and truth must be torch tensors'''
+    
     batch_size = len(truth)
     with torch.no_grad():
         probability = probability.view(batch_size, -1)

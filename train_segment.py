@@ -64,8 +64,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     
-    SRM_FLAG=1
-    
 
     wandb.save('segmentation/merged_net.py')
     wandb.save('segmentation/timm_srm_unetpp.py')
@@ -155,7 +153,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         # if epoch == 4:
         #     model.module.encoder.unfreeze()
 
-        train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch, SRM_FLAG)
+        train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
         valid_metrics = valid_epoch(model, valid_loader, criterion,  epoch)
         
         scheduler.step(valid_metrics["valid_loss_segmentation"])
