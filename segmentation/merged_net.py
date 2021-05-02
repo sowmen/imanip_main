@@ -7,6 +7,7 @@ from timm.models.layers.adaptive_avgmax_pool import SelectAdaptivePool2d
 from segmentation.srm_kernel import setup_srm_layer
 from segmentation.timm_efficientnet import EfficientNet
 import gc
+import re
 from collections import OrderedDict
 
 class SRM_Classifer(nn.Module):
@@ -121,10 +122,8 @@ class SRM_Classifer(nn.Module):
         del pretrained_dict['module.classifier.weight']
         del pretrained_dict['module.classifier.bias']
         
-        encoder_dict = OrderedDict()
-        for item in pretrained_dict.items():
-            key = item[0].split('.',1)[-1]
-            encoder_dict[key] = item[1]
+        encoder_dict = {re.sub("^module.", "", k): v for k, v in pretrained_dict.items()}
         
         print(self.load_state_dict(encoder_dict, strict=False))
+        
         

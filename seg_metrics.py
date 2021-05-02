@@ -1,49 +1,8 @@
 import torch
 from pytorch_toolbelt import losses
 import numpy as np
+import traceback    
 
-def dice_score(
-    outputs: torch.Tensor,
-    targets: torch.Tensor,
-    eps: float = 1e-7,
-    threshold: float = None,
-):
-
-    outputs = torch.sigmoid(outputs)
-
-    if threshold is not None:
-        outputs = (outputs > threshold).float()
-
-    intersection = torch.sum(targets * outputs)
-    union = torch.sum(targets) + torch.sum(outputs)
-    dice = ((2 * intersection) + eps) / (union + eps)
-    
-    return dice #single float
-
-def dice_coeff(outputs : list, targets : list): 
-    """Dice coeff for batches"""
-    # if outputs.is_cuda:
-    #     s = torch.FloatTensor(1).cuda().zero_()
-    # else:
-    assert len(outputs) == len(targets)
-    # assert outputs[0].size() == targets[0].size()
-
-    s = torch.FloatTensor(1).zero_()
-    mx_dice = -1
-    best_idx = 0
-
-    for i, c in enumerate(zip(outputs, targets)):
-        if(c[0].requires_grad or c[1].requires_grad):
-            print("NOT DETACHED dice_coeff")
-
-        d = losses.functional.soft_dice_score(c[0], c[1], smooth=1e-7)
-        if torch.sum(c[1]).item() > 0 and d.item() > mx_dice:
-            mx_dice = d.item()
-            best_idx = i 
-        s = s + d
-        
-    print(f"Best Dice: {mx_dice}, Count = {torch.sum(targets[best_idx]).item()}, IDX : {best_idx}")
-    return s / (i + 1), (best_idx, mx_dice)
 
 def get_avg_batch_dice(outputs : torch.tensor, targets : torch.tensor): 
     """Dice coeff for batches"""
@@ -59,39 +18,15 @@ def get_avg_batch_dice(outputs : torch.tensor, targets : torch.tensor):
         
         d = losses.functional.soft_dice_score(c[0], c[1], smooth=1e-7).item()
         tot_dice += d
-        if (d > 0 and d < 1.0) and d > mx_dice:
+        if (d >= 0 and d <= 1.0) and d > mx_dice:
             mx_dice = d
             best_idx = i
-        if (d > 0 and d < 1.0) and d < worst_dice:
+        if (d >= 0 and d <= 1.0) and d < worst_dice:
             worst_dice = d
             worst_idx = i 
     
     return tot_dice / (outputs.shape[0]), (mx_dice, best_idx), (worst_dice, worst_idx)
 
-def jaccard_coeff(outputs, targets):
-    """jaccard coeff for batches"""
-    # if outputs.is_cuda:
-    #     s = torch.FloatTensor(1).cuda().zero_()
-    # else:
-    assert len(outputs) == len(targets)
-    # assert outputs[0].size() == targets[0].size()
-
-    s = torch.FloatTensor(1).zero_()
-    mx_iou = -1
-    best_idx = 0
-    
-    for i, c in enumerate(zip(outputs, targets)):
-        if(c[0].requires_grad or c[1].requires_grad):
-            print("NOT DETACHED jaccard_coeff")
-
-        d = losses.functional.soft_jaccard_score(c[0], c[1], smooth=1e-7)
-        if torch.sum(c[1]).item() > 0 and d.item() > mx_iou:
-            mx_iou = d.item()
-            best_idx = i 
-        s = s + d
-        
-    print(f"Best IOU: {mx_iou}, Count = {torch.sum(targets[best_idx]).item()}, IDX : {best_idx}")
-    return s / (i + 1), (best_idx, mx_iou)
 
 def get_avg_batch_jaccard(outputs : torch.tensor, targets : torch.tensor): 
     """Dice coeff for batches"""
@@ -107,14 +42,32 @@ def get_avg_batch_jaccard(outputs : torch.tensor, targets : torch.tensor):
         
         d = losses.functional.soft_jaccard_score(c[0], c[1], smooth=1e-7).item()
         tot_iou += d
-        if (d > 0 and d < 1.0) and d > mx_iou:
+        if (d >= 0 and d <= 1.0) and d > mx_iou:
             mx_iou = d
             best_idx = i 
-        if (d > 0 and d < 1.0) and d < worst_iou:
+        if (d >= 0 and d <= 1.0) and d < worst_iou:
             worst_iou = d
             worst_idx = i 
     
     return tot_iou / (outputs.shape[0]), (mx_iou, best_idx), (worst_iou, worst_idx)
+
+
+from sklearn.metrics import roc_auc_score
+
+def batch_pixel_auc(outputs : torch.tensor, targets : torch.tensor, paths):
+    i, sum = 0, 0
+    for x, y, path in zip(outputs, targets, paths):
+        try:
+            roc = roc_auc_score(y.numpy().ravel() >= 0.5, x.numpy().ravel() >= 0.5)
+            sum += roc
+            i += 1
+        except ValueError as e:
+            print(traceback.print_exc())
+            print(e)
+            print(path)
+        
+    return (sum / i), i
+
 
 def sensitivity(outputs, targets):
     true_positives = torch.sum(torch.round(torch.clamp(targets * outputs, 0, 1)))
@@ -126,35 +79,6 @@ def specificity(outputs, targets):
     possible_negatives = torch.sum(torch.round(torch.clamp(1 - targets, 0, 1)))
     return true_negatives / (possible_negatives + 1e-7)
 
-# https://www.kaggle.com/cpmpml/fast-iou-metric-in-numpy-and-tensorflow
-def get_iou_vector(A, B):
-    # Numpy version    
-    batch_size = A.shape[0]
-    metric = 0.0
-    for batch in range(batch_size):
-        t, p = A[batch], B[batch]
-        true = np.sum(t)
-        pred = np.sum(p)
-        
-        # deal with empty mask first
-        if true == 0:
-            metric += (pred == 0)
-            continue
-        
-        # non empty mask case.  Union is never empty 
-        # hence it is safe to divide by its number of pixels
-        intersection = np.sum(t * p)
-        union = true + pred - intersection
-        iou = intersection / union
-        
-        # iou metrric is a stepwise approximation of the real iou over 0.5
-        iou = np.floor(max(0, (iou - 0.45)*20)) / 10
-        
-        metric += iou
-        
-    # teake the average over all images in batch
-    metric /= batch_size
-    return metric
 
 
 #region DICE TEST
@@ -167,7 +91,6 @@ def predict(X, threshold):
 def metric(probability, truth, threshold=0.5, reduction='none'):
     '''Calculates dice of positive and negative images seperately'''
     '''probability and truth must be torch tensors'''
-    
     batch_size = len(truth)
     with torch.no_grad():
         probability = probability.view(batch_size, -1)
@@ -224,7 +147,7 @@ def compute_iou_batch(outputs, labels, classes=None):
     iou = np.nanmean(ious)
     return iou
 
-class DiceMeter:
+class SegMeter:
     '''A meter to keep track of iou and dice scores throughout an epoch'''
     def __init__(self):
         self.base_threshold = 0.5 # <<<<<<<<<<< here's the threshold
@@ -233,7 +156,7 @@ class DiceMeter:
         self.dice_pos_scores = []
         self.iou_scores = []
 
-    def update(self, targets, outputs):
+    def update(self, outputs, targets):
         # probs = torch.sigmoid(outputs)
         probs = outputs
         dice, dice_neg, dice_pos, _, _ = metric(probs, targets, self.base_threshold)
