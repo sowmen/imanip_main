@@ -420,33 +420,35 @@ def get_transforms_normalize():
 
 if __name__ == "__main__":
 
-    combo_all_df = pd.read_csv('combo_all_FULL.csv').sample(frac=1.0, random_state=123)
+    # combo_all_df = get_dataframe('combo_all_FULL.csv', folds=None)
+    casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
+    imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
+    cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
+    nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
+    coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
     
-    # df_without_cmfd = combo_all_df[~combo_all_df['root_dir'].str.contains('CMFD')]
-    
-    # cmfd = combo_all_df[combo_all_df['root_dir'].str.contains('CMFD')]
-    # cmfd_real = cmfd[cmfd['label'] == 0].sample(n=1000, random_state=123)
-    # cmfd_fake = cmfd[cmfd['label'] == 1].sample(n=1800, random_state=123)
-    # cmfd = pd.concat([cmfd_real, cmfd_fake]).sample(frac=1.0, random_state=123)
-    
-    nist_extend = pd.read_csv('nist_extend.csv').sample(frac=1.0, random_state=123)
+    nist_extend = get_dataframe('nist_extend.csv', folds=12)
     # # nist_extend_real = nist_extend[nist_extend['label'] == 0].sample(n=1000, random_state=123)
     # # nist_extend_fake = nist_extend[nist_extend['label'] == 1].sample(n=1500, random_state=123)
     # # nist_extend = pd.concat([nist_extend_real, nist_extend_fake]).sample(frac=1.0, random_state=123)
     
-    coverage_extend = pd.read_csv('coverage_extend.csv').sample(frac=1.0, random_state=123)
+    coverage_extend = get_dataframe('coverage_extend.csv', folds=12)
     # # coverage_extend_real = coverage_extend[coverage_extend['label'] == 0].sample(n=800, random_state=123)
     # # coverage_extend_fake = coverage_extend[coverage_extend['label'] == 1].sample(n=800, random_state=123)
     # # coverage_extend = pd.concat([coverage_extend_real, coverage_extend_fake]).sample(frac=1.0, random_state=123)
             
-    df_full = pd.concat([combo_all_df, nist_extend, coverage_extend])
+    df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full,\
+                         nist_extend, coverage_extend])
     df_full.insert(0, 'image', -1)
 
     # df_128 = pd.read_csv('combo_all_128.csv').sample(frac=1.0, random_state=123)
-
     # df = pd.concat([df_full, df_128])
+
     df = df_full
-    print(df.groupby('root_dir').label.value_counts())
+    with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+        print(df.label.value_counts())
+        print('------')
+        print(df.groupby('fold').root_dir.value_counts())
 
     acc = AverageMeter()
     f1 = AverageMeter()
