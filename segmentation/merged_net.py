@@ -86,7 +86,8 @@ class SRM_Classifer(nn.Module):
             self.freeze()
         if encoder_checkpoint:
             self.load_weights(encoder_checkpoint)
-        
+    
+    @torch.cuda.amp.autocast()
     def forward(self, im, ela):#, dft_dwt):
 
         x1 = self.srm_conv(im)

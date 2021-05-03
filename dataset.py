@@ -3,12 +3,8 @@ import random
 import numpy as np
 import pandas as pd
 import cv2
-import math
-import copy
-import gc
 from tqdm import tqdm
 
-import torch
 from torch.utils.data import Dataset
 from albumentations import augmentations
 from torchvision import transforms
@@ -192,6 +188,7 @@ class DATASET(Dataset):
             Returns only fake rows for segmentation
         """
         return rows[rows["label"] == 1]
+    
     
     def _filter_mask(self, data, count):
         temp_data = []

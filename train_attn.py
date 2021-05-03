@@ -40,7 +40,7 @@ config_defaults = {
 
 TEST_FOLD = 1
 
-def train(name, df, patch_size, VAL_FOLD=0, resume=False):
+def train(name, df, VAL_FOLD=0, resume=False):
     dt_string = datetime.now().strftime("%d|%m_%H|%M|%S")
     print("Starting -->", dt_string)
 
@@ -50,7 +50,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     
     wandb.init(project="imanip", config=config_defaults, name=run)
     config = wandb.config
-
 
 
     model = SRM_Classifer(num_classes=1, encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5')
@@ -78,7 +77,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         mode="train",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
-        patch_size=patch_size,
         transforms_normalize=transforms_normalize,
         imgaug_augment=train_imgaug,
         geo_augment=train_geo_aug
@@ -90,7 +88,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         mode="val",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
-        patch_size=patch_size,
         transforms_normalize=transforms_normalize,
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
@@ -100,7 +97,6 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         mode="test",
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
-        patch_size=patch_size,
         transforms_normalize=transforms_normalize,
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
@@ -118,6 +114,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     criterion = nn.BCEWithLogitsLoss()
     es = EarlyStopping(patience=20, mode="min")
 
+    scaler = torch.cuda.amp.GradScaler()
 
     model = nn.DataParallel(model).to(device)
     
@@ -129,6 +126,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scaler.load_state_dict(checkpoint["scaler_state_dict"])
         start_epoch = checkpoint['epoch'] + 1
         print("-----------> Resuming <------------")
 
@@ -136,7 +134,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
+        train_metrics = train_epoch(model, train_loader, optimizer, criterion, scaler, epoch)
         valid_metrics = valid_epoch(model, valid_loader, criterion, epoch)
         
         scheduler.step(valid_metrics['valid_loss'])
@@ -160,6 +158,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict' : optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
+            "scaler_state_dict": scaler.state_dict()
         }
         torch.save(checkpoint, os.path.join('checkpoint', f"{run}.pt"))
 
@@ -174,7 +173,7 @@ def train(name, df, patch_size, VAL_FOLD=0, resume=False):
     return test_metrics
 
 
-def train_epoch(model, train_loader, optimizer, criterion, epoch):
+def train_epoch(model, train_loader, optimizer, criterion, scaler, epoch):
     model.train()
 
     total_loss = AverageMeter()
@@ -188,14 +187,15 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         target_labels = batch["label"].to(device)
         # dft_dwt_vector = batch["dft_dwt_vector"].to(device)
         
+        with torch.cuda.amp.autocast():
+            out_logits, _ = model(images, elas)#, dft_dwt_vector)
+            loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
+
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+
         optimizer.zero_grad()
-        
-        out_logits, _ = model(images, elas)#, dft_dwt_vector)
-
-        loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
-        loss.backward()
-
-        optimizer.step()
 
         ############## SRM Step ###########
         bayer_mask = torch.zeros(3,3,5,5).cuda()
@@ -419,9 +419,6 @@ def get_transforms_normalize():
 
 
 if __name__ == "__main__":
-    patch_size = 'FULL'
-
-    # df = pd.read_csv(f"combo_all_{patch_size}.csv").sample(frac=1.0, random_state=123).reset_index(drop=True)
 
     combo_all_df = pd.read_csv('combo_all_FULL.csv').sample(frac=1.0, random_state=123)
     
@@ -445,9 +442,10 @@ if __name__ == "__main__":
     df_full = pd.concat([combo_all_df, nist_extend, coverage_extend])
     df_full.insert(0, 'image', -1)
 
-    df_128 = pd.read_csv('combo_all_128.csv').sample(frac=1.0, random_state=123)
+    # df_128 = pd.read_csv('combo_all_128.csv').sample(frac=1.0, random_state=123)
 
-    df = pd.concat([df_full, df_128])
+    # df = pd.concat([df_full, df_128])
+    df = df_full
     print(df.groupby('root_dir').label.value_counts())
 
     acc = AverageMeter()
@@ -457,9 +455,8 @@ if __name__ == "__main__":
     for i in range(1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(full+128)COMBO_ALL_{patch_size}" + config_defaults["model"],
+            name=f"(full, amp-test)COMBO_ALL" + config_defaults["model"],
             df=df,
-            patch_size=patch_size,
             VAL_FOLD=i,
             resume=False
         )
