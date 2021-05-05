@@ -1,3 +1,4 @@
+from losses import SupConLoss
 import os
 import numpy as np
 import pandas as pd
@@ -6,9 +7,11 @@ from tqdm import tqdm
 from datetime import datetime
 from sklearn import metrics
 import gc
+import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import wandb
 
@@ -27,10 +30,10 @@ config_defaults = {
     "train_batch_size": 40,
     "valid_batch_size": 64,
     "optimizer": "adam",
-    "learning_rate": 0.0001,
-    "weight_decay": 0.0001,
-    "schedule_patience": 5,
-    "schedule_factor": 0.25,
+    "learning_rate": 0.001,
+    # "weight_decay": 0.0001,
+    # "schedule_patience": 5,
+    # "schedule_factor": 0.25,
     "model": "",
 }
 
@@ -75,7 +78,8 @@ def train(name, df, VAL_FOLD=0, resume=False):
         test_fold=TEST_FOLD,
         transforms_normalize=transforms_normalize,
         imgaug_augment=train_imgaug,
-        geo_augment=train_geo_aug
+        geo_augment=train_geo_aug,
+        supcon=True
     )
     train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
@@ -85,6 +89,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         transforms_normalize=transforms_normalize,
+        supcon=True
     )
     valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
@@ -94,23 +99,23 @@ def train(name, df, VAL_FOLD=0, resume=False):
         val_fold=VAL_FOLD,
         test_fold=TEST_FOLD,
         transforms_normalize=transforms_normalize,
+        supcon=True
     )
     test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
     #endregion ######################################################################################
 
 
 
-    optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         patience=config.schedule_patience,
         mode="min",
         factor=config.schedule_factor,
     )
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = SupConLoss().to(device)
     es = EarlyStopping(patience=20, mode="min")
 
-    scaler = torch.cuda.amp.GradScaler()
 
     model = nn.DataParallel(model).to(device)
     
@@ -119,10 +124,9 @@ def train(name, df, VAL_FOLD=0, resume=False):
     start_epoch = 0
     if resume:
         checkpoint = torch.load('checkpoint/(using pretrain)COMBO_ALL_FULL_[09|04_12|46|35].pt')
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        # scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scaler.load_state_dict(checkpoint["scaler_state_dict"])
         start_epoch = checkpoint['epoch'] + 1
         print("-----------> Resuming <------------")
 
@@ -130,18 +134,15 @@ def train(name, df, VAL_FOLD=0, resume=False):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        train_metrics = train_epoch(model, train_loader, optimizer, criterion, scaler, epoch)
-        valid_metrics = valid_epoch(model, valid_loader, criterion, epoch)
+        train_metrics_st1 = train_stage1(model, train_loader, optimizer, criterion, epoch)
         
-        scheduler.step(valid_metrics['valid_loss'])
 
-        print(f"TRAIN_ACC = {train_metrics['train_acc_05']}, TRAIN_LOSS = {train_metrics['train_loss']}")
-        print(f"VALID_ACC = {valid_metrics['valid_acc_05']}, VALID_LOSS = {valid_metrics['valid_loss']}")
+        print(f"TRAIN_LOSS = {train_metrics_st1['train_loss']}")
         print("New LR", optimizer.param_groups[0]['lr'])
 
         
         es(
-            valid_metrics["valid_loss_segmentation"],
+            train_metrics_st1['train_loss'],
             model,
             model_path=os.path.join(OUTPUT_DIR, f"{run}.h5"),
         )
@@ -153,8 +154,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict' : optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
-            "scaler_state_dict": scaler.state_dict()
+            # 'scheduler_state_dict': scheduler.state_dict(),
         }
         torch.save(checkpoint, os.path.join('checkpoint', f"{run}.pt"))
 
@@ -163,13 +163,66 @@ def train(name, df, VAL_FOLD=0, resume=False):
         print(model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{run}.h5"))))
         print("LOADED FOR TEST")
 
-    test_metrics = test(model, test_loader, criterion)
+    # test_metrics = test(model, test_loader, criterion)
     wandb.save(os.path.join(OUTPUT_DIR, f"{run}.h5"))
 
-    return test_metrics
+    # return test_metrics
 
 
-def train_epoch(model, train_loader, optimizer, criterion, scaler, epoch):
+
+def train_stage1(model, train_loader, optimizer, criterion, epoch):
+    model.train()
+
+    total_loss = AverageMeter()
+
+    for batch in tqdm(train_loader):
+        images = torch.cat([batch["image"][0], batch["image"][1]], dim=0).to(device)
+        elas = torch.cat([batch["ela"][0], batch["ela"][1]], dim=0).to(device)
+        target_labels = batch["label"].to(device)
+
+        bsz = target_labels.shape[0]
+
+        optimizer.zero_grad()
+
+        _, (features, _, _, _, _) = model(images, elas)
+        features = F.normalize(features, dim=1)
+
+        f1, f2 = torch.split(features, [bsz, bsz], dim=0)
+        features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+
+
+        loss = criterion(features, target_labels)
+        loss.backward()
+
+        optimizer.step()
+        
+
+        ############## SRM Step ###########
+        bayer_mask = torch.zeros(3,3,5,5).cuda()
+        bayer_mask[:,:,5//2, 5//2] = 1
+        bayer_weight = model.module.bayer_conv.weight * (1-bayer_mask)
+        bayer_weight = (bayer_weight / torch.sum(bayer_weight, dim=(2,3), keepdim=True)) + 1e-7
+        bayer_weight -= bayer_mask
+        model.module.bayer_conv.weight = nn.Parameter(bayer_weight)
+        ###################################
+
+        #---------------------Batch Loss Update-------------------------
+        total_loss.update(loss.item(), train_loader.batch_size)
+
+        gc.collect()
+
+        
+    train_metrics = {
+        "train_loss" : total_loss.avg,
+        "epoch" : epoch,
+        "train_learning_rate" : optimizer.param_groups[0]['lr']
+    }
+    wandb.log(train_metrics)
+
+    return train_metrics
+
+
+def train_epoch(model, train_loader, optimizer, criterion, epoch):
     model.train()
 
     total_loss = AverageMeter()
@@ -178,20 +231,19 @@ def train_epoch(model, train_loader, optimizer, criterion, scaler, epoch):
     targets = []
 
     for batch in tqdm(train_loader):
-        images = batch["image"].to(device)
-        elas = batch["ela"].to(device)
+        images = torch.cat([batch["image"][0], batch["image"][1]], dim=0).to(device)
+        elas = torch.cat([batch["ela"][0], batch["ela"][1]], dim=0).to(device)
         target_labels = batch["label"].to(device)
-        # dft_dwt_vector = batch["dft_dwt_vector"].to(device)
-        
-        with torch.cuda.amp.autocast():
-            out_logits, _ = model(images, elas)#, dft_dwt_vector)
-            loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
-
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
 
         optimizer.zero_grad()
+
+        out_logits, _ = model(images, elas)
+
+        loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
+        loss.backward()
+
+        optimizer.step()
+        
 
         ############## SRM Step ###########
         bayer_mask = torch.zeros(3,3,5,5).cuda()
@@ -345,6 +397,19 @@ def test(model, test_loader, criterion):
     return test_metrics
 
 
+# def adjust_learning_rate(config, optimizer, epoch):
+#     lr = config.learning_rate
+#     if config.cosine:
+#         eta_min = lr * (config.lr_decay_rate ** 3)
+#         lr = eta_min + (lr - eta_min) * (
+#                 1 + math.cos(math.pi * epoch / config.epochs)) / 2
+#     else:
+#         steps = np.sum(epoch > np.asarray(config.lr_decay_epochs))
+#         if steps > 0:
+#             lr = lr * (config.lr_decay_rate ** steps)
+
+#     for param_group in optimizer.param_groups:
+#         param_group['lr'] = lr
 
 
 if __name__ == "__main__":
@@ -379,24 +444,31 @@ if __name__ == "__main__":
         print('------')
         print(df.groupby('fold').root_dir.value_counts())
 
-    acc = AverageMeter()
-    f1 = AverageMeter()
-    loss = AverageMeter()
-    auc = AverageMeter()
-    for i in range(1):
-        print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
-        test_metrics = train(
-            name=f"(full, amp-test)COMBO_ALL" + config_defaults["model"],
-            df=df,
-            VAL_FOLD=i,
-            resume=False
-        )
-        acc.update(test_metrics['test_acc_05'])
-        f1.update(test_metrics['test_f1_05'])
-        loss.update(test_metrics['test_loss'])
-        auc.update(test_metrics['test_auc'])
+    # acc = AverageMeter()
+    # f1 = AverageMeter()
+    # loss = AverageMeter()
+    # auc = AverageMeter()
+    # for i in range(1):
+    #     print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
+    #     test_metrics = train(
+    #         name=f"(full, amp-test)COMBO_ALL" + config_defaults["model"],
+    #         df=df,
+    #         VAL_FOLD=i,
+    #         resume=False
+    #     )
+    #     acc.update(test_metrics['test_acc_05'])
+    #     f1.update(test_metrics['test_f1_05'])
+    #     loss.update(test_metrics['test_loss'])
+    #     auc.update(test_metrics['test_auc'])
     
-    print(f'FINAL ACCURACY : {acc.avg}')
-    print(f'FINAL F1 : {f1.avg}')
-    print(f'FINAL LOSS : {loss.avg}')
-    print(f'FINAL AUC : {auc.avg}')
+    # print(f'FINAL ACCURACY : {acc.avg}')
+    # print(f'FINAL F1 : {f1.avg}')
+    # print(f'FINAL LOSS : {loss.avg}')
+    # print(f'FINAL AUC : {auc.avg}')
+
+    train(
+        name=f"(Supcon stage1)COMBO_ALL" + config_defaults["model"],
+        df=df,
+        VAL_FOLD=0,
+        resume=False
+    )

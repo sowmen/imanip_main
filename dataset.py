@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import cv2
 from tqdm import tqdm
+import copy
 
 from torch.utils.data import Dataset
 from albumentations import augmentations
@@ -15,7 +16,7 @@ from utils import get_ela
 
 class DATASET(Dataset):
     def __init__(self, dataframe, mode, val_fold, test_fold, nonzero_filter=50, imgaug_augment=None,
-                 transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False
+                 transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False, supcon=False
     ):
 
         super().__init__()
@@ -28,7 +29,8 @@ class DATASET(Dataset):
         self.geo_augment = geo_augment
         self.transforms_normalize = transforms_normalize
         self.label_smoothing = 0.1
-        self.root_folder = "Image_Manipulation_Dataset"
+        self.root_folder = "/media/crimson/easystore/image_manipulation/Image_Manipulation_Dataset"
+        self.supcon = supcon
 
         # self.attn_mask_transforms = albumentations.Compose([
         #     augmentations.transforms.Resize(
@@ -102,10 +104,16 @@ class DATASET(Dataset):
                 if('NIST' in root_dir):
                     mask_image = 255 - mask_image
     
-                    
+            if self.supcon:
+                image2 = cv2.flip(image, 1)
+                mask_image2 = cv2.flip(mask_image, 1)
+                ela_image2 = cv2.flip(ela_image, 1)
+
             if self.imgaug_augment:
                 try :
                     image = self.imgaug_augment.augment_image(image)
+                    if self.supcon:
+                        image2 = self.imgaug_augment.augment_image(image2)
                 except Exception as e:
                     print(image_path, e) 
         
@@ -115,11 +123,22 @@ class DATASET(Dataset):
                 image = data["image"]
                 mask_image = data["mask"]
                 ela_image = data["ela"]
+
+                if self.supcon:
+                    data2 = self.geo_augment(image=image2, mask=mask_image2, ela=ela_image2)
+                    image2 = data2["image"]
+                    mask_image2 = data2["mask"]
+                    ela_image2 = data2["ela"]
             
 
             image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
             ela_image = augmentations.geometric.functional.resize(ela_image, self.resize, self.resize, cv2.INTER_AREA)
             mask_image = augmentations.geometric.functional.resize(mask_image, self.resize, self.resize, cv2.INTER_AREA)
+
+            if self.supcon:
+                image2 = augmentations.geometric.functional.resize(image2, self.resize, self.resize, cv2.INTER_AREA)
+                ela_image2 = augmentations.geometric.functional.resize(ela_image2, self.resize, self.resize, cv2.INTER_AREA)
+                mask_image2 = augmentations.geometric.functional.resize(mask_image2, self.resize, self.resize, cv2.INTER_AREA)
 
             
             ###--- Generate DFT DWT Vector -----------------
@@ -140,6 +159,14 @@ class DATASET(Dataset):
 
             tensor_image = transNormalize(tensor_image)
             tensor_ela = transNormalize(tensor_ela)
+
+            if self.supcon:
+                tensor_image2 = transTensor(image2)
+                tensor_ela2 = transTensor(ela_image2)
+                tensor_mask2 = transTensor(mask_image2)
+
+                tensor_image2 = transNormalize(tensor_image2)
+                tensor_ela2 = transNormalize(tensor_ela2)
             ########################################
 
             # if self.transforms_normalize:
@@ -153,14 +180,17 @@ class DATASET(Dataset):
                 if(np.count_nonzero(tensor_mask.numpy().ravel() >= 0.5) < 100):
                     index = random.randint(0, len(self.data) - 1)
                     continue
+                if(np.count_nonzero(tensor_mask2.numpy().ravel() >= 0.5) < 100):
+                    index = random.randint(0, len(self.data) - 1)
+                    continue
                 
             return {
-                "image": tensor_image,
+                "image": (tensor_image, tensor_image2),
                 "image_path" : image_path,
                 "mask_path" : mask_path, 
                 "label": label, 
-                "mask": tensor_mask,
-                "ela" : tensor_ela,
+                "mask": (tensor_mask, tensor_mask2),
+                "ela" : (tensor_ela, tensor_ela2),
                 # "dft_dwt_vector" : dft_dwt_vector
                 # "attn_mask": attn_mask_image
             }
@@ -223,3 +253,13 @@ class DATASET(Dataset):
             temp_data.append(row)
                 
         return temp_data
+
+
+
+class TwoCropTransform:
+    """Create two crops of the same image"""
+    def __init__(self, transform):
+        self.transform = transform
+
+    def __call__(self, x):
+        return [self.transform(x), self.transform(x)]
