@@ -23,13 +23,14 @@ from segmentation.merged_net import SRM_Classifer
 from sim_dataset import SimDataset
 
 OUTPUT_DIR = "weights"
+CKPT_DIR = "checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 12,
-    "valid_batch_size": 32,
+    "train_batch_size": 8,
+    "valid_batch_size": 20,
     "optimizer": "adam",
-    "learning_rate": 0.0001,
+    "learning_rate": 0.00001,
     "weight_decay": 0.0005,
     "schedule_patience": 4,
     "schedule_factor": 0.25,
@@ -43,7 +44,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
     dt_string = datetime.now().strftime("%d|%m_%H|%M|%S")
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    os.makedirs('checkpoint', exist_ok=True)
+    os.makedirs(CKPT_DIR, exist_ok=True)
     run = f"{name}_[{dt_string}]"
     
     print("Starting -->", run)
@@ -56,6 +57,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
     
     encoder = SRM_Classifer(encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5', freeze_encoder=True)
     model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
+
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     
 
@@ -91,7 +93,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
         imgaug_augment=None,
         geo_augment=train_geo_aug,
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=2, pin_memory=True, drop_last=False)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -102,7 +104,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
         transforms_normalize=transforms_normalize,
         equal_sample=True
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=2, pin_memory=True, drop_last=False)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -113,7 +115,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
         transforms_normalize=transforms_normalize,
         equal_sample=True
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=2, pin_memory=True, drop_last=False)
     #endregion ######################################################################################
 
 
@@ -130,9 +132,10 @@ def train(name, df, VAL_FOLD=0, resume=False):
 
 
     model = nn.DataParallel(model).to(device)
+    print(model.load_state_dict(torch.load('(defacto+customloss)UnetPP_[29|04_21|04|41].h5')))
     
     # wandb.watch(model, log_freq=50, log='all')
-
+    
     start_epoch = 0
     if resume:
         checkpoint = torch.load('checkpoint/224CASIA_128UnetPP_[30|10_05|21|34].pt')
@@ -146,8 +149,8 @@ def train(name, df, VAL_FOLD=0, resume=False):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        if epoch == 6:
-            model.module.encoder.unfreeze()
+        # if epoch == 6:
+        #     model.module.encoder.unfreeze()
 
         train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
         valid_metrics = valid_epoch(model, valid_loader, criterion,  epoch)
@@ -180,7 +183,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
             'optimizer_state_dict' : optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
         }
-        torch.save(checkpoint, os.path.join('checkpoint', f"{run}.pt"))
+        torch.save(checkpoint, os.path.join(CKPT_DIR, f"{run}.pt"))
 
 
     if os.path.exists(os.path.join(OUTPUT_DIR, f"{run}.h5")):
@@ -426,31 +429,33 @@ def get_lossfn():
 if __name__ == "__main__":
 
     #---------------------------------- FULL --------------------------------------#
-    combo_all_df = get_dataframe('combo_all_FULL.csv', folds=None)
-    casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
-    imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
-    cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
-    nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
+    # combo_all_df = get_dataframe('combo_all_FULL.csv', folds=None)
+    # casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
+    # imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
+    # cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
+    # nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
     coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
     
-    nist_extend = get_dataframe('nist_extend.csv', folds=12)
+    # nist_extend = get_dataframe('nist_extend.csv', folds=12)
     coverage_extend = get_dataframe('coverage_extend.csv', folds=12)
-    defacto_cp = get_dataframe('dataset_csv/defacto_copy_move.csv', folds=-1)
-    defacto_inpaint = get_dataframe('dataset_csv/defacto_inpainting.csv', folds=-1)
-    defacto_s1 = get_dataframe('dataset_csv/defacto_splicing1.csv', folds=-1)
-    defacto_s2 = get_dataframe('dataset_csv/defacto_splicing2.csv', folds=-1)
-    defacto_s3 = get_dataframe('dataset_csv/defacto_splicing3.csv', folds=-1)
+    # defacto_cp = get_dataframe('dataset_csv/defacto_copy_move.csv', folds=-1)
+    # defacto_inpaint = get_dataframe('dataset_csv/defacto_inpainting.csv', folds=-1)
+    # defacto_s1 = get_dataframe('dataset_csv/defacto_splicing1.csv', folds=-1)
+    # defacto_s2 = get_dataframe('dataset_csv/defacto_splicing2.csv', folds=-1)
+    # defacto_s3 = get_dataframe('dataset_csv/defacto_splicing3.csv', folds=-1)
     
 
-    df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full,\
-                    nist_extend, coverage_extend, defacto_cp, \
-                    defacto_inpaint, defacto_s1, defacto_s2, defacto_s3])
+    # df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full,\
+    #                 nist_extend, coverage_extend, defacto_cp, \
+    #                 defacto_inpaint, defacto_s1, defacto_s2, defacto_s3])
+    df_full = pd.concat([coverage_full, coverage_extend])
     df_full.insert(0, 'image', '')
     
-    casia128 = get_dataframe('dataset_csv/casia_128.csv', folds=-1)
-    casia128_real = casia128[casia128['label'] == 0]
+    # casia128 = get_dataframe('dataset_csv/casia_128.csv', folds=-1)
+    # casia128_real = casia128[casia128['label'] == 0]
     
-    df = pd.concat([df_full, casia128_real])
+    # df = pd.concat([df_full, casia128_real])
+    df = df_full
     
     
     #---------------------------------- 128 ---------------------------------------#
@@ -466,8 +471,8 @@ if __name__ == "__main__":
     
     with pd.option_context('display.max_rows', None, 'display.max_columns', None):
         print(df.label.value_counts())
-        # print('------')
-        # print(df_full.groupby('fold').root_dir.value_counts())
+        print('------')
+        print(df_full.groupby('fold').root_dir.value_counts())
 
     dice = AverageMeter()
     jaccard = AverageMeter()
@@ -475,7 +480,7 @@ if __name__ == "__main__":
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(defacto+customloss)" + config_defaults["model"],
+            name=f"(COVERAGE+customloss)" + config_defaults["model"],
             df=df,
             VAL_FOLD=i,
             resume=False,

@@ -184,16 +184,28 @@ class DATASET(Dataset):
                     index = random.randint(0, len(self.data) - 1)
                     continue
                 
-            return {
-                "image": (tensor_image, tensor_image2),
-                "image_path" : image_path,
-                "mask_path" : mask_path, 
-                "label": label, 
-                "mask": (tensor_mask, tensor_mask2),
-                "ela" : (tensor_ela, tensor_ela2),
-                # "dft_dwt_vector" : dft_dwt_vector
-                # "attn_mask": attn_mask_image
-            }
+            if self.supcon:
+                return {
+                    "image": (tensor_image, tensor_image2),
+                    "image_path" : image_path,
+                    "mask_path" : mask_path, 
+                    "label": label, 
+                    "mask": (tensor_mask, tensor_mask2),
+                    "ela" : (tensor_ela, tensor_ela2),
+                    # "dft_dwt_vector" : dft_dwt_vector
+                    # "attn_mask": attn_mask_image
+                }
+            else:
+                return {
+                    "image": tensor_image,
+                    "image_path" : image_path,
+                    "mask_path" : mask_path, 
+                    "label": label, 
+                    "mask": tensor_mask,
+                    "ela" : tensor_ela,
+                    # "dft_dwt_vector" : dft_dwt_vector
+                    # "attn_mask": attn_mask_image
+                }
 
 
     def _equalize(self, rows: pd.DataFrame) -> pd.DataFrame:
