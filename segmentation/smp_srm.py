@@ -40,7 +40,7 @@ class SMP_SRM_UPP(nn.Module):
         self.aux_params = dict(
             pooling='avg',             # one of 'avg', 'max'
             dropout=0.2,               # dropout ratio, default is None
-            activation='sigmoid',      # activation function, default is None
+            activation=None,      # activation function, default is None
             classes=1,                 # define number of output labels
         )
         base_model = smp.UnetPlusPlus(
@@ -73,8 +73,3 @@ class SMP_SRM_UPP(nn.Module):
         labels = self.classification_head(features[-1])
             
         return masks, labels
-        
-
-model = SMP_SRM_UPP()
-masks, labels = model(torch.randn(1,3,256,256), torch.randn(1,3,256,256))
-print(masks.shape, labels.shape)

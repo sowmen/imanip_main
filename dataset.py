@@ -29,7 +29,7 @@ class DATASET(Dataset):
         self.geo_augment = geo_augment
         self.transforms_normalize = transforms_normalize
         self.label_smoothing = 0.1
-        self.root_folder = "/media/crimson/easystore/image_manipulation/Image_Manipulation_Dataset"
+        self.root_folder = "Image_Manipulation_Dataset"
         self.supcon = supcon
 
         # self.attn_mask_transforms = albumentations.Compose([
@@ -180,7 +180,7 @@ class DATASET(Dataset):
                 if(np.count_nonzero(tensor_mask.numpy().ravel() >= 0.5) < 100):
                     index = random.randint(0, len(self.data) - 1)
                     continue
-                if(np.count_nonzero(tensor_mask2.numpy().ravel() >= 0.5) < 100):
+                if(self.supcon and np.count_nonzero(tensor_mask2.numpy().ravel() >= 0.5) < 100):
                     index = random.randint(0, len(self.data) - 1)
                     continue
                 
@@ -239,7 +239,7 @@ class DATASET(Dataset):
         if os.path.exists("filtermask50.txt"):
             with open("filtermask50.txt", "r") as fp: lines = fp.read().splitlines()
         
-        pbar = tqdm(data, desc="Filtering empty mask", dynamic_ncols=True, bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}')
+        pbar = tqdm(data, desc="Filtering empty mask", dynamic_ncols=True)
         for row in pbar:
             image_name, _, mask_patch, _, _, _, root_dir = row
 
@@ -265,13 +265,3 @@ class DATASET(Dataset):
             temp_data.append(row)
                 
         return temp_data
-
-
-
-class TwoCropTransform:
-    """Create two crops of the same image"""
-    def __init__(self, transform):
-        self.transform = transform
-
-    def __call__(self, x):
-        return [self.transform(x), self.transform(x)]

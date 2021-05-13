@@ -17,7 +17,7 @@ import seg_metrics
 from pytorch_toolbelt import losses
 from utils import *
 
-# import segmentation_models_pytorch as smp
+from segmentation.smp_srm import SMP_SRM_UPP
 from segmentation.timm_srm_unetpp import UnetPP
 from segmentation.merged_net import SRM_Classifer 
 from sim_dataset import SimDataset
@@ -27,15 +27,15 @@ CKPT_DIR = "checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 8,
-    "valid_batch_size": 20,
+    "train_batch_size": 20,
+    "valid_batch_size": 32,
     "optimizer": "adam",
-    "learning_rate": 0.00001,
+    "learning_rate": 0.001,
     "weight_decay": 0.0005,
-    "schedule_patience": 4,
-    "schedule_factor": 0.25,
+    "schedule_patience": 5,
+    "schedule_factor": 0.15,
     'sampling':'nearest',
-    "model": "UnetPP",
+    "model": "SMP-UnetPP",
 }
 TEST_FOLD = 1
 
@@ -54,15 +54,15 @@ def train(name, df, VAL_FOLD=0, resume=False):
 
 
     # model = smp.DeepLabV3('resnet34', classes=1, encoder_weights='imagenet')
+    model = SMP_SRM_UPP()
     
-    encoder = SRM_Classifer(encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5', freeze_encoder=True)
-    model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
+    # encoder = SRM_Classifer(encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5', freeze_encoder=True)
+    # model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
 
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     
-
-    wandb.save('segmentation/merged_net.py')
     wandb.save('segmentation/timm_srm_unetpp.py')
+    wandb.save('segmentation/smp_srm.py')
     wandb.save('dataset.py')
     
     
@@ -132,7 +132,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
 
 
     model = nn.DataParallel(model).to(device)
-    print(model.load_state_dict(torch.load('(defacto+customloss)UnetPP_[29|04_21|04|41].h5')))
+    # print(model.load_state_dict(torch.load('(defacto+customloss)UnetPP_[29|04_21|04|41].h5')))
     
     # wandb.watch(model, log_freq=50, log='all')
     
@@ -191,6 +191,9 @@ def train(name, df, VAL_FOLD=0, resume=False):
         print("LOADED FOR TEST")
 
     test_metrics = test(model, test_loader, criterion)
+    calculate_auc(model, test_dataset, 'TEST')
+    calculate_auc(model, valid_dataset, 'VAL')
+
     wandb.save(os.path.join(OUTPUT_DIR, f"{run}.h5"))
 
     return test_metrics
@@ -207,7 +210,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
 
     scores = seg_metrics.SegMeter()
 
-    for batch in tqdm(train_loader, desc=f"Train epoch {epoch}", dynamic_ncols=True, bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}'):
+    for batch in tqdm(train_loader, desc=f"Train epoch {epoch}", dynamic_ncols=True):
         images = batch["image"].to(device)
         elas = batch["ela"].to(device)
         gt = batch["mask"].to(device)
@@ -225,10 +228,10 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         ############## SRM Step ###########
         bayer_mask = torch.zeros(3,3,5,5).cuda()
         bayer_mask[:, :, 5//2, 5//2] = 1
-        bayer_weight = model.module.encoder.bayer_conv.weight * (1-bayer_mask)
+        bayer_weight = model.module.bayer_conv.weight * (1-bayer_mask)
         bayer_weight = (bayer_weight / torch.sum(bayer_weight, dim=(2,3), keepdim=True)) + 1e-7
         bayer_weight -= bayer_mask
-        model.module.encoder.bayer_conv.weight = nn.Parameter(bayer_weight)
+        model.module.bayer_conv.weight = nn.Parameter(bayer_weight)
         ###################################
             
         # ---------------------Batch Loss Update-------------------------
@@ -281,7 +284,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     example_images = []
     
     with torch.no_grad():
-        for batch in tqdm(valid_loader, desc=f"Valid epoch {epoch}", dynamic_ncols=True, bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}'):
+        for batch in tqdm(valid_loader, desc=f"Valid epoch {epoch}", dynamic_ncols=True):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
@@ -415,6 +418,58 @@ def test(model, test_loader, criterion):
     wandb.log(test_metrics)
     return test_metrics
 
+from sklearn.metrics import roc_auc_score
+def calculate_auc(model, dataset, step):
+    model.eval()
+
+    preds = []
+    truths = []
+    paths = []
+
+    for data in tqdm(dataset):
+        images = data["image"].unsqueeze(0).to(device)
+        elas = data["ela"].unsqueeze(0).to(device)
+        gt = data["mask"].unsqueeze(0)
+        target_labels = data["label"]
+        mask_path = data['mask_path']
+
+        if(target_labels > 0.5 and np.count_nonzero(gt.numpy().ravel() >= 0.5) > 0):
+            pred_mask, _ = model(images, elas)
+
+            pred_mask = torch.sigmoid(pred_mask)
+            pred_mask = pred_mask.cpu().detach()
+            
+            preds.append(pred_mask.squeeze())
+            truths.append(gt.squeeze())
+            paths.append(mask_path)
+    
+
+    thrs = [0.0,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1.0]
+    example_images = []
+    auc, cnt = 0, 0
+    for gtr, pr, path in tqdm(zip(truths, preds, paths)):
+        best, bt = -1, 0
+        for thr in thrs:
+            tmp = roc_auc_score(gtr.numpy().ravel() >= 0.5, pr.numpy().ravel() >= thr)          
+            if tmp > best: 
+                best = tmp
+                bt = thr
+        auc += best
+        cnt += 1
+        example_images.append((pr, gtr, path, bt))
+    dataset_auc = auc / cnt
+
+    examples = []
+    for b in example_images:
+        caption = "Thr:" + str(b[-1]) + b[-2]
+        examples.append(wandb.Image(b[0],caption=caption))
+        examples.append(wandb.Image(b[1]))
+
+    wandb.log({
+        "examples": examples,
+        f"{step}_pixel_auc" : dataset_auc
+    })
+    print(f"{step} AUC : ", dataset_auc)
 
 
 from losses import DiceLoss, ImanipLoss
@@ -425,19 +480,18 @@ def get_lossfn():
     return criterion
 
     
-
 if __name__ == "__main__":
 
     #---------------------------------- FULL --------------------------------------#
     # combo_all_df = get_dataframe('combo_all_FULL.csv', folds=None)
-    # casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
+    casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
     # imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
     # cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
     # nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
-    coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
+    # coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
     
     # nist_extend = get_dataframe('nist_extend.csv', folds=12)
-    coverage_extend = get_dataframe('coverage_extend.csv', folds=12)
+    # coverage_extend = get_dataframe('coverage_extend.csv', folds=12)
     # defacto_cp = get_dataframe('dataset_csv/defacto_copy_move.csv', folds=-1)
     # defacto_inpaint = get_dataframe('dataset_csv/defacto_inpainting.csv', folds=-1)
     # defacto_s1 = get_dataframe('dataset_csv/defacto_splicing1.csv', folds=-1)
@@ -448,7 +502,7 @@ if __name__ == "__main__":
     # df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full,\
     #                 nist_extend, coverage_extend, defacto_cp, \
     #                 defacto_inpaint, defacto_s1, defacto_s2, defacto_s3])
-    df_full = pd.concat([coverage_full, coverage_extend])
+    df_full = casia_full
     df_full.insert(0, 'image', '')
     
     # casia128 = get_dataframe('dataset_csv/casia_128.csv', folds=-1)
@@ -480,7 +534,7 @@ if __name__ == "__main__":
     for i in range(0,1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(COVERAGE+customloss)" + config_defaults["model"],
+            name=f"(CASIA_FULL+customloss)" + config_defaults["model"],
             df=df,
             VAL_FOLD=i,
             resume=False,
