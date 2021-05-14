@@ -6,6 +6,7 @@ import cv2
 from tqdm import tqdm
 import copy
 
+import torch
 from torch.utils.data import Dataset
 from albumentations import augmentations
 from torchvision import transforms
@@ -177,10 +178,10 @@ class DATASET(Dataset):
             # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
             if label == 1:
-                if(np.count_nonzero(tensor_mask.numpy().ravel() >= 0.5) < 100):
+                if(torch.count_nonzero(tensor_mask.ravel() >= 0.5) < 100):
                     index = random.randint(0, len(self.data) - 1)
                     continue
-                if(self.supcon and np.count_nonzero(tensor_mask2.numpy().ravel() >= 0.5) < 100):
+                if(self.supcon and torch.count_nonzero(tensor_mask2.ravel() >= 0.5) < 100):
                     index = random.randint(0, len(self.data) - 1)
                     continue
                 

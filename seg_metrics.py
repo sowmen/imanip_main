@@ -223,6 +223,8 @@ class MetricMeter:
         images = batch["image"].cpu().detach()
         paths = batch["image_path"]
 
+        targets = (targets >= 0.5).astype('uint8')
+        
         real_indices = torch.where(target_labels < 0.5)[0]
         real_images = images[real_indices]
         real_pred_mask = predictions[real_indices]
