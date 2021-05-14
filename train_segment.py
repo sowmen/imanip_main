@@ -40,7 +40,7 @@ config_defaults = {
 TEST_FOLD = 1
 
 
-def train(name, df, VAL_FOLD=0, resume=False):
+def train(name, df, VAL_FOLD=0, resume=None):
     dt_string = datetime.now().strftime("%d|%m_%H|%M|%S")
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -137,8 +137,8 @@ def train(name, df, VAL_FOLD=0, resume=False):
     # wandb.watch(model, log_freq=50, log='all')
     
     start_epoch = 0
-    if resume:
-        checkpoint = torch.load('checkpoint/224CASIA_128UnetPP_[30|10_05|21|34].pt')
+    if resume is not None:
+        checkpoint = torch.load(resume)
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -159,19 +159,18 @@ def train(name, df, VAL_FOLD=0, resume=False):
 
         print(
             f"TRAIN_LOSS = {train_metrics['train_loss_segmentation']}, \
-            TRAIN_DICE = {train_metrics['train_dice']}, \
-            TRAIN_JACCARD = {train_metrics['train_jaccard']}"
+            TRAIN_FAKE_DICE = {train_metrics['train_fake_dice']}, \
+            TRAIN_REAL_FPR = {train_metrics['train_real_fpr']}"
         )
         print(
             f"VALID_LOSS = {valid_metrics['valid_loss_segmentation']}, \
-            VALID_DICE = {valid_metrics['valid_dice']}, \
-            VALID_JACCARD = {valid_metrics['valid_jaccard']}"
+            VALID_FAKE_DICE = {valid_metrics['valid_fake_dice']}, \
+            VALID_REAL_FPR = {valid_metrics['valid_real_fpr']}"
         )
 
-        es(
-            valid_metrics["valid_loss_segmentation"],
-            model,
-            model_path=os.path.join(OUTPUT_DIR, f"{run}.h5"),
+        es(valid_metrics["valid_loss_segmentation"],
+           model,
+           model_path=os.path.join(OUTPUT_DIR, f"{run}.h5"),
         )
         if es.early_stop:
             print("Early stopping")
@@ -190,13 +189,11 @@ def train(name, df, VAL_FOLD=0, resume=False):
         print(model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{run}.h5"))))
         print("LOADED FOR TEST")
 
-    test_metrics = test(model, test_loader, criterion)
+    test(model, test_loader, criterion)
     calculate_auc(model, test_dataset, 'TEST')
     calculate_auc(model, valid_dataset, 'VAL')
 
     wandb.save(os.path.join(OUTPUT_DIR, f"{run}.h5"))
-
-    return test_metrics
     
     
     
@@ -218,7 +215,6 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
 
         optimizer.zero_grad()
         pred_mask, label_tensor = model(images, elas)
-        # pred_mask = model(images)
 
         loss_segmentation, bce_loss, dice_loss = criterion(pred_mask, gt, label_tensor, target_labels.view(-1, 1))
         loss_segmentation.backward()
@@ -292,7 +288,6 @@ def valid_epoch(model, valid_loader, criterion, epoch):
                     
             
             pred_mask, label_tensor = model(images, elas)
-            # pred_mask = model(images)
 
             loss_segmentation, bce_loss, dice_loss = criterion(pred_mask, gt, label_tensor, target_labels.view(-1, 1))
 
@@ -394,7 +389,6 @@ def test(model, test_loader, criterion):
         "examples": metrics.example_images,
     }
     wandb.log(test_metrics)
-    return test_metrics
 
 
 from sklearn.metrics import roc_auc_score
@@ -507,21 +501,10 @@ if __name__ == "__main__":
         print('------')
         print(df_full.groupby('fold').root_dir.value_counts())
 
-    dice = AverageMeter()
-    jaccard = AverageMeter()
-    loss = AverageMeter()
-    for i in range(0,1):
-        print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
-        test_metrics = train(
-            name=f"(CASIA_FULL+customloss)" + config_defaults["model"],
-            df=df,
-            VAL_FOLD=i,
-            resume=False,
-        )
-        dice.update(test_metrics['test_dice'])
-        jaccard.update(test_metrics['test_jaccard'])
-        loss.update(test_metrics['test_loss_segmentation'])
     
-    print(f'DICE : {dice.avg}')
-    print(f'JACCARD : {jaccard.avg}')
-    print(f'LOSS : {loss.avg}')
+    train(
+        name=f"(CASIA_FULL+customloss)" + config_defaults["model"],
+        df=df,
+        VAL_FOLD=0,
+        resume=None,
+    )
