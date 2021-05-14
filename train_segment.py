@@ -203,11 +203,11 @@ def train(name, df, VAL_FOLD=0, resume=False):
 def train_epoch(model, train_loader, optimizer, criterion, epoch):
     model.train()
 
-    segmentation_loss = AverageMeter()
-    dice = AverageMeter()
-    jaccard = AverageMeter()
-    # pixel_auc = AverageMeter()
-
+    total_loss = AverageMeter()
+    classification_loss = AverageMeter()
+    mask_loss = AverageMeter()
+    
+    metrics = seg_metrics.MetricMeter("TRAIN")
     scores = seg_metrics.SegMeter()
 
     for batch in tqdm(train_loader, desc=f"Train epoch {epoch}", dynamic_ncols=True):
@@ -220,7 +220,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         pred_mask, label_tensor = model(images, elas)
         # pred_mask = model(images)
 
-        loss_segmentation = criterion(pred_mask, gt, label_tensor, target_labels.view(-1, 1))
+        loss_segmentation, bce_loss, dice_loss = criterion(pred_mask, gt, label_tensor, target_labels.view(-1, 1))
         loss_segmentation.backward()
 
         optimizer.step()
@@ -235,37 +235,38 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         ###################################
             
         # ---------------------Batch Loss Update-------------------------
-        segmentation_loss.update(loss_segmentation.item(), train_loader.batch_size)
+        total_loss.update(loss_segmentation.item(), train_loader.batch_size)
+        classification_loss.update(bce_loss.item(), train_loader.batch_size)
+        mask_loss.update(dice_loss.item(), train_loader.batch_size)
 
         with torch.no_grad():
             pred_mask = torch.sigmoid(pred_mask)
             pred_mask = pred_mask.cpu().detach()
             gt = gt.cpu().detach()
             
-            batch_dice, _, _ = seg_metrics.get_avg_batch_dice(pred_mask, gt)
-            dice.update(batch_dice, train_loader.batch_size)
-
-            batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(pred_mask, gt)
-            jaccard.update(batch_jaccard, train_loader.batch_size)
-
-            
-            # batch_pixel_auc, num = seg_metrics.batch_pixel_auc(pred_mask, gt, batch["image_path"])
-            # pixel_auc.update(batch_pixel_auc, num)
-            
+            metrics.update(pred_mask, gt, batch)
             scores.update(pred_mask, gt)
             
 
     dice2, dice_neg, dice_pos, iou2 = seg_metrics.epoch_score_log("TRAIN", scores)
+
     train_metrics = {
-        "train_loss_segmentation": segmentation_loss.avg,
-        "train_dice": dice.avg,
-        "train_jaccard": jaccard.avg,
         "epoch" : epoch,
+        "train_loss_segmentation": total_loss.avg,
+        "train_classification_loss": classification_loss.avg,
+        "train_mask_loss": mask_loss.avg,
+
+        "train_fake_dice": metrics.fake_dice.avg,
+        "train_fake_jaccard": metrics.fake_jaccard.avg,
+        "train_fake_pixel_auc": metrics.fake_pixel_auc.avg,
+        "train_fake_fpr": metrics.fake_fpr.avg,
+        "train_real_fpr": metrics.real_fpr.avg,
+        "train_total_fpr": metrics.total_fpr.avg,
+
         "train_dice2" : dice2,
         "train_dice_pos" : dice_pos,
         "train_dice_neg" : dice_neg,
         "train_iou2" : iou2,
-        # "train_pixel_auc" : pixel_auc.avg
     }
     wandb.log(train_metrics)
 
@@ -275,13 +276,12 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
 def valid_epoch(model, valid_loader, criterion, epoch):
     model.eval()
 
-    segmentation_loss = AverageMeter()
-    dice = AverageMeter()
-    jaccard = AverageMeter()
-    # pixel_auc = AverageMeter()
+    total_loss = AverageMeter()
+    classification_loss = AverageMeter()
+    mask_loss = AverageMeter()
+    
+    metrics = seg_metrics.MetricMeter("VALID")
     scores = seg_metrics.SegMeter()
-
-    example_images = []
     
     with torch.no_grad():
         for batch in tqdm(valid_loader, desc=f"Valid epoch {epoch}", dynamic_ncols=True):
@@ -294,68 +294,42 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             pred_mask, label_tensor = model(images, elas)
             # pred_mask = model(images)
 
-            loss_segmentation = criterion(pred_mask, gt, label_tensor, target_labels.view(-1, 1))
+            loss_segmentation, bce_loss, dice_loss = criterion(pred_mask, gt, label_tensor, target_labels.view(-1, 1))
 
             # ---------------------Batch Loss Update-------------------------
-            segmentation_loss.update(loss_segmentation.item(), valid_loader.batch_size)
+            total_loss.update(loss_segmentation.item(), valid_loader.batch_size)
+            classification_loss.update(bce_loss.item(), valid_loader.batch_size)
+            mask_loss.update(dice_loss.item(), valid_loader.batch_size)
 
             pred_mask = torch.sigmoid(pred_mask)
             pred_mask = pred_mask.cpu().detach()
             gt = gt.cpu().detach()
             
-            batch_dice, (mx_dice, best_dice_idx), (worst_dice, worst_dice_idx) = seg_metrics.get_avg_batch_dice(pred_mask, gt)
-            dice.update(batch_dice, valid_loader.batch_size)
-
-            batch_jaccard, (mx_iou, best_iou__idx), (worst_iou, worst_idx) = seg_metrics.get_avg_batch_jaccard(pred_mask, gt)
-            jaccard.update(batch_jaccard, valid_loader.batch_size)
-
-            if(np.random.rand() < 0.5 and len(example_images) < 20):
-                images = images.cpu().detach()
-                example_images.append({
-                    "best_image" : images[best_dice_idx],
-                    "best_image_name" : batch["image_path"][best_dice_idx],
-                    "best_dice" : mx_dice,
-                    "best_pred" : pred_mask[best_dice_idx],
-                    "best_gt" : gt[best_dice_idx],
-                    "worst_image" : images[worst_dice_idx],
-                    "worst_image_name" : batch["image_path"][worst_dice_idx],
-                    "worst_dice" : worst_dice,
-                    "worst_pred" : pred_mask[worst_dice_idx],
-                    "worst_gt" : gt[worst_dice_idx],
-                })
-            
+            metrics.update(pred_mask, gt, batch)
             scores.update(pred_mask, gt)
 
-            # batch_pixel_auc, num = seg_metrics.batch_pixel_auc(pred_mask, gt, batch["image_path"])
-            # pixel_auc.update(batch_pixel_auc, valid_loader.batch_size)
-
-            gc.collect()
-
-    examples = []
-    for b in example_images:
-        caption_best = f"{epoch}Best Dice:" + str(b["best_dice"]) + "Path : " + str(b["best_image_name"])
-        examples.append(wandb.Image(b['best_image'],caption=caption_best))
-        examples.append(wandb.Image(b['best_pred'],caption=f'{epoch}PRED'))
-        examples.append(wandb.Image(b['best_gt'],caption=f'{epoch}GT'))
-
-        caption_worst = f"{epoch}Worst Dice:" + str(b["worst_dice"]) + "Path : " + str(b["worst_image_name"])
-        examples.append(wandb.Image(b['worst_image'],caption=caption_worst))
-        examples.append(wandb.Image(b['worst_pred'],caption=f'{epoch}PRED'))
-        examples.append(wandb.Image(b['worst_gt'],caption=f'{epoch}GT'))
 
     dice2, dice_neg, dice_pos, iou2 = seg_metrics.epoch_score_log("VALID", scores)
 
     valid_metrics = {
-        "valid_loss_segmentation": segmentation_loss.avg,
-        "valid_dice": dice.avg,
-        "valid_jaccard": jaccard.avg,
-        "examples": examples,
         "epoch" : epoch,
+        "valid_loss_segmentation": total_loss.avg,
+        "valid_classification_loss": classification_loss.avg,
+        "valid_mask_loss": mask_loss.avg,
+
+        "valid_fake_dice": metrics.fake_dice.avg,
+        "valid_fake_jaccard": metrics.fake_jaccard.avg,
+        "valid_fake_pixel_auc": metrics.fake_pixel_auc.avg,
+        "valid_fake_fpr": metrics.fake_fpr.avg,
+        "valid_real_fpr": metrics.real_fpr.avg,
+        "valid_total_fpr": metrics.total_fpr.avg,
+
         "valid_dice2" : dice2,
         "valid_dice_pos" : dice_pos,
         "valid_dice_neg" : dice_neg,
         "valid_iou2" : iou2,
-        # "valid_pixel_auc" : pixel_auc.avg
+        
+        "examples": metrics.example_images,
     }
     wandb.log(valid_metrics)
 
@@ -365,14 +339,15 @@ def valid_epoch(model, valid_loader, criterion, epoch):
 def test(model, test_loader, criterion):
     model.eval()
 
-    segmentation_loss = AverageMeter()
-    dice = AverageMeter()
-    jaccard = AverageMeter()
-    # pixel_auc = AverageMeter()
+    total_loss = AverageMeter()
+    classification_loss = AverageMeter()
+    mask_loss = AverageMeter()
+    
+    metrics = seg_metrics.MetricMeter("TEST")
     scores = seg_metrics.SegMeter()
 
     with torch.no_grad():
-        for batch in tqdm(test_loader, dynamic_ncols=True, bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}'):
+        for batch in tqdm(test_loader, dynamic_ncols=True):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             gt = batch["mask"].to(device)
@@ -382,41 +357,45 @@ def test(model, test_loader, criterion):
             pred_mask, label_tensor = model(images, elas)
             # pred_mask = model(images)
 
-            loss_segmentation = criterion(pred_mask, gt, label_tensor, target_labels.view(-1, 1))
+            loss_segmentation, bce_loss, dice_loss = criterion(pred_mask, gt, label_tensor, target_labels.view(-1, 1))
 
             # ---------------------Batch Loss Update-------------------------
-            segmentation_loss.update(loss_segmentation.item(), test_loader.batch_size)
+            total_loss.update(loss_segmentation.item(), test_loader.batch_size)
+            classification_loss.update(bce_loss.item(), test_loader.batch_size)
+            mask_loss.update(dice_loss.item(), test_loader.batch_size)
 
             pred_mask = torch.sigmoid(pred_mask)
             pred_mask = pred_mask.cpu().detach()
             gt = gt.cpu().detach()
             
-            batch_dice, _, _ = seg_metrics.get_avg_batch_dice(pred_mask, gt)
-            dice.update(batch_dice, test_loader.batch_size)
-
-            batch_jaccard, _, _ = seg_metrics.get_avg_batch_jaccard(pred_mask, gt)
-            jaccard.update(batch_jaccard, test_loader.batch_size)
-
+            metrics.update(pred_mask, gt, batch)
             scores.update(pred_mask, gt)
 
-            # batch_pixel_auc, num = seg_metrics.batch_pixel_auc(pred_mask, gt, batch["image_path"])
-            # pixel_auc.update(batch_pixel_auc, test_loader.batch_size)
-
-            gc.collect()
 
     dice2, dice_neg, dice_pos, iou2 = seg_metrics.epoch_score_log("TEST", scores)
+
     test_metrics = {
-        "test_loss_segmentation": segmentation_loss.avg,
-        "test_dice": dice.avg,
-        "test_jaccard": jaccard.avg,
+        "test_loss_segmentation": total_loss.avg,
+        "test_classification_loss": classification_loss.avg,
+        "test_mask_loss": mask_loss.avg,
+
+        "test_fake_dice": metrics.fake_dice.avg,
+        "test_fake_jaccard": metrics.fake_jaccard.avg,
+        "test_fake_pixel_auc": metrics.fake_pixel_auc.avg,
+        "test_fake_fpr": metrics.fake_fpr.avg,
+        "test_real_fpr": metrics.real_fpr.avg,
+        "test_total_fpr": metrics.total_fpr.avg,
+
         "test_dice2" : dice2,
         "test_dice_pos" : dice_pos,
         "test_dice_neg" : dice_neg,
         "test_iou2" : iou2,
-        # "test_pixel_auc" : pixel_auc.avg
+        
+        "examples": metrics.example_images,
     }
     wandb.log(test_metrics)
     return test_metrics
+
 
 from sklearn.metrics import roc_auc_score
 def calculate_auc(model, dataset, step):

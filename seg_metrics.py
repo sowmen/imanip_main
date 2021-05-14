@@ -1,22 +1,21 @@
+from utils import AverageMeter
 import torch
 from pytorch_toolbelt import losses
-import numpy as np
-import traceback    
+import numpy as np  
+from sklearn.metrics import roc_auc_score, confusion_matrix
+import wandb
 
-
-def get_avg_batch_dice(outputs : torch.tensor, targets : torch.tensor): 
+def get_avg_dice(predictions:torch.tensor, targets:torch.tensor): 
     """Dice coeff for batches"""
-
     tot_dice = 0.0
     mx_dice, worst_dice = -1, 1e9
     best_idx, worst_idx = 0, 0
 
-    for i, c in enumerate(zip(outputs, targets)):
-
-        assert c[0].shape == c[1].shape
-        assert c[0].requires_grad == False
+    for i, (pred, gt) in enumerate(zip(predictions, targets)):
+        assert pred.shape == gt.shape
+        assert pred.requires_grad == False
         
-        d = losses.functional.soft_dice_score(c[0], c[1], smooth=1e-7).item()
+        d = losses.functional.soft_dice_score(pred, gt, smooth=1e-7).item()
         tot_dice += d
         if (d >= 0 and d <= 1.0) and d > mx_dice:
             mx_dice = d
@@ -25,22 +24,20 @@ def get_avg_batch_dice(outputs : torch.tensor, targets : torch.tensor):
             worst_dice = d
             worst_idx = i 
     
-    return tot_dice / (outputs.shape[0]), (mx_dice, best_idx), (worst_dice, worst_idx)
+    return tot_dice / (predictions.shape[0]), (mx_dice, best_idx), (worst_dice, worst_idx)
 
 
-def get_avg_batch_jaccard(outputs : torch.tensor, targets : torch.tensor): 
-    """Dice coeff for batches"""
-
+def get_avg_jaccard(predictions:torch.tensor, targets:torch.tensor): 
+    """Jaccard coeff for batches"""
     tot_iou = 0.0
     mx_iou, worst_iou = -1, 1e9
     best_idx, worst_idx = 0, 0
 
-    for i, c in enumerate(zip(outputs, targets)):
-
-        assert c[0].shape == c[1].shape
-        assert c[0].requires_grad == False
+    for i, (pred, gt) in enumerate(zip(predictions, targets)):
+        assert pred.shape == gt.shape
+        assert pred.requires_grad == False
         
-        d = losses.functional.soft_jaccard_score(c[0], c[1], smooth=1e-7).item()
+        d = losses.functional.soft_jaccard_score(pred, gt, smooth=1e-7).item()
         tot_iou += d
         if (d >= 0 and d <= 1.0) and d > mx_iou:
             mx_iou = d
@@ -49,33 +46,56 @@ def get_avg_batch_jaccard(outputs : torch.tensor, targets : torch.tensor):
             worst_iou = d
             worst_idx = i 
     
-    return tot_iou / (outputs.shape[0]), (mx_iou, best_idx), (worst_iou, worst_idx)
+    return tot_iou / (predictions.shape[0]), (mx_iou, best_idx), (worst_iou, worst_idx)
 
 
-from sklearn.metrics import roc_auc_score
-
-def batch_pixel_auc(outputs : torch.tensor, targets : torch.tensor, paths):
-    i, sum = 0, 0
-    for x, y, path in zip(outputs, targets, paths):
+def get_pixel_auc(predictions:torch.tensor, targets:torch.tensor, paths):
+    sum, i = 0, 0
+    for pred, truth, path in zip(predictions, targets, paths):
         try:
-            roc = roc_auc_score(y.numpy().ravel() >= 0.5, x.numpy().ravel() >= 0.5)
+            roc = roc_auc_score(truth.ravel(), pred.ravel())
             sum += roc
             i += 1
         except ValueError as e:
-            print(traceback.print_exc())
             print(e)
             print(path)
         
     return (sum / i), i
 
 
-def sensitivity(outputs, targets):
-    true_positives = torch.sum(torch.round(torch.clamp(targets * outputs, 0, 1)))
+def get_fpr(predictions:torch.tensor, targets:torch.tensor, thr=0.5):
+    sum, i = 0, 0
+    min_fpr, max_fpr = 1e9, -1
+    best_idx, worst_idx = 0, 0
+
+    for truth, pred in zip(targets, predictions):
+        truth = (truth.numpy().ravel() >= thr).astype('uint8')
+        pred = (pred.numpy().ravel() >= thr).astype('uint8')
+
+        if np.count_nonzero(pred) == 0:
+            min_fpr, best_idx = 0, i
+            i += 1
+            continue
+
+        tn, fp, fn, tp = confusion_matrix(truth, pred).ravel()
+        fpr = fp/(fp+tn)
+
+        if fpr < min_fpr: min_fpr, best_idx = fpr, i
+        if fpr > max_fpr: max_fpr, worst_idx = fpr, i
+
+        sum += fpr
+        i += 1
+    
+    return (sum/i), (min_fpr, best_idx), (max_fpr, worst_idx)
+
+
+def sensitivity(predictions, targets):
+    true_positives = torch.sum(torch.round(torch.clamp(targets * predictions, 0, 1)))
     possible_positives = torch.sum(torch.round(torch.clamp(targets, 0, 1)))
     return true_positives / (possible_positives + 1e-7)
 
-def specificity(outputs, targets):
-    true_negatives = torch.sum(torch.round(torch.clamp((1 - targets) * (1 - outputs), 0, 1)))
+def specificity(predictions, targets):
+    true_negatives = torch.sum(torch.round(torch.clamp((1 - targets) * (1 - predictions), 0, 1)))
     possible_negatives = torch.sum(torch.round(torch.clamp(1 - targets, 0, 1)))
     return true_negatives / (possible_negatives + 1e-7)
 
@@ -137,10 +157,10 @@ def compute_ious(pred, label, classes, ignore_index=255, only_present=True):
     return ious if ious else [1]
 
 
-def compute_iou_batch(outputs, labels, classes=None):
+def compute_iou_batch(predictions, labels, classes=None):
     '''computes mean iou for a batch of ground truth masks and predicted masks'''
     ious = []
-    preds = np.copy(outputs) # copy is imp
+    preds = np.copy(predictions) # copy is imp
     labels = np.array(labels) # tensor to np
     for pred, label in zip(preds, labels):
         ious.append(np.nanmean(compute_ious(pred, label, classes)))
@@ -156,9 +176,9 @@ class SegMeter:
         self.dice_pos_scores = []
         self.iou_scores = []
 
-    def update(self, outputs, targets):
-        # probs = torch.sigmoid(outputs)
-        probs = outputs
+    def update(self, predictions, targets):
+        # probs = torch.sigmoid(predictions)
+        probs = predictions
         dice, dice_neg, dice_pos, _, _ = metric(probs, targets, self.base_threshold)
         self.base_dice_scores.extend(dice)
         self.dice_pos_scores.extend(dice_pos)
@@ -183,3 +203,128 @@ def epoch_score_log(phase, meter):
     return dice, dice_neg, dice_pos, iou
 #######################################################################################
 #endregion
+
+
+class MetricMeter:
+    '''A meter to keep track of scores throughout an epoch'''
+    def __init__(self, mode):
+        self.mode = mode
+        self.fake_dice = AverageMeter()
+        self.fake_jaccard = AverageMeter()
+        self.fake_pixel_auc = AverageMeter()
+        self.fake_fpr = AverageMeter()
+        self.real_fpr = AverageMeter()
+        self.total_fpr = AverageMeter()
+
+        self.example_images = []
+
+    def update(self, predictions, targets, batch=None):
+        target_labels = batch["label"].cpu().detach()
+        images = batch["image"].cpu().detach()
+        paths = batch["image_path"]
+
+        real_indices = torch.where(target_labels < 0.5)[0]
+        real_images = images[real_indices]
+        real_pred_mask = predictions[real_indices]
+        real_gt = targets[real_indices]
+        real_image_paths = paths[real_indices]
+
+        fake_indices = torch.where(target_labels > 0.5)[0]
+        fake_images = images[fake_indices]
+        fake_pred_mask = predictions[fake_indices]
+        fake_gt = targets[fake_indices]
+        fake_image_paths = paths[fake_indices]
+
+        batch_fake_dice, (mx_fake_dice, best_fake_dice_idx), (worst_fake_dice, worst_fake_dice_idx) = get_avg_dice(fake_pred_mask, fake_gt)
+        self.fake_dice.update(batch_fake_dice, fake_pred_mask.shape[0])
+
+        batch_fake_jaccard, _, _ = get_avg_jaccard(fake_pred_mask, fake_gt)
+        self.fake_jaccard.update(batch_fake_jaccard, fake_pred_mask.shape[0])
+
+        batch_fake_pixel_auc, num = get_pixel_auc(fake_pred_mask, fake_gt, fake_image_paths)
+        self.fake_pixel_auc.update(batch_fake_pixel_auc, num)
+
+        batch_fake_fpr, _, _ = get_fpr(fake_pred_mask, fake_gt)
+        self.fake_fpr.update(batch_fake_fpr, fake_pred_mask.shape[0])
+
+        batch_real_fpr, (min_fpr, best_real_fpr_idx), (max_fpr, worst_real_fpr_idx) = get_fpr(real_pred_mask, real_gt)
+        self.real_fpr.update(batch_real_fpr, real_pred_mask.shape[0])
+
+        batch_total_fpr, _, _ = get_fpr(predictions, targets)
+        self.total_fpr.update(batch_total_fpr, predictions.shape[0])
+
+        if self.mode != "TRAIN":
+            if(np.random.rand() < 0.3 and len(self.example_images) < 30):
+                self.example_images.append(
+                    wandb.Image(
+                        get_image_plot(fake_images[best_fake_dice_idx],
+                            fake_pred_mask[best_fake_dice_idx], 
+                            fake_gt[best_fake_dice_idx],
+                            f"BestDice : {mx_fake_dice}"
+                        ),
+                        caption= fake_image_paths[best_fake_dice_idx].split('/', 2)[-1]
+                    )
+                )
+                self.example_images.append(
+                    wandb.Image(   
+                        get_image_plot(fake_images[worst_fake_dice_idx],
+                            fake_pred_mask[worst_fake_dice_idx],
+                            fake_gt[best_fake_dice_idx],
+                            f"WorstDice : {worst_fake_dice}"
+                        ),
+                        caption= fake_image_paths[worst_fake_dice_idx].split('/', 2)[-1]
+                    )
+                )
+                self.example_images.append(
+                    wandb.Image(
+                        get_image_plot(real_images[best_real_fpr_idx],
+                            real_pred_mask[best_real_fpr_idx], 
+                            real_gt[best_real_fpr_idx],
+                            f"BestFPR : {min_fpr}"
+                        ),
+                        caption= real_image_paths[best_real_fpr_idx].split('/', 2)[-1]
+                    )
+                )
+                self.example_images.append(
+                    wandb.Image(
+                        get_image_plot(real_images[worst_real_fpr_idx],
+                            real_pred_mask[worst_real_fpr_idx], 
+                            real_gt[worst_real_fpr_idx],
+                            f"BestFPR : {max_fpr}"
+                        ),
+                        caption= real_image_paths[worst_real_fpr_idx].split('/', 2)[-1]
+                    )
+                )
+
+
+from matplotlib import gridspec
+import matplotlib.pyplot as plt
+import io
+import PIL
+
+def get_image_plot(image, pred, gt, title):
+    fig = plt.figure(figsize=(12,5))
+    gs = gridspec.GridSpec(1,3)
+    gs.update(wspace=0., hspace=0.)
+
+    ax1 = plt.subplot(gs[0,0])
+    ax1.imshow(image)
+    ax1.axis('off')
+    ax1.set_aspect('equal')
+    ax2 = plt.subplot(gs[0,1])
+    ax2.imshow(pred)
+    ax2.axis('off')
+    ax2.set_aspect('equal')
+    ax3 = plt.subplot(gs[0,2])
+    ax3.imshow(gt)
+    ax3.axis('off')
+    ax3.set_aspect('equal')
+    fig.tight_layout()
+    fig.suptitle(title, fontsize=18)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', bbox_inches = 'tight', pad_inches = 0)
+    buf.seek(0)
+    im = PIL.Image.open(buf)
+
+    return im
