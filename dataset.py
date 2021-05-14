@@ -178,10 +178,10 @@ class DATASET(Dataset):
             # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
             if label == 1:
-                if(torch.count_nonzero(tensor_mask.ravel() >= 0.5) < 100):
+                if(np.count_nonzero(tensor_mask.numpy().ravel() >= 0.5) < 100):
                     index = random.randint(0, len(self.data) - 1)
                     continue
-                if(self.supcon and torch.count_nonzero(tensor_mask2.ravel() >= 0.5) < 100):
+                if(self.supcon and np.count_nonzero(tensor_mask2.numpy().ravel() >= 0.5) < 100):
                     index = random.randint(0, len(self.data) - 1)
                     continue
                 

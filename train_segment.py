@@ -10,6 +10,9 @@ from torch.utils.data import DataLoader
 
 torch.backends.cudnn.benchmark = True
 
+import warnings
+warnings.filterwarnings("ignore")
+
 import wandb
 
 from dataset import DATASET
