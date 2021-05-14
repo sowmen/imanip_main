@@ -224,18 +224,18 @@ class MetricMeter:
         paths = batch["image_path"]
 
         targets = (targets >= 0.5).astype('uint8')
-        
+
         real_indices = torch.where(target_labels < 0.5)[0]
         real_images = images[real_indices]
         real_pred_mask = predictions[real_indices]
         real_gt = targets[real_indices]
-        real_image_paths = paths[real_indices]
+        real_image_paths = [paths[i] for i in real_indices]
 
         fake_indices = torch.where(target_labels > 0.5)[0]
         fake_images = images[fake_indices]
         fake_pred_mask = predictions[fake_indices]
         fake_gt = targets[fake_indices]
-        fake_image_paths = paths[fake_indices]
+        fake_image_paths = [paths[i] for i in fake_indices]
 
         batch_fake_dice, (mx_fake_dice, best_fake_dice_idx), (worst_fake_dice, worst_fake_dice_idx) = get_avg_dice(fake_pred_mask, fake_gt)
         self.fake_dice.update(batch_fake_dice, fake_pred_mask.shape[0])
