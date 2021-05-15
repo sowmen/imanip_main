@@ -1,5 +1,6 @@
 from utils import AverageMeter
 import torch
+import torchvision
 from pytorch_toolbelt import losses
 import numpy as np  
 from sklearn.metrics import roc_auc_score, confusion_matrix
@@ -65,7 +66,7 @@ def get_pixel_auc(predictions:torch.tensor, targets:torch.tensor, paths):
 
 def get_fpr(predictions:torch.tensor, targets:torch.tensor, thr=0.5):
     sum, i = 0, 0
-    min_fpr, max_fpr = 1e9, -1
+    min_fpr, max_fpr = 1e9, -1e12
     best_idx, worst_idx = 0, 0
 
     for truth, pred in zip(targets, predictions):
@@ -80,8 +81,12 @@ def get_fpr(predictions:torch.tensor, targets:torch.tensor, thr=0.5):
         tn, fp, fn, tp = confusion_matrix(truth, pred).ravel()
         fpr = fp/(fp+tn)
 
-        if fpr < min_fpr: min_fpr, best_idx = fpr, i
-        if fpr > max_fpr: max_fpr, worst_idx = fpr, i
+        if fpr < min_fpr: 
+          min_fpr = fpr
+          best_idx = i
+        if fpr > max_fpr: 
+          max_fpr = fpr
+          worst_idx = i
 
         sum += fpr
         i += 1
@@ -255,14 +260,16 @@ class MetricMeter:
         batch_total_fpr, _, _ = get_fpr(predictions, targets)
         self.total_fpr.update(batch_total_fpr, predictions.shape[0])
 
+        _, (mx_real_dice, best_real_dice_idx), (worst_real_dice, worst_real_dice_idx) = get_avg_dice(real_pred_mask, real_gt)
+
         if self.mode != "TRAIN":
-            if(np.random.rand() < 0.3 and len(self.example_images) < 30):
+            if(np.random.rand() < 0.7 and len(self.example_images) < 30):
                 self.example_images.append(
                     wandb.Image(
                         get_image_plot(fake_images[best_fake_dice_idx],
                             fake_pred_mask[best_fake_dice_idx], 
                             fake_gt[best_fake_dice_idx],
-                            f"BestDice : {mx_fake_dice}"
+                            f"BestFakeDice : {mx_fake_dice}"
                         ),
                         caption= fake_image_paths[best_fake_dice_idx].split('/', 2)[-1]
                     )
@@ -271,8 +278,8 @@ class MetricMeter:
                     wandb.Image(   
                         get_image_plot(fake_images[worst_fake_dice_idx],
                             fake_pred_mask[worst_fake_dice_idx],
-                            fake_gt[best_fake_dice_idx],
-                            f"WorstDice : {worst_fake_dice}"
+                            fake_gt[worst_fake_dice_idx],
+                            f"WorstFakeDice : {worst_fake_dice}"
                         ),
                         caption= fake_image_paths[worst_fake_dice_idx].split('/', 2)[-1]
                     )
@@ -282,21 +289,42 @@ class MetricMeter:
                         get_image_plot(real_images[best_real_fpr_idx],
                             real_pred_mask[best_real_fpr_idx], 
                             real_gt[best_real_fpr_idx],
-                            f"BestFPR : {min_fpr}"
+                            f"BestRealFPR : {min_fpr}"
                         ),
                         caption= real_image_paths[best_real_fpr_idx].split('/', 2)[-1]
                     )
                 )
-                self.example_images.append(
-                    wandb.Image(
-                        get_image_plot(real_images[worst_real_fpr_idx],
-                            real_pred_mask[worst_real_fpr_idx], 
-                            real_gt[worst_real_fpr_idx],
-                            f"BestFPR : {max_fpr}"
-                        ),
-                        caption= real_image_paths[worst_real_fpr_idx].split('/', 2)[-1]
+                if max_fpr > 0:
+                    self.example_images.append(
+                        wandb.Image(
+                            get_image_plot(real_images[worst_real_fpr_idx],
+                                real_pred_mask[worst_real_fpr_idx], 
+                                real_gt[worst_real_fpr_idx],
+                                f"WorstRealFPR : {max_fpr}"
+                            ),
+                            caption= real_image_paths[worst_real_fpr_idx].split('/', 2)[-1]
+                        )
                     )
-                )
+                self.example_images.append(
+                        wandb.Image(
+                            get_image_plot(real_images[best_real_dice_idx],
+                                real_pred_mask[best_real_dice_idx], 
+                                real_gt[best_real_dice_idx],
+                                f"BestRealDice : {mx_real_dice}"
+                            ),
+                            caption= real_image_paths[best_real_dice_idx].split('/', 2)[-1]
+                        )
+                    )
+                self.example_images.append(
+                        wandb.Image(
+                            get_image_plot(real_images[worst_real_dice_idx],
+                                real_pred_mask[worst_real_dice_idx], 
+                                real_gt[worst_real_dice_idx],
+                                f"WorstRealDice : {worst_real_dice}"
+                            ),
+                            caption= real_image_paths[worst_real_dice_idx].split('/', 2)[-1]
+                        )
+                    )
 
 
 from matplotlib import gridspec
@@ -310,15 +338,15 @@ def get_image_plot(image, pred, gt, title):
     gs.update(wspace=0., hspace=0.)
 
     ax1 = plt.subplot(gs[0,0])
-    ax1.imshow(image.permute((1,2,0)))
+    ax1.imshow(tensor2image(image))
     ax1.axis('off')
     ax1.set_aspect('equal')
     ax2 = plt.subplot(gs[0,1])
-    ax2.imshow(pred.permute((1,2,0)))
+    ax2.imshow(pred.squeeze(), cmap='gray')
     ax2.axis('off')
     ax2.set_aspect('equal')
     ax3 = plt.subplot(gs[0,2])
-    ax3.imshow(gt.permute((1,2,0)))
+    ax3.imshow(gt.squeeze(), cmap='gray')
     ax3.axis('off')
     ax3.set_aspect('equal')
     fig.tight_layout()
@@ -330,3 +358,8 @@ def get_image_plot(image, pred, gt, title):
     im = PIL.Image.open(buf)
 
     return im
+
+def tensor2image(tensor):
+    image = torchvision.utils.make_grid(tensor, normalize=True)
+    image = PIL.Image.fromarray(image.mul(255).clamp(0, 255).byte().permute(1, 2, 0).cpu().numpy())
+    return image
