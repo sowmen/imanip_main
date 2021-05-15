@@ -402,7 +402,7 @@ def calculate_auc(model, dataset, step):
     truths = []
     paths = []
 
-    for data in tqdm(dataset):
+    for data in tqdm(dataset, desc=f"{step} AUC: "):
         images = data["image"].unsqueeze(0).to(device)
         elas = data["ela"].unsqueeze(0).to(device)
         gt = data["mask"].unsqueeze(0)
@@ -423,7 +423,7 @@ def calculate_auc(model, dataset, step):
     thrs = [0.0,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1.0]
     example_images = []
     auc, cnt = 0, 0
-    for gtr, pr, path in tqdm(zip(truths, preds, paths)):
+    for gtr, pr, path in tqdm(zip(truths, preds, paths),total=len(truths)):
         best, bt = -1, 0
         for thr in thrs:
             tmp = roc_auc_score(gtr.numpy().ravel() >= 0.5, pr.numpy().ravel() >= thr)          
