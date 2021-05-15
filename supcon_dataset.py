@@ -15,8 +15,8 @@ from dft_dwt import generate_dft_dwt_vector
 from utils import get_ela
 
 
-class DATASET(Dataset):
-    def __init__(self, dataframe, mode, val_fold, test_fold, nonzero_filter=100, imgaug_augment=None,
+class SupCon_DATASET(Dataset):
+    def __init__(self, dataframe, mode, val_fold, test_fold, nonzero_filter=50, imgaug_augment=None,
                  transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False
     ):
 
@@ -31,14 +31,6 @@ class DATASET(Dataset):
         self.transforms_normalize = transforms_normalize
         self.label_smoothing = 0.1
         self.root_folder = "Image_Manipulation_Dataset"
-
-        # self.attn_mask_transforms = albumentations.Compose([
-        #     augmentations.transforms.Resize(
-        #         32, 32, interpolation=cv2.INTER_LANCZOS4, always_apply=True, p=1
-        #     ),
-        #     albumentations.Normalize(mean=self.normalize['mean'], std=self.normalize['std'], p=1, always_apply=True),
-        #     albumentations.pytorch.ToTensor()
-        # ])
         
 
         if self.mode == "train":
@@ -103,10 +95,14 @@ class DATASET(Dataset):
                 if('NIST' in root_dir):
                     mask_image = 255 - mask_image
     
+            image2 = cv2.flip(image, 1)
+            mask_image2 = cv2.flip(mask_image, 1)
+            ela_image2 = cv2.flip(ela_image, 1)
 
             if self.imgaug_augment:
                 try :
                     image = self.imgaug_augment.augment_image(image)
+                    image2 = self.imgaug_augment.augment_image(image2)
                 except Exception as e:
                     print(image_path, e) 
         
@@ -116,16 +112,21 @@ class DATASET(Dataset):
                 image = data["image"]
                 mask_image = data["mask"]
                 ela_image = data["ela"]
+
+                data2 = self.geo_augment(image=image2, mask=mask_image2, ela=ela_image2)
+                image2 = data2["image"]
+                mask_image2 = data2["mask"]
+                ela_image2 = data2["ela"]
             
 
             image = augmentations.geometric.functional.resize(image, self.resize, self.resize, cv2.INTER_AREA)
             ela_image = augmentations.geometric.functional.resize(ela_image, self.resize, self.resize, cv2.INTER_AREA)
             mask_image = augmentations.geometric.functional.resize(mask_image, self.resize, self.resize, cv2.INTER_AREA)
 
-            
-            ###--- Generate DFT DWT Vector -----------------
-            # dft_dwt_vector = generate_dft_dwt_vector(image)
-            # dft_dwt_vector = torch.from_numpy(dft_dwt_vector).float()
+            image2 = augmentations.geometric.functional.resize(image2, self.resize, self.resize, cv2.INTER_AREA)
+            ela_image2 = augmentations.geometric.functional.resize(ela_image2, self.resize, self.resize, cv2.INTER_AREA)
+            mask_image2 = augmentations.geometric.functional.resize(mask_image2, self.resize, self.resize, cv2.INTER_AREA)
+
 
             ##########------Normalize-----##########
             image_normalize = {
@@ -142,30 +143,30 @@ class DATASET(Dataset):
             tensor_image = transNormalize(tensor_image)
             tensor_ela = transNormalize(tensor_ela)
 
+            tensor_image2 = transTensor(image2)
+            tensor_ela2 = transTensor(ela_image2)
+            tensor_mask2 = transTensor(mask_image2)
+
+            tensor_image2 = transNormalize(tensor_image2)
+            tensor_ela2 = transNormalize(tensor_ela2)
             ########################################
 
-            # if self.transforms_normalize:
-            #     data = self.transforms_normalize(image=image, mask=mask_image, ela=ela_image)
-            #     tensor_image = data["image"]
-            #     tensor_mask = data["mask"] / 255.0
-            #     tensor_ela = data["ela"]
-            # attn_mask_image = self.attn_mask_transforms(image=attn_mask_image)["image"]
 
             if label == 1:
                 if(np.count_nonzero(tensor_mask.numpy().ravel() >= 0.5) < 100):
                     index = random.randint(0, len(self.data) - 1)
                     continue
-
+                if(np.count_nonzero(tensor_mask2.numpy().ravel() >= 0.5) < 100):
+                    index = random.randint(0, len(self.data) - 1)
+                    continue
                 
             return {
-                "image": tensor_image,
+                "image": (tensor_image, tensor_image2),
                 "image_path" : image_path,
                 "mask_path" : mask_path, 
                 "label": label, 
-                "mask": tensor_mask,
-                "ela" : tensor_ela,
-                # "dft_dwt_vector" : dft_dwt_vector
-                # "attn_mask": attn_mask_image
+                "mask": (tensor_mask, tensor_mask2),
+                "ela" : (tensor_ela, tensor_ela2),
             }
 
 
@@ -197,8 +198,8 @@ class DATASET(Dataset):
         temp_data = []
         
         removed_count = 0
-        if os.path.exists("filtermask100.txt"):
-            with open("filtermask100.txt", "r") as fp: lines = fp.read().splitlines()
+        if os.path.exists("filtermask50.txt"):
+            with open("filtermask50.txt", "r") as fp: lines = fp.read().splitlines()
         
         pbar = tqdm(data, desc="Filtering empty mask", dynamic_ncols=True)
         for row in pbar:
