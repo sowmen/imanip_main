@@ -7,6 +7,9 @@ from sklearn.metrics import roc_auc_score, confusion_matrix
 import wandb
 
 def get_avg_dice(predictions:torch.tensor, targets:torch.tensor): 
+    if len(predictions) == 0:
+          return 0, (0, 0), (0, 0)
+
     """Dice coeff for batches"""
     tot_dice = 0.0
     mx_dice, worst_dice = -1, 1e9
@@ -29,6 +32,9 @@ def get_avg_dice(predictions:torch.tensor, targets:torch.tensor):
 
 
 def get_avg_jaccard(predictions:torch.tensor, targets:torch.tensor): 
+    if len(predictions) == 0:
+        return 0, (0, 0), (0, 0)
+
     """Jaccard coeff for batches"""
     tot_iou = 0.0
     mx_iou, worst_iou = -1, 1e9
@@ -51,6 +57,9 @@ def get_avg_jaccard(predictions:torch.tensor, targets:torch.tensor):
 
 
 def get_pixel_auc(predictions:torch.tensor, targets:torch.tensor, paths):
+    if len(predictions) == 0:
+          return 0, 0
+          
     sum, i = 0, 0
     for pred, truth, path in zip(predictions, targets, paths):
         try:
@@ -65,6 +74,9 @@ def get_pixel_auc(predictions:torch.tensor, targets:torch.tensor, paths):
 
 
 def get_fpr(predictions:torch.tensor, targets:torch.tensor, thr=0.5):
+    if len(predictions) == 0:
+        return 0, (0, 0), (0, 0)
+
     sum, i = 0, 0
     min_fpr, max_fpr = 1e9, -1e12
     best_idx, worst_idx = 0, 0
@@ -248,11 +260,11 @@ class MetricMeter:
         batch_fake_jaccard, _, _ = get_avg_jaccard(fake_pred_mask, fake_gt)
         self.fake_jaccard.update(batch_fake_jaccard, fake_pred_mask.shape[0])
 
-        batch_fake_pixel_auc, num = get_pixel_auc(fake_pred_mask, fake_gt, fake_image_paths)
-        self.fake_pixel_auc.update(batch_fake_pixel_auc, num)
-
         batch_fake_fpr, _, _ = get_fpr(fake_pred_mask, fake_gt)
         self.fake_fpr.update(batch_fake_fpr, fake_pred_mask.shape[0])
+
+        batch_fake_pixel_auc, num = get_pixel_auc(fake_pred_mask, fake_gt, fake_image_paths)
+        self.fake_pixel_auc.update(batch_fake_pixel_auc, num)
 
         batch_real_fpr, (min_fpr, best_real_fpr_idx), (max_fpr, worst_real_fpr_idx) = get_fpr(real_pred_mask, real_gt)
         self.real_fpr.update(batch_real_fpr, real_pred_mask.shape[0])
@@ -261,6 +273,7 @@ class MetricMeter:
         self.total_fpr.update(batch_total_fpr, predictions.shape[0])
 
         _, (mx_real_dice, best_real_dice_idx), (worst_real_dice, worst_real_dice_idx) = get_avg_dice(real_pred_mask, real_gt)
+        _, (mx_avg_dice, best_avg_dice_idx), (worst_avg_dice, worst_avg_dice_idx) = get_avg_dice(predictions, targets)
 
         if self.mode != "TRAIN":
             if(np.random.rand() < 0.5 and len(self.example_images) < 100):
@@ -323,6 +336,26 @@ class MetricMeter:
                                 f"WorstRealDice : {worst_real_dice}"
                             ),
                             caption= real_image_paths[worst_real_dice_idx].split('/', 2)[-1]
+                        )
+                    )
+                self.example_images.append(
+                        wandb.Image(
+                            get_image_plot(images[best_avg_dice_idx],
+                                predictions[best_avg_dice_idx], 
+                                targets[best_avg_dice_idx],
+                                f"BestAvgDice : {mx_avg_dice}"
+                            ),
+                            caption= paths[best_avg_dice_idx].split('/', 2)[-1]
+                        )
+                    )
+                self.example_images.append(
+                        wandb.Image(
+                            get_image_plot(images[worst_avg_dice_idx],
+                                predictions[worst_avg_dice_idx], 
+                                targets[worst_avg_dice_idx],
+                                f"WorstAvgDice : {worst_avg_dice}"
+                            ),
+                            caption= paths[worst_avg_dice_idx].split('/', 2)[-1]
                         )
                     )
 
