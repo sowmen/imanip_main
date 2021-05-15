@@ -263,7 +263,7 @@ class MetricMeter:
         _, (mx_real_dice, best_real_dice_idx), (worst_real_dice, worst_real_dice_idx) = get_avg_dice(real_pred_mask, real_gt)
 
         if self.mode != "TRAIN":
-            if(np.random.rand() < 0.7 and len(self.example_images) < 30):
+            if(np.random.rand() < 0.5 and len(self.example_images) < 100):
                 self.example_images.append(
                     wandb.Image(
                         get_image_plot(fake_images[best_fake_dice_idx],
