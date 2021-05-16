@@ -170,6 +170,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
             VALID_FAKE_DICE = {valid_metrics['valid_fake_dice']}, \
             VALID_REAL_FPR = {valid_metrics['valid_real_fpr']}"
         )
+        print("New LR", optimizer.param_groups[0]['lr'])
 
         es(valid_metrics["valid_loss_segmentation"],
            model,
