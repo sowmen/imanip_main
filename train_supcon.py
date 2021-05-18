@@ -27,7 +27,7 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 40,
+    "train_batch_size": 16,
     "valid_batch_size": 64,
     "optimizer": "adam",
     "learning_rate": 0.001,
@@ -39,7 +39,7 @@ config_defaults = {
 
 TEST_FOLD = 1
 
-def train(name, df, VAL_FOLD=0, resume=False):
+def train(name, df, VAL_FOLD=0, resume=None):
     dt_string = datetime.now().strftime("%d|%m_%H|%M|%S")
     print("Starting -->", dt_string)
 
@@ -107,12 +107,12 @@ def train(name, df, VAL_FOLD=0, resume=False):
 
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        patience=config.schedule_patience,
-        mode="min",
-        factor=config.schedule_factor,
-    )
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    #     optimizer,
+    #     patience=config.schedule_patience,
+    #     mode="min",
+    #     factor=config.schedule_factor,
+    # )
     criterion = SupConLoss().to(device)
     es = EarlyStopping(patience=20, mode="min")
 
@@ -122,8 +122,8 @@ def train(name, df, VAL_FOLD=0, resume=False):
     # wandb.watch(model, log_freq=50, log='all')
 
     start_epoch = 0
-    if resume:
-        checkpoint = torch.load('checkpoint/(using pretrain)COMBO_ALL_FULL_[09|04_12|46|35].pt')
+    if resume is not None:
+        checkpoint = torch.load(resume)
         # scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -467,8 +467,8 @@ if __name__ == "__main__":
     # print(f'FINAL AUC : {auc.avg}')
 
     train(
-        name=f"(Supcon stage1)COMBO_ALL" + config_defaults["model"],
+        name=f"resume(Supcon stage1)COMBO_ALL" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
-        resume=False
+        resume='checkpoint/(Supcon stage1)COMBO_ALL_[06|05_14|41|10].pt'
     )

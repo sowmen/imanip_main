@@ -29,7 +29,7 @@ class DATASET(Dataset):
         self.geo_augment = geo_augment
         self.transforms_normalize = transforms_normalize
         self.label_smoothing = 0.1
-        self.root_folder = "/media/crimson/easystore/image_manipulation/Image_Manipulation_Dataset"
+        self.root_folder = "Image_Manipulation_Dataset"
         self.supcon = supcon
 
         # self.attn_mask_transforms = albumentations.Compose([
