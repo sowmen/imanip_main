@@ -28,8 +28,8 @@ OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 40,
-    "valid_batch_size": 64,
+    "train_batch_size": 64,
+    "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0001,
     "weight_decay": 0.0001,
@@ -145,7 +145,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
 
         
         es(
-            valid_metrics["valid_loss_segmentation"],
+            valid_metrics["valid_loss"],
             model,
             model_path=os.path.join(OUTPUT_DIR, f"{run}.h5"),
         )
@@ -181,7 +181,7 @@ def train_epoch(model, train_loader, optimizer, criterion, scaler, epoch):
     predictions = []
     targets = []
 
-    for batch in tqdm(train_loader):
+    for batch in tqdm(train_loader, desc=f"Train epoch {epoch}", dynamic_ncols=True):
         images = batch["image"].to(device)
         elas = batch["ela"].to(device)
         target_labels = batch["label"].to(device)
@@ -247,7 +247,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     example_images = []
 
     with torch.no_grad():
-        for batch in tqdm(valid_loader):
+        for batch in tqdm(valid_loader, desc=f"Valid epoch {epoch}", dynamic_ncols=True):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             target_labels = batch["label"].to(device)
@@ -313,7 +313,7 @@ def test(model, test_loader, criterion):
     targets = []
 
     with torch.no_grad():
-        for batch in tqdm(test_loader):
+        for batch in tqdm(test_loader, dynamic_ncols=True):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             target_labels = batch["label"].to(device)
@@ -420,26 +420,27 @@ def get_transforms_normalize():
 
 if __name__ == "__main__":
 
-    # combo_all_df = get_dataframe('combo_all_FULL.csv', folds=None)
-    casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
-    imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
-    cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
-    nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
-    coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
+    combo_all_df = get_dataframe('combo_all_FULL.csv', folds=None)
+    # casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
+    # imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
+    # cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
+    # nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
+    # coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
     
-    nist_extend = get_dataframe('nist_extend.csv', folds=12)
+    # nist_extend = get_dataframe('nist_extend.csv', folds=12)
     # # nist_extend_real = nist_extend[nist_extend['label'] == 0].sample(n=1000, random_state=123)
     # # nist_extend_fake = nist_extend[nist_extend['label'] == 1].sample(n=1500, random_state=123)
     # # nist_extend = pd.concat([nist_extend_real, nist_extend_fake]).sample(frac=1.0, random_state=123)
     
-    coverage_extend = get_dataframe('coverage_extend.csv', folds=12)
+    # coverage_extend = get_dataframe('coverage_extend.csv', folds=12)
     # # coverage_extend_real = coverage_extend[coverage_extend['label'] == 0].sample(n=800, random_state=123)
     # # coverage_extend_fake = coverage_extend[coverage_extend['label'] == 1].sample(n=800, random_state=123)
     # # coverage_extend = pd.concat([coverage_extend_real, coverage_extend_fake]).sample(frac=1.0, random_state=123)
             
-    df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full,\
-                         nist_extend, coverage_extend])
-    df_full.insert(0, 'image', -1)
+    # df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full,\
+    #                      nist_extend, coverage_extend])
+    df_full = combo_all_df
+    df_full.insert(0, 'image', '')
 
     # df_128 = pd.read_csv('combo_all_128.csv').sample(frac=1.0, random_state=123)
     # df = pd.concat([df_full, df_128])
@@ -457,7 +458,7 @@ if __name__ == "__main__":
     for i in range(1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(full, amp-test)COMBO_ALL" + config_defaults["model"],
+            name=f"(combo, amp-test)COMBO_ALL" + config_defaults["model"],
             df=df,
             VAL_FOLD=i,
             resume=False
