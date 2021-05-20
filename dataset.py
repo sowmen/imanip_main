@@ -4,7 +4,9 @@ import numpy as np
 import pandas as pd
 import cv2
 from tqdm import tqdm
+import copy
 
+import torch
 from torch.utils.data import Dataset
 from albumentations import augmentations
 from torchvision import transforms
@@ -14,7 +16,7 @@ from utils import get_ela
 
 
 class DATASET(Dataset):
-    def __init__(self, dataframe, mode, val_fold, test_fold, nonzero_filter=50, imgaug_augment=None,
+    def __init__(self, dataframe, mode, val_fold, test_fold, nonzero_filter=100, imgaug_augment=None,
                  transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False
     ):
 
@@ -54,8 +56,7 @@ class DATASET(Dataset):
         if segment:
             rows = self._segment(rows)
 
-        print(
-            "real:{}, fakes:{}, mode = {}".format(
+        print("real:{}, fakes:{}, mode = {}".format(
                 len(rows[rows["label"] == 0]), len(rows[rows["label"] == 1]), self.mode
             )
         )
@@ -102,7 +103,7 @@ class DATASET(Dataset):
                 if('NIST' in root_dir):
                     mask_image = 255 - mask_image
     
-                    
+
             if self.imgaug_augment:
                 try :
                     image = self.imgaug_augment.augment_image(image)
@@ -140,6 +141,7 @@ class DATASET(Dataset):
 
             tensor_image = transNormalize(tensor_image)
             tensor_ela = transNormalize(tensor_ela)
+
             ########################################
 
             # if self.transforms_normalize:
@@ -153,6 +155,7 @@ class DATASET(Dataset):
                 if(np.count_nonzero(tensor_mask.numpy().ravel() >= 0.5) < 100):
                     index = random.randint(0, len(self.data) - 1)
                     continue
+
                 
             return {
                 "image": tensor_image,
@@ -194,10 +197,10 @@ class DATASET(Dataset):
         temp_data = []
         
         removed_count = 0
-        if os.path.exists("filtermask50.txt"):
-            with open("filtermask50.txt", "r") as fp: lines = fp.read().splitlines()
+        if os.path.exists("filtermask100.txt"):
+            with open("filtermask100.txt", "r") as fp: lines = fp.read().splitlines()
         
-        pbar = tqdm(data, desc="Filtering empty mask", dynamic_ncols=True, bar_format='{l_bar}{bar:20}{r_bar}{bar:-20b}')
+        pbar = tqdm(data, desc="Filtering empty mask", dynamic_ncols=True)
         for row in pbar:
             image_name, _, mask_patch, _, _, _, root_dir = row
 

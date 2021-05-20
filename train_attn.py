@@ -12,10 +12,6 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import wandb
 
-import albumentations
-from albumentations import augmentations
-import imgaug.augmenters as iaa
-import albumentations.pytorch
 
 torch.backends.cudnn.benchmark = True
 
@@ -350,73 +346,6 @@ def test(model, test_loader, criterion):
 
 
 
-def get_train_transforms():
-    train_imgaug  = iaa.Sequential(
-        [
-            iaa.SomeOf((0, 5),
-                [   
-                    iaa.OneOf([
-                        iaa.JpegCompression(compression=(10, 60)),
-                        iaa.GaussianBlur((0, 1.75)), # blur images with a sigma between 0 and 3.0
-                        iaa.AverageBlur(k=(2, 7)), # blur image using local means with kernel sizes between 2 and 7
-                        iaa.MedianBlur(k=(3, 7)), # blur image using local medians with kernel sizes between 2 and 7
-                    ]),
-                    iaa.Sharpen(alpha=(0, 1.0), lightness=(0.75, 1.5)), # sharpen images
-                    iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5), # add gaussian noise to images
-                    # iaa.Sometimes(0.3, iaa.Invert(0.05, per_channel=True)), # invert color channels
-                    # iaa.Add((-10, 10), per_channel=0.5), # change brightness of images (by -10 to 10 of original value)
-                    iaa.AddToHueAndSaturation((-20, 20)), # change hue and saturation
-                    iaa.LinearContrast((0.5, 2.0), per_channel=0.5), # improve or worsen the contrast
-                    # # either change the brightness of the whole image (sometimes
-                    # # per channel) or change the brightness of subareas
-                    iaa.Sometimes(0.6,
-                        iaa.OneOf([
-                            iaa.Multiply((0.5, 1.5), per_channel=0.5),
-                            iaa.MultiplyAndAddToBrightness(mul=(0.5, 2.5), add=(-10,10)),
-                            iaa.MultiplyHueAndSaturation(),
-                            # iaa.BlendAlphaFrequencyNoise(
-                            #     exponent=(-4, 0),
-                            #     foreground=iaa.Multiply((0.5, 1.5), per_channel=True),
-                            #     background=iaa.LinearContrast((0.5, 2.0))
-                            # )
-                        ])
-                    ),
-                ], random_order=True
-            )
-        ], random_order=True
-    )
-    train_geo_aug = albumentations.Compose(
-        [
-            albumentations.HorizontalFlip(p=0.5),
-            albumentations.VerticalFlip(p=0.5),
-            albumentations.RandomRotate90(p=0.1),
-            albumentations.ShiftScaleRotate(shift_limit=0.01, scale_limit=0.04, rotate_limit=35, p=0.25),
-            # albumentations.OneOf([
-            #     albumentations.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
-            #     albumentations.GridDistortion(p=0.5),
-            #     albumentations.OpticalDistortion(p=0.5, distort_limit=2, shift_limit=0.5)                  
-            # ], p=0.7),
-        ],
-        additional_targets={'ela':'image'}
-    )
-    return train_imgaug, train_geo_aug
-
-def get_transforms_normalize():
-    normalize = {
-        "mean": [0.4535408213875562, 0.42862278450748387, 0.41780105499276865],
-        "std": [0.2672804038612597, 0.2550410416463668, 0.29475415579144293],
-    }
-
-    transforms_normalize = albumentations.Compose(
-        [
-            albumentations.Normalize(mean=normalize['mean'], std=normalize['std'], always_apply=True, p=1),
-            albumentations.pytorch.transforms.ToTensorV2()
-        ],
-        additional_targets={'ela':'image'}
-    )
-    return transforms_normalize
-
-
 
 if __name__ == "__main__":
 
@@ -437,9 +366,8 @@ if __name__ == "__main__":
     # # coverage_extend_fake = coverage_extend[coverage_extend['label'] == 1].sample(n=800, random_state=123)
     # # coverage_extend = pd.concat([coverage_extend_real, coverage_extend_fake]).sample(frac=1.0, random_state=123)
             
-    # df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full,\
-    #                      nist_extend, coverage_extend])
-    df_full = combo_all_df
+    df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full,\
+                         nist_extend, coverage_extend])
     df_full.insert(0, 'image', '')
 
     # df_128 = pd.read_csv('combo_all_128.csv').sample(frac=1.0, random_state=123)
