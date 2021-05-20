@@ -9,10 +9,11 @@ from segmentation.srm_kernel import setup_srm_layer
 
 class SMP_SRM_UPP(nn.Module):
     
-    def __init__(self, in_channels=3):
+    def __init__(self, in_channels=3, classifier_only=False):
         super(SMP_SRM_UPP, self).__init__()
         
         self.in_channels = in_channels
+        self.classifier_only = classifier_only
         
 
         self.srm_conv = setup_srm_layer(self.in_channels)
@@ -47,13 +48,16 @@ class SMP_SRM_UPP(nn.Module):
             in_channels=54,
             classes=1,
             encoder_name='timm-efficientnet-b4',
-            encoder_weights='noisy-student',
+            encoder_weights=None,
             decoder_attention_type='scse',
             aux_params=self.aux_params
         )
         self.encoder = base_model.encoder
-        self.decoder = base_model.decoder
-        self.segmentation_head = base_model.segmentation_head
+
+        if classifier_only == False:
+            self.decoder = base_model.decoder
+            self.segmentation_head = base_model.segmentation_head
+
         self.classification_head = base_model.classification_head
 
         del(base_model)
@@ -68,8 +72,14 @@ class SMP_SRM_UPP(nn.Module):
         _merged_input = torch.cat([x1, x2, x3, x_ela], dim=1)
         
         features = self.encoder(_merged_input)
-        decoder_output = self.decoder(*features)
-        masks = self.segmentation_head(decoder_output)
+
+        if self.classifier_only == False:
+            decoder_output = self.decoder(*features)
+            masks = self.segmentation_head(decoder_output)
+
         labels = self.classification_head(features[-1])
+        
+        if self.classifier_only == False:
+            return masks, labels
             
-        return masks, labels
+        return labels
