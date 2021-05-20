@@ -297,16 +297,16 @@ class MetricMeter:
                         caption= fake_image_paths[worst_fake_dice_idx].split('/', 2)[-1]
                     )
                 )
-                self.example_images.append(
-                    wandb.Image(
-                        get_image_plot(real_images[best_real_fpr_idx],
-                            real_pred_mask[best_real_fpr_idx], 
-                            real_gt[best_real_fpr_idx],
-                            f"BestRealFPR : {min_fpr}"
-                        ),
-                        caption= real_image_paths[best_real_fpr_idx].split('/', 2)[-1]
-                    )
-                )
+                # self.example_images.append(
+                #     wandb.Image(
+                #         get_image_plot(real_images[best_real_fpr_idx],
+                #             real_pred_mask[best_real_fpr_idx], 
+                #             real_gt[best_real_fpr_idx],
+                #             f"BestRealFPR : {min_fpr}"
+                #         ),
+                #         caption= real_image_paths[best_real_fpr_idx].split('/', 2)[-1]
+                #     )
+                # )
                 if max_fpr > 0:
                     self.example_images.append(
                         wandb.Image(
@@ -336,16 +336,6 @@ class MetricMeter:
                                 f"WorstRealDice : {worst_real_dice}"
                             ),
                             caption= real_image_paths[worst_real_dice_idx].split('/', 2)[-1]
-                        )
-                    )
-                self.example_images.append(
-                        wandb.Image(
-                            get_image_plot(images[best_avg_dice_idx],
-                                predictions[best_avg_dice_idx], 
-                                targets[best_avg_dice_idx],
-                                f"BestAvgDice : {mx_avg_dice}"
-                            ),
-                            caption= paths[best_avg_dice_idx].split('/', 2)[-1]
                         )
                     )
                 self.example_images.append(
