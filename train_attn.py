@@ -27,8 +27,8 @@ config_defaults = {
     "train_batch_size": 40,
     "valid_batch_size": 64,
     "optimizer": "adam",
-    "learning_rate": 0.0001,
-    "weight_decay": 0.0001,
+    "learning_rate": 1e-4,
+    "weight_decay": 1e-5,
     "schedule_patience": 5,
     "schedule_factor": 0.25,
     "model": "",
@@ -101,12 +101,13 @@ def train(name, df, VAL_FOLD=0, resume=False):
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        patience=config.schedule_patience,
-        mode="min",
-        factor=config.schedule_factor,
-    )
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    #     optimizer,
+    #     patience=config.schedule_patience,
+    #     mode="min",
+    #     factor=config.schedule_factor,
+    # )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=15)
     criterion = nn.BCEWithLogitsLoss()
     es = EarlyStopping(patience=20, mode="min")
 
@@ -133,7 +134,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
         train_metrics = train_epoch(model, train_loader, optimizer, criterion, scaler, epoch)
         valid_metrics = valid_epoch(model, valid_loader, criterion, epoch)
         
-        scheduler.step(valid_metrics['valid_loss'])
+        # scheduler.step(valid_metrics['valid_loss'])
 
         print(f"TRAIN_ACC = {train_metrics['train_acc_05']}, TRAIN_LOSS = {train_metrics['train_loss']}")
         print(f"VALID_ACC = {valid_metrics['valid_acc_05']}, VALID_LOSS = {valid_metrics['valid_loss']}")
@@ -176,7 +177,8 @@ def train_epoch(model, train_loader, optimizer, criterion, scaler, epoch):
     
     predictions = []
     targets = []
-
+    
+    iters = len(train_loader)
     for batch in tqdm(train_loader):
         images = batch["image"].to(device)
         elas = batch["ela"].to(device)

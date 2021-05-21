@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 from timm.models.layers import Conv2dSame
 
+"""
+PixelAttention implementation from SPAN
+"""
 class PixelAttention(nn.Module):
     def __init__(self, in_channels, shift=1, useBN=False, useRes=False):
         super(PixelAttention, self).__init__()
