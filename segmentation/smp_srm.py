@@ -79,7 +79,7 @@ class SMP_SRM_UPP(nn.Module):
 
         labels = self.classification_head(features[-1])
         
-        if self.classifier_only == False:
-            return masks, labels
+        if self.classifier_only == True:
+            return labels
             
-        return labels
+        return masks, labels

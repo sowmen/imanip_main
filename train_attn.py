@@ -18,6 +18,7 @@ torch.backends.cudnn.benchmark = True
 from utils import *
 from dataset import DATASET
 from segmentation.merged_net import SRM_Classifer
+from segmentation.smp_srm import SMP_SRM_UPP
 
 
 OUTPUT_DIR = "weights"
@@ -48,7 +49,8 @@ def train(name, df, VAL_FOLD=0, resume=False):
     config = wandb.config
 
 
-    model = SRM_Classifer(num_classes=1, encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5')
+    # model = SRM_Classifer(num_classes=1, encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5')
+    model = SMP_SRM_UPP(classifier_only=True)
 
     # for name_, param in model.named_parameters():
     #     if 'classifier' in name_:
@@ -59,7 +61,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
     print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))    
     
 
-    wandb.save('segmentation/merged_net.py')
+    wandb.save('segmentation/smp_srm.py')
     wandb.save('dataset.py')
 
 
@@ -110,7 +112,6 @@ def train(name, df, VAL_FOLD=0, resume=False):
     criterion = nn.BCEWithLogitsLoss()
     es = EarlyStopping(patience=20, mode="min")
 
-    scaler = torch.cuda.amp.GradScaler()
 
     model = nn.DataParallel(model).to(device)
     
@@ -122,7 +123,6 @@ def train(name, df, VAL_FOLD=0, resume=False):
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scaler.load_state_dict(checkpoint["scaler_state_dict"])
         start_epoch = checkpoint['epoch'] + 1
         print("-----------> Resuming <------------")
 
@@ -130,7 +130,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        train_metrics = train_epoch(model, train_loader, optimizer, criterion, scaler, epoch)
+        train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
         valid_metrics = valid_epoch(model, valid_loader, criterion, epoch)
         
         scheduler.step(valid_metrics['valid_loss'])
@@ -154,7 +154,6 @@ def train(name, df, VAL_FOLD=0, resume=False):
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict' : optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
-            "scaler_state_dict": scaler.state_dict()
         }
         torch.save(checkpoint, os.path.join('checkpoint', f"{run}.pt"))
 
@@ -169,7 +168,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
     return test_metrics
 
 
-def train_epoch(model, train_loader, optimizer, criterion, scaler, epoch):
+def train_epoch(model, train_loader, optimizer, criterion, epoch):
     model.train()
 
     total_loss = AverageMeter()
@@ -183,15 +182,13 @@ def train_epoch(model, train_loader, optimizer, criterion, scaler, epoch):
         target_labels = batch["label"].to(device)
         # dft_dwt_vector = batch["dft_dwt_vector"].to(device)
         
-        with torch.cuda.amp.autocast():
-            out_logits, _ = model(images, elas)#, dft_dwt_vector)
-            loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
-
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-
         optimizer.zero_grad()
+
+        out_logits, _ = model(images, elas)#, dft_dwt_vector)
+        loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
+
+        loss.backward()
+        optimizer.step()        
 
         ############## SRM Step ###########
         bayer_mask = torch.zeros(3,3,5,5).cuda()
