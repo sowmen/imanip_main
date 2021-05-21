@@ -11,26 +11,28 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import wandb
-
+from warmup_scheduler import GradualWarmupScheduler
 
 torch.backends.cudnn.benchmark = True
 
 from utils import *
 from dataset import DATASET
 from segmentation.merged_net import SRM_Classifer
+from segmentation.smp_srm import SMP_SRM_UPP
 
 
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
     "epochs": 100,
-    "train_batch_size": 40,
-    "valid_batch_size": 64,
+    "train_batch_size": 64,
+    "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 1e-4,
     "weight_decay": 1e-5,
-    "schedule_patience": 5,
-    "schedule_factor": 0.25,
+    # "schedule_patience": 5,
+    # "schedule_factor": 0.25,
+    "warmup" : 3,
     "model": "",
 }
 
@@ -48,7 +50,8 @@ def train(name, df, VAL_FOLD=0, resume=False):
     config = wandb.config
 
 
-    model = SRM_Classifer(num_classes=1, encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5')
+    # model = SRM_Classifer(num_classes=1, encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5')
+    model = SMP_SRM_UPP(classifier_only=True)
 
     # for name_, param in model.named_parameters():
     #     if 'classifier' in name_:
@@ -59,7 +62,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
     print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))    
     
 
-    wandb.save('segmentation/merged_net.py')
+    wandb.save('segmentation/smp_srm.py')
     wandb.save('dataset.py')
 
 
@@ -107,11 +110,15 @@ def train(name, df, VAL_FOLD=0, resume=False):
     #     mode="min",
     #     factor=config.schedule_factor,
     # )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=15)
+    after_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=config.epochs - config.warmup)
+    scheduler = GradualWarmupScheduler(optimizer       = optimizer, 
+                                       multiplier      = 1, 
+                                       total_epoch     = config.warmup + 1, 
+                                       after_scheduler = after_scheduler)
+
     criterion = nn.BCEWithLogitsLoss()
     es = EarlyStopping(patience=20, mode="min")
 
-    scaler = torch.cuda.amp.GradScaler()
 
     model = nn.DataParallel(model).to(device)
     
@@ -123,7 +130,6 @@ def train(name, df, VAL_FOLD=0, resume=False):
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scaler.load_state_dict(checkpoint["scaler_state_dict"])
         start_epoch = checkpoint['epoch'] + 1
         print("-----------> Resuming <------------")
 
@@ -131,7 +137,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
         print(f"Epoch = {epoch}/{config.epochs-1}")
         print("------------------")
 
-        train_metrics = train_epoch(model, train_loader, optimizer, criterion, scaler, epoch)
+        train_metrics = train_epoch(model, train_loader, optimizer, scheduler, criterion, epoch)
         valid_metrics = valid_epoch(model, valid_loader, criterion, epoch)
         
         # scheduler.step(valid_metrics['valid_loss'])
@@ -142,7 +148,7 @@ def train(name, df, VAL_FOLD=0, resume=False):
 
         
         es(
-            valid_metrics["valid_loss_segmentation"],
+            valid_metrics["valid_loss"],
             model,
             model_path=os.path.join(OUTPUT_DIR, f"{run}.h5"),
         )
@@ -155,7 +161,6 @@ def train(name, df, VAL_FOLD=0, resume=False):
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict' : optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
-            "scaler_state_dict": scaler.state_dict()
         }
         torch.save(checkpoint, os.path.join('checkpoint', f"{run}.pt"))
 
@@ -170,30 +175,28 @@ def train(name, df, VAL_FOLD=0, resume=False):
     return test_metrics
 
 
-def train_epoch(model, train_loader, optimizer, criterion, scaler, epoch):
+def train_epoch(model, train_loader, optimizer, scheduler, criterion, epoch):
     model.train()
 
     total_loss = AverageMeter()
     
     predictions = []
     targets = []
-    
-    iters = len(train_loader)
-    for batch in tqdm(train_loader):
+
+    for batch_idx, batch in tqdm(enumerate(train_loader), total=len(train_loader),  desc=f"Train epoch {epoch}", dynamic_ncols=True):
         images = batch["image"].to(device)
         elas = batch["ela"].to(device)
         target_labels = batch["label"].to(device)
         # dft_dwt_vector = batch["dft_dwt_vector"].to(device)
         
-        with torch.cuda.amp.autocast():
-            out_logits, _ = model(images, elas)#, dft_dwt_vector)
-            loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
+        scheduler.step(epoch + 1 + batch_idx / len(train_loader))
 
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
+        out_logits, _ = model(images, elas)#, dft_dwt_vector)
+        loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
 
-        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()     
+        optimizer.zero_grad()   
 
         ############## SRM Step ###########
         bayer_mask = torch.zeros(3,3,5,5).cuda()
@@ -245,7 +248,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     example_images = []
 
     with torch.no_grad():
-        for batch in tqdm(valid_loader):
+        for batch in tqdm(valid_loader, desc=f"Valid epoch {epoch}", dynamic_ncols=True):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             target_labels = batch["label"].to(device)
@@ -311,7 +314,7 @@ def test(model, test_loader, criterion):
     targets = []
 
     with torch.no_grad():
-        for batch in tqdm(test_loader):
+        for batch in tqdm(test_loader, dynamic_ncols=True):
             images = batch["image"].to(device)
             elas = batch["ela"].to(device)
             target_labels = batch["label"].to(device)
@@ -388,7 +391,7 @@ if __name__ == "__main__":
     for i in range(1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(full, amp-test)COMBO_ALL" + config_defaults["model"],
+            name=f"(combo, amp-test)COMBO_ALL" + config_defaults["model"],
             df=df,
             VAL_FOLD=i,
             resume=False
