@@ -2,6 +2,7 @@ import sys
 sys.path.append('../image_manipulation/')
 
 import segmentation_models_pytorch as smp
+from segmentation.unetplusplus_modules.SMPUnetPlusPlus import UnetPlusPlus
 import torch
 import torch.nn as nn
 import gc
@@ -44,7 +45,7 @@ class SMP_SRM_UPP(nn.Module):
             activation=None,      # activation function, default is None
             classes=1,                 # define number of output labels
         )
-        base_model = smp.UnetPlusPlus(
+        base_model = UnetPlusPlus(
             in_channels=54,
             classes=1,
             encoder_name='timm-efficientnet-b4',
