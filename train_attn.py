@@ -24,14 +24,14 @@ from segmentation.smp_srm import SMP_SRM_UPP
 OUTPUT_DIR = "weights"
 device =  'cuda'
 config_defaults = {
-    "epochs": 100,
-    "train_batch_size": 64,
+    "epochs": 200,
+    "train_batch_size": 40,
     "valid_batch_size": 32,
     "optimizer": "adam",
-    "learning_rate": 1e-4,
+    "learning_rate": 0.001,
     "weight_decay": 1e-5,
-    # "schedule_patience": 5,
-    # "schedule_factor": 0.25,
+    "schedule_patience": 5,
+    "schedule_factor": 0.25,
     "warmup" : 3,
     "model": "",
 }
@@ -104,20 +104,24 @@ def train(name, df, VAL_FOLD=0, resume=False):
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
-    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    # after_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     #     optimizer,
     #     patience=config.schedule_patience,
     #     mode="min",
     #     factor=config.schedule_factor,
     # )
-    after_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=config.epochs - config.warmup)
+    after_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_0=35, T_mult=2)
     scheduler = GradualWarmupScheduler(optimizer       = optimizer, 
                                        multiplier      = 1, 
                                        total_epoch     = config.warmup + 1, 
                                        after_scheduler = after_scheduler)
 
+    # this zero gradient update is needed to avoid a warning message, issue #8.
+    # optimizer.zero_grad()
+    # optimizer.step()
+
     criterion = nn.BCEWithLogitsLoss()
-    es = EarlyStopping(patience=20, mode="min")
+    es = EarlyStopping(patience=200, mode="min")
 
 
     model = nn.DataParallel(model).to(device)
@@ -140,11 +144,15 @@ def train(name, df, VAL_FOLD=0, resume=False):
         train_metrics = train_epoch(model, train_loader, optimizer, scheduler, criterion, epoch)
         valid_metrics = valid_epoch(model, valid_loader, criterion, epoch)
         
-        # scheduler.step(valid_metrics['valid_loss'])
+        scheduler.step(valid_metrics['valid_loss'])
 
         print(f"TRAIN_ACC = {train_metrics['train_acc_05']}, TRAIN_LOSS = {train_metrics['train_loss']}")
         print(f"VALID_ACC = {valid_metrics['valid_acc_05']}, VALID_LOSS = {valid_metrics['valid_loss']}")
-        print("New LR", optimizer.param_groups[0]['lr'])
+        # print("Optimizer LR", optimizer.param_groups[0]['lr'])
+        print("Scheduler LR", scheduler.get_lr()[0])
+        wandb.log({
+            'schedule_lr' : optimizer.param_groups[0]['lr']
+        })
 
         
         es(
@@ -189,9 +197,9 @@ def train_epoch(model, train_loader, optimizer, scheduler, criterion, epoch):
         target_labels = batch["label"].to(device)
         # dft_dwt_vector = batch["dft_dwt_vector"].to(device)
         
-        scheduler.step(epoch + 1 + batch_idx / len(train_loader))
+        # scheduler.step(epoch + 1 + batch_idx / len(train_loader)) #-> For CosineAnnealingWarmRestarts
 
-        out_logits, _ = model(images, elas)#, dft_dwt_vector)
+        out_logits = model(images, elas)#, dft_dwt_vector)
         loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
 
         loss.backward()
@@ -254,7 +262,7 @@ def valid_epoch(model, valid_loader, criterion, epoch):
             target_labels = batch["label"].to(device)
             # dft_dwt_vector = batch["dft_dwt_vector"].to(device)
 
-            out_logits, _ = model(images, elas)#, dft_dwt_vector)
+            out_logits = model(images, elas)#, dft_dwt_vector)
 
             loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
             
@@ -320,7 +328,7 @@ def test(model, test_loader, criterion):
             target_labels = batch["label"].to(device)
             # dft_dwt_vector = batch["dft_dwt_vector"].to(device)
 
-            out_logits, _ = model(images, elas)#, dft_dwt_vector)
+            out_logits = model(images, elas)#, dft_dwt_vector)
 
             loss = criterion(out_logits, target_labels.view(-1, 1).type_as(out_logits))
             
@@ -356,23 +364,24 @@ if __name__ == "__main__":
 
     # combo_all_df = get_dataframe('combo_all_FULL.csv', folds=None)
     casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
-    imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
-    cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
-    nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
-    coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
+    # imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
+    # cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
+    # nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
+    # coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
     
-    nist_extend = get_dataframe('nist_extend.csv', folds=12)
+    # nist_extend = get_dataframe('dataset_csv/nist_extend.csv', folds=12)
     # # nist_extend_real = nist_extend[nist_extend['label'] == 0].sample(n=1000, random_state=123)
     # # nist_extend_fake = nist_extend[nist_extend['label'] == 1].sample(n=1500, random_state=123)
     # # nist_extend = pd.concat([nist_extend_real, nist_extend_fake]).sample(frac=1.0, random_state=123)
     
-    coverage_extend = get_dataframe('coverage_extend.csv', folds=12)
+    # coverage_extend = get_dataframe('dataset_csv/coverage_extend.csv', folds=12)
     # # coverage_extend_real = coverage_extend[coverage_extend['label'] == 0].sample(n=800, random_state=123)
     # # coverage_extend_fake = coverage_extend[coverage_extend['label'] == 1].sample(n=800, random_state=123)
     # # coverage_extend = pd.concat([coverage_extend_real, coverage_extend_fake]).sample(frac=1.0, random_state=123)
             
-    df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full,\
-                         nist_extend, coverage_extend])
+    # df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full,\
+    #                      nist_extend, coverage_extend])
+    df_full = casia_full
     df_full.insert(0, 'image', '')
 
     # df_128 = pd.read_csv('combo_all_128.csv').sample(frac=1.0, random_state=123)
@@ -391,7 +400,7 @@ if __name__ == "__main__":
     for i in range(1):
         print(f'>>>>>>>>>>>>>> CV {i} <<<<<<<<<<<<<<<')
         test_metrics = train(
-            name=f"(combo, amp-test)COMBO_ALL" + config_defaults["model"],
+            name=f"(RL Plateau scheduler)CASIA_FULL" + config_defaults["model"],
             df=df,
             VAL_FOLD=i,
             resume=False
