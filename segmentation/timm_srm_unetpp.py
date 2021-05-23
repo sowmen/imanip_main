@@ -4,8 +4,9 @@ sys.path.append('../image_manipulation/')
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from segmentation.layers import upsize2, Decode
+from segmentation.layers import upsize2#, Decode
 # from segmentation.layers import BnInception as Decode
+from segmentation.layers import DecoderBlock as Decode
 import copy
 
 class UnetPP(nn.Module):

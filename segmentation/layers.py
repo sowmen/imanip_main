@@ -108,7 +108,42 @@ class Decode(nn.Module):
     def forward(self, x):
         x = self.top(torch.cat(x, 1))
         return x
-    
+
+from segmentation_models_pytorch.base import modules as md
+class DecoderBlock(nn.Module):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+    ):
+        super().__init__()
+        self.conv1 = md.Conv2dReLU(
+            in_channels,
+            out_channels,
+            kernel_size=3,
+            padding=1,
+            use_batchnorm=True,
+        )
+        self.attention1 = md.Attention('scse', in_channels=in_channels)
+        self.conv2 = md.Conv2dReLU(
+            out_channels,
+            out_channels,
+            kernel_size=3,
+            padding=1,
+            use_batchnorm=True,
+        )
+        self.attention2 = md.Attention('scse', in_channels=out_channels)
+
+    def forward(self, x):
+        x = torch.cat(x, 1)
+        
+        x = self.attention1(x)
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.attention2(x)
+        return x
+
+
 class BnInception(nn.Module):
     def __init__(self,  in_channels, out_channels, kernel_size=[1,3,5], padding =[0,1,2]):
         super(BnInception, self).__init__()

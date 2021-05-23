@@ -148,12 +148,12 @@ def train(name, df, VAL_FOLD=0, resume=False):
 
         print(f"TRAIN_ACC = {train_metrics['train_acc_05']}, TRAIN_LOSS = {train_metrics['train_loss']}")
         print(f"VALID_ACC = {valid_metrics['valid_acc_05']}, VALID_LOSS = {valid_metrics['valid_loss']}")
-        # print("Optimizer LR", optimizer.param_groups[0]['lr'])
+        print("Optimizer LR", optimizer.param_groups[0]['lr'])
         print("Scheduler LR", scheduler.get_lr()[0])
         wandb.log({
-            'schedule_lr' : optimizer.param_groups[0]['lr']
+            'optim_lr' : optimizer.param_groups[0]['lr'],
+            'schedule_lr' : scheduler.get_lr()[0]
         })
-
         
         es(
             valid_metrics["valid_loss"],
