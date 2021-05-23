@@ -116,7 +116,11 @@ class EfficientNetBaseEncoder(EfficientNet, EncoderMixin):
 
         features = []
         for i in range(self._depth + 1):
+            print(f"({i})before-->", x.shape)
+            print(stages[i])
             x = stages[i](x)
+            print(f"({i})after-->", x.shape)
+            print("====================================")
             features.append(x)
 
         return features

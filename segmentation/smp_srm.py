@@ -49,7 +49,7 @@ class SMP_SRM_UPP(nn.Module):
             in_channels=54,
             classes=1,
             encoder_name='timm-efficientnet-b4',
-            encoder_weights=None,
+            encoder_weights='noisy-student',
             decoder_attention_type='scse',
             aux_params=self.aux_params
         )

@@ -25,8 +25,8 @@ from segmentation.timm_srm_unetpp import UnetPP
 from segmentation.merged_net import SRM_Classifer 
 from sim_dataset import SimDataset
 
-OUTPUT_DIR = "weights"
-CKPT_DIR = "checkpoint"
+OUTPUT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/weights"
+CKPT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
@@ -129,6 +129,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
         patience=config.schedule_patience,
         mode="min",
         factor=config.schedule_factor,
+        verbose=True
     )
     criterion = get_lossfn()
     es = EarlyStopping(patience=20, mode="min")
@@ -171,6 +172,9 @@ def train(name, df, VAL_FOLD=0, resume=None):
             VALID_REAL_FPR = {valid_metrics['valid_real_fpr']}"
         )
         print("New LR", optimizer.param_groups[0]['lr'])
+        wandb.log({
+            'learning_rate': optimizer.param_groups[0]['lr']
+        })
 
         es(valid_metrics["valid_loss_segmentation"],
            model,
@@ -491,19 +495,19 @@ if __name__ == "__main__":
     
     #---------------------------------- 128 ---------------------------------------#
 
-    casia128 = get_dataframe('dataset_csv/casia_128.csv', folds=41)
-    imd128 = get_dataframe('dataset_csv/imd_128.csv', folds=41)
-    cmfd128 = get_dataframe('dataset_csv/cmfd_128.csv', folds=-1)
-    coverage128 = get_dataframe('dataset_csv/coverage_128.csv', folds=12)
-    nist128 = get_dataframe('dataset_csv/nist16_128.csv', folds=15)
+    # casia128 = get_dataframe('dataset_csv/casia_128.csv', folds=41)
+    # imd128 = get_dataframe('dataset_csv/imd_128.csv', folds=41)
+    # cmfd128 = get_dataframe('dataset_csv/cmfd_128.csv', folds=-1)
+    # coverage128 = get_dataframe('dataset_csv/coverage_128.csv', folds=12)
+    # nist128 = get_dataframe('dataset_csv/nist16_128.csv', folds=15)
 
-    df_128 = pd.concat([casia128, imd128, coverage128, cmfd128, nist128, coverage128])
-    df = df_128
+    # df_128 = pd.concat([casia128, imd128, coverage128, cmfd128, nist128, coverage128])
+    # df = df_128
     
     with pd.option_context('display.max_rows', None, 'display.max_columns', None):
         print(df.label.value_counts())
         print('------')
-        print(df_full.groupby('fold').root_dir.value_counts())
+        print(df.groupby('fold').root_dir.value_counts())
 
     
     train(
