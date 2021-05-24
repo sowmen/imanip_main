@@ -40,13 +40,6 @@ class Conv2dSamePadding(nn.Conv2d):
         return F.conv2d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 
-class BatchNorm2d(nn.BatchNorm2d):
-    def __init__(self, num_features, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, name=None):
-        super().__init__(num_features, eps=eps, momentum=momentum, affine=affine,
-                         track_running_stats=track_running_stats)
-        self.name = name
-
-
 
 def double_conv(in_channels, out_channels):
     return nn.Sequential(
@@ -67,19 +60,11 @@ def up_conv(in_channels, out_channels):
     )
 
 
-def custom_head(in_channels, out_channels):
-    return nn.Sequential(
-        nn.Dropout(),
-        nn.Linear(in_channels, 512),
-        nn.ReLU(inplace=True),
-        nn.Dropout(),
-        nn.Linear(512, out_channels)
-    )
-
 def upsize2(x, sampling='nearest'):
     x = F.interpolate(x, scale_factor=2, mode=sampling)
     return x
 
+    
     
 class Decode(nn.Module):
     def __init__(self, in_channel, out_channel):
@@ -87,17 +72,17 @@ class Decode(nn.Module):
 
         self.top = nn.Sequential(
             nn.Conv2d(in_channel, out_channel//2, kernel_size=3, stride=1, padding=1, bias=False),
-            BatchNorm2d( out_channel//2),
+            nn.BatchNorm2d( out_channel//2),
             Swish(), #nn.ReLU(inplace=True),
             #nn.Dropout(0.1),
 
             nn.Conv2d(out_channel//2, out_channel//2, kernel_size=3, stride=1, padding=1, bias=False),
-            BatchNorm2d(out_channel//2),
+            nn.BatchNorm2d(out_channel//2),
             Swish(), #nn.ReLU(inplace=True),
             #nn.Dropout(0.1),
 
             nn.Conv2d(out_channel//2, out_channel, kernel_size=1, stride=1, padding=0, bias=False),
-            BatchNorm2d(out_channel),
+            nn.BatchNorm2d(out_channel),
             Swish(), #nn.ReLU(inplace=True),
         )
         nn.init.xavier_uniform_(self.top[0].weight)
@@ -109,39 +94,6 @@ class Decode(nn.Module):
         x = self.top(torch.cat(x, 1))
         return x
 
-from segmentation_models_pytorch.base import modules as md
-class DecoderBlock(nn.Module):
-    def __init__(
-            self,
-            in_channels,
-            out_channels,
-    ):
-        super().__init__()
-        self.conv1 = md.Conv2dReLU(
-            in_channels,
-            out_channels,
-            kernel_size=3,
-            padding=1,
-            use_batchnorm=True,
-        )
-        self.attention1 = md.Attention('scse', in_channels=in_channels)
-        self.conv2 = md.Conv2dReLU(
-            out_channels,
-            out_channels,
-            kernel_size=3,
-            padding=1,
-            use_batchnorm=True,
-        )
-        self.attention2 = md.Attention('scse', in_channels=out_channels)
-
-    def forward(self, x):
-        x = torch.cat(x, 1)
-        
-        x = self.attention1(x)
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.attention2(x)
-        return x
 
 
 class BnInception(nn.Module):
@@ -175,3 +127,53 @@ class BnInception(nn.Module):
         x = self.relu(x)
         # print(x.size())
         return x
+
+
+
+from segmentation_models_pytorch.base import modules as md
+
+class AttentionDecoderBlock(nn.Module):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+    ):
+        super().__init__()
+        self.conv1 = md.Conv2dReLU(
+            in_channels,
+            out_channels,
+            kernel_size=3,
+            padding=1,
+            use_batchnorm=True,
+        )
+        self.attention1 = md.Attention('scse', in_channels=in_channels)
+        self.conv2 = md.Conv2dReLU(
+            out_channels,
+            out_channels,
+            kernel_size=3,
+            padding=1,
+            use_batchnorm=True,
+        )
+        self.attention2 = md.Attention('scse', in_channels=out_channels)
+
+    def forward(self, x):
+        x = torch.cat(x, 1)
+        
+        x = self.attention1(x)
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.attention2(x)
+        return x
+
+
+class ClassificationHead(nn.Sequential):
+
+    def __init__(self, in_channels, classes, pooling="avg", dropout=0.2, activation=None):
+        if pooling not in ("max", "avg"):
+            raise ValueError("Pooling should be one of ('max', 'avg'), got {}.".format(pooling))
+        pool = nn.AdaptiveAvgPool2d(1) if pooling == 'avg' else nn.AdaptiveMaxPool2d(1)
+        flatten = md.Flatten()
+        dropout = nn.Dropout(p=dropout, inplace=True) if dropout else nn.Identity()
+        linear = nn.Linear(in_channels, classes, bias=True)
+        activation = md.Activation(activation)
+        super().__init__(pool, flatten, dropout, linear, activation)

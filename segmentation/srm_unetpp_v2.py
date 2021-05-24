@@ -4,21 +4,20 @@ sys.path.append('../image_manipulation/')
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from segmentation.layers import upsize2#, Decode
-# from segmentation.layers import BnInception as Decode
-from segmentation.layers import AttentionDecoderBlock as Decode
-import copy
+from segmentation.layers import upsize2, Decode
+# from segmentation.layers import AttentionDecoderBlock as Decode
 
-class UnetPP(nn.Module):
+
+class MyUnetPP(nn.Module):
     def __init__(self, encoder, num_classes=1, sampling='nearest'):
-        super(UnetPP, self).__init__()
+        super(MyUnetPP, self).__init__()
         
         self.encoder = encoder
         self.num_classes = num_classes
         self.sampling = sampling
         
         # TOP DOWN -> TOP DECODER IS 0
-        self.size = [24,32,56,160,448]
+        self.size = encoder.encoder_params['out_channels']
         
         self.mix = nn.Parameter(torch.FloatTensor(5))
         self.mix.data.fill_(1)

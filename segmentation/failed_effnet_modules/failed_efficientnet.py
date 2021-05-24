@@ -3,7 +3,7 @@ from torch.hub import load_state_dict_from_url
 import sys
 sys.path.append('../image_manipulation/')
 
-from segmentation.utils import *
+from segmentation.failed_effnet_modules.utils import *
 
 
 class EfficientNet(nn.Module):

@@ -22,48 +22,27 @@ class SRM_Classifer(nn.Module):
         self.bayer_conv = nn.Conv2d(self.in_channels, out_channels=3, kernel_size=5, padding=2, bias=False)
         nn.init.xavier_uniform_(self.bayer_conv.weight)
         
-        # self.rgb_conv = nn.Conv2d(self.in_channels, out_channels=16, kernel_size=3, padding=1, bias=False)
-        # nn.init.xavier_uniform_(self.rgb_conv.weight)
-
         self.rgb_conv = nn.Sequential(
             nn.Conv2d(self.in_channels, out_channels=16, kernel_size=3, padding=1, bias=False),
-            # nn.BatchNorm2d(32),
-            # nn.ReLU(inplace=True),
             nn.Conv2d(16, out_channels=16, kernel_size=3, padding=1, bias=False),
-            # nn.Conv2d(32, out_channels=32, kernel_size=3, padding=1, bias=False),
-            # nn.BatchNorm2d(32),
             nn.ReLU(inplace=True)
         )
         nn.init.xavier_uniform_(self.rgb_conv[0].weight)
         nn.init.xavier_uniform_(self.rgb_conv[1].weight)
-        # nn.init.xavier_uniform_(self.rgb_conv[2].weight)
+
         
         self.ela_net = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=3, padding=1, bias=False),
-            # nn.BatchNorm2d(32),
-            # nn.ReLU(inplace=True),
             nn.Conv2d(32, 32, kernel_size=3, padding=1, bias=False),
-            # nn.BatchNorm2d(32),
             nn.ReLU(inplace=True)
         )
         nn.init.xavier_uniform_(self.ela_net[0].weight)
         nn.init.xavier_uniform_(self.ela_net[1].weight)
 
-        # self.dft_net = nn.Sequential(
-        #     nn.Conv2d(18, 32, kernel_size=3, padding=1, bias=False),
-        #     nn.BatchNorm2d(32),
-        #     nn.ReLU(inplace=True),
-        #     nn.Conv2d(32, 32, kernel_size=3, padding=1, bias=False),
-        #     nn.BatchNorm2d(32),
-        #     nn.ReLU(inplace=True),
-        # )
-        # nn.init.xavier_uniform_(self.dft_net[0].weight)
-        # nn.init.xavier_uniform_(self.dft_net[3].weight)
-
 
         base_model = EfficientNet(in_channels=54)
         self.encoder = base_model.encoder
-        # self.classifier = base_model.classifier
+
 
         self.reducer = nn.Sequential(
             SelectAdaptivePool2d(pool_type="avg", flatten=True),
@@ -88,17 +67,14 @@ class SRM_Classifer(nn.Module):
             self.load_weights(encoder_checkpoint)
     
     # @torch.cuda.amp.autocast()
-    def forward(self, im, ela):#, dft_dwt):
+    def forward(self, im, ela):
 
         x1 = self.srm_conv(im)
         x2 = self.bayer_conv(im)
         x3 = self.rgb_conv(im)
         x_ela = self.ela_net(ela)
 
-        # x_dft = self.dft_net(dft_dwt)
-        # x_dft = torch.add(x_dft, dft_dwt)
 
-        # _merged_input = torch.cat([x1, x2, x3, x_ela, x_dft], dim=1)
         _merged_input = torch.cat([x1, x2, x3, x_ela], dim=1)
         
         enc_out, (start, end), _ = self.encoder(_merged_input)
@@ -107,6 +83,7 @@ class SRM_Classifer(nn.Module):
         x = self.classifier(reduced_feat)
         
         return x, (reduced_feat, _merged_input, enc_out, start, end)
+    
     
     def freeze(self):
         for param in self.parameters():
