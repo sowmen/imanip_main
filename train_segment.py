@@ -33,7 +33,7 @@ CKPT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 20,
+    "train_batch_size": 16,
     "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0001,
@@ -41,7 +41,7 @@ config_defaults = {
     "schedule_patience": 5,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "SMP-UnetPP",
+    "model": "MyUnetPP-v2-Attn",
 }
 TEST_FOLD = 1
 
@@ -239,10 +239,10 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         ############## SRM Step ###########
         bayer_mask = torch.zeros(3,3,5,5).cuda()
         bayer_mask[:, :, 5//2, 5//2] = 1
-        bayer_weight = model.module.bayer_conv.weight * (1-bayer_mask)
+        bayer_weight = model.module.encoder.bayer_conv.weight * (1-bayer_mask)
         bayer_weight = (bayer_weight / torch.sum(bayer_weight, dim=(2,3), keepdim=True)) + 1e-7
         bayer_weight -= bayer_mask
-        model.module.bayer_conv.weight = nn.Parameter(bayer_weight)
+        model.module.encoder.bayer_conv.weight = nn.Parameter(bayer_weight)
         ###################################
             
         # ---------------------Batch Loss Update-------------------------
