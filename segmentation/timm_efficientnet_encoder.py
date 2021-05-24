@@ -25,11 +25,14 @@ class TimmEfficientNetBaseEncoder(nn.Module):
             del base_model_sequential
             gc.collect()
 
-            if self.attention is not None:
-                self.attention_modules = []
-                for num_channel in self.params['out_channels']:
-                    self.attention_modules.append(md.Attention(attention, in_channels=num_channel))
             
+            self.attention_modules = nn.ModuleList()
+            for num_channel in self.params['out_channels']:
+                if self.attention is not None:
+                    self.attention_modules.append(md.Attention(attention, in_channels=num_channel))
+                else:
+                    self.attention_modules.append(nn.Identity())
+
 
         def forward(self, x):
             """
@@ -45,8 +48,8 @@ class TimmEfficientNetBaseEncoder(nn.Module):
             stage_outputs = []
             
             x = self.stem(x)
-            if self.attention is not None:
-                x = self.attention_modules[0](x)
+            x = self.attention_modules[0](x)
+
             stage_outputs.append(x)
             
             attn_idx, idx = 1, 0
@@ -55,10 +58,9 @@ class TimmEfficientNetBaseEncoder(nn.Module):
                     x = inner_block(x)
 
                     if idx in self.params['stage_idxs']:
-                        if self.attention is not None:
-                            x = self.attention_modules[attn_idx](x)
-                            attn_idx += 1
+                        x = self.attention_modules[attn_idx](x)
                         stage_outputs.append(x)
+                        attn_idx += 1
                     idx += 1
 
             return stage_outputs
