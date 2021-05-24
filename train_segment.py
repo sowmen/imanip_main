@@ -28,20 +28,20 @@ from sim_dataset import SimDataset
 from segmentation.merged_netv2 import Mani_FeatX
 from segmentation.unetpp_v2 import MyUnetPP
 
-OUTPUT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/weights"
-CKPT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/checkpoint"
+OUTPUT_DIR = "weights"
+CKPT_DIR = "checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 20,
+    "train_batch_size": 16,
     "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0001,
     "weight_decay": 0.0005,
     "schedule_patience": 5,
-    "schedule_factor": 0.25,
+    "schedule_factor": 0.15,
     'sampling':'nearest',
-    "model": "SMP-UnetPP",
+    "model": "MyUnetPP-v2-Attn",
 }
 TEST_FOLD = 1
 
@@ -239,10 +239,10 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         ############## SRM Step ###########
         bayer_mask = torch.zeros(3,3,5,5).cuda()
         bayer_mask[:, :, 5//2, 5//2] = 1
-        bayer_weight = model.module.bayer_conv.weight * (1-bayer_mask)
+        bayer_weight = model.module.encoder.bayer_conv.weight * (1-bayer_mask)
         bayer_weight = (bayer_weight / torch.sum(bayer_weight, dim=(2,3), keepdim=True)) + 1e-7
         bayer_weight -= bayer_mask
-        model.module.bayer_conv.weight = nn.Parameter(bayer_weight)
+        model.module.encoder.bayer_conv.weight = nn.Parameter(bayer_weight)
         ###################################
             
         # ---------------------Batch Loss Update-------------------------
@@ -464,7 +464,7 @@ from losses import DiceLoss, ImanipLoss
 def get_lossfn():
     bce = nn.BCEWithLogitsLoss()
     dice = DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
-    criterion = ImanipLoss(bce, dice)
+    criterion = ImanipLoss(bce, dice, dice_weight=1.15)
     return criterion
 
     
@@ -518,7 +518,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(CASIA_FULL+customloss)" + config_defaults["model"],
+        name=f"(CASIA_FULL+sumloss1.15)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,
