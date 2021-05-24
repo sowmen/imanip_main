@@ -25,6 +25,9 @@ from segmentation.timm_srm_unetpp import UnetPP
 from segmentation.merged_net import SRM_Classifer 
 from sim_dataset import SimDataset
 
+from segmentation.merged_netv2 import Mani_FeatX
+from segmentation.unetpp_v2 import MyUnetPP
+
 OUTPUT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/weights"
 CKPT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/checkpoint"
 device = 'cuda'
@@ -33,10 +36,10 @@ config_defaults = {
     "train_batch_size": 20,
     "valid_batch_size": 32,
     "optimizer": "adam",
-    "learning_rate": 0.001,
+    "learning_rate": 0.0001,
     "weight_decay": 0.0005,
     "schedule_patience": 5,
-    "schedule_factor": 0.15,
+    "schedule_factor": 0.25,
     'sampling':'nearest',
     "model": "SMP-UnetPP",
 }
@@ -57,15 +60,19 @@ def train(name, df, VAL_FOLD=0, resume=None):
 
 
     # model = smp.DeepLabV3('resnet34', classes=1, encoder_weights='imagenet')
-    model = SMP_SRM_UPP()
+    # model = SMP_SRM_UPP()
     
     # encoder = SRM_Classifer(encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5', freeze_encoder=True)
     # model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
 
+    encoder = Mani_FeatX()
+    model = MyUnetPP(encoder)
+
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     
-    wandb.save('segmentation/timm_srm_unetpp.py')
-    wandb.save('segmentation/smp_srm.py')
+    wandb.save('segmentation/merged_netv2.py')
+    wandb.save('segmentation/unetpp_v2.py')
+    wandb.save('segmentation/layers.py')
     wandb.save('dataset.py')
     
     

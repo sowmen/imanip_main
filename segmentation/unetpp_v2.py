@@ -4,21 +4,24 @@ sys.path.append('../image_manipulation/')
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from segmentation.layers import upsize2, Decode
-# from segmentation.layers import AttentionDecoderBlock as Decode
+from segmentation.layers import upsize2#, Decode
+from segmentation.layers import AttentionDecoderBlock as Decode
 
 
 class MyUnetPP(nn.Module):
-    def __init__(self, encoder, num_classes=1, sampling='nearest'):
+    def __init__(self, encoder, num_classes=1, sampling='nearest', use_stem=False):
         super(MyUnetPP, self).__init__()
         
         self.encoder = encoder
         self.num_classes = num_classes
         self.sampling = sampling
+        self.use_stem = use_stem
         
         # TOP DOWN -> TOP DECODER IS 0
-        self.size = encoder.encoder_params['out_channels']
+        if use_stem: self.size = encoder.encoder_params['out_channels'][0:1] + encoder.encoder_params['out_channels'][2:]
+        else: self.size = encoder.encoder_params['out_channels'][1:]
         
+
         self.mix = nn.Parameter(torch.FloatTensor(5))
         self.mix.data.fill_(1)
         
@@ -48,17 +51,16 @@ class MyUnetPP(nn.Module):
         
         
     def forward(self, inp, ela):
-        batch_size, C, H, W = inp.shape
+        _, _, H, W = inp.shape
         
-        cls_tensor, (_, _, _, start, end) = self.encoder(inp, ela)
+        class_tensor, (_, _, stage_outputs) = self.encoder(inp, ela)
         
-        layer = end
-            
-        x0_0 = layer[0]
-        x1_0 = layer[1]
-        x2_0 = layer[2]
-        x3_0 = layer[3]
-        x4_0 = layer[4]
+        if self.use_stem: x0_0 = stage_outputs[0]
+        else: x0_0 = stage_outputs[1]
+        x1_0 = stage_outputs[2]
+        x2_0 = stage_outputs[3]
+        x3_0 = stage_outputs[4]
+        x4_0 = stage_outputs[5]
 
         x0_1 = self.decode0_1([x0_0, upsize2(x1_0, self.sampling)])
         x1_1 = self.decode1_1([x1_0, upsize2(x2_0, self.sampling)])
@@ -82,7 +84,6 @@ class MyUnetPP(nn.Module):
         logit4 = self.logit4(x0_4)
         
         logit = self.mix[1]*logit1 + self.mix[2]*logit2 + self.mix[3]*logit3 + self.mix[4]*logit4
-        logit = F.interpolate(logit, size=(H,W), mode='bilinear', align_corners=False)
+        mask_logit = F.interpolate(logit, size=(H,W), mode='bilinear', align_corners=False)
         
-        return logit, cls_tensor
-        
+        return mask_logit, class_tensor

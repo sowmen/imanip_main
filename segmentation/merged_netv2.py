@@ -58,7 +58,7 @@ class Mani_FeatX(nn.Module):
         if checkpoint:
             self.load_weights(checkpoint)
     
-    # @torch.cuda.amp.autocast()
+
     def forward(self, im, ela):
 
         x1 = self.srm_conv(im)
@@ -93,5 +93,3 @@ class Mani_FeatX(nn.Module):
              if re.sub("^module.", "", k) in self.state_dict().keys()}
         
         print(self.load_state_dict(filtered_dict, strict=False))
-        
-        
