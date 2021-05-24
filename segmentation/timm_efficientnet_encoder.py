@@ -1,14 +1,15 @@
 import timm
 import torch.nn as nn
 import gc
-
+from segmentation_models_pytorch.base import modules as md
 
 class TimmEfficientNetBaseEncoder(nn.Module):
-        def __init__(self, model_name="tf_efficientnet_b4_ns", in_channels=3, pretrained=True):
+        def __init__(self, model_name="tf_efficientnet_b4_ns", in_channels=3, pretrained=True, attention=None):
             super().__init__()
 
             self.model_name = model_name
             self.in_channels = in_channels
+            self.attention = attention
             self.params = timm_efficientnet_encoder_params[model_name.rsplit('_', 1)[0]]['params']
 
 
@@ -24,6 +25,11 @@ class TimmEfficientNetBaseEncoder(nn.Module):
             del base_model_sequential
             gc.collect()
 
+            if self.attention is not None:
+                self.attention_modules = []
+                for num_channel in self.params['out_channels']:
+                    self.attention_modules.append(md.Attention(attention, in_channels=num_channel))
+            
 
         def forward(self, x):
             """
@@ -39,14 +45,19 @@ class TimmEfficientNetBaseEncoder(nn.Module):
             stage_outputs = []
             
             x = self.stem(x)
+            if self.attention is not None:
+                x = self.attention_modules[0](x)
             stage_outputs.append(x)
             
-            idx = 0
+            attn_idx, idx = 1, 0
             for block in self.blocks:
                 for inner_block in block:
                     x = inner_block(x)
 
                     if idx in self.params['stage_idxs']:
+                        if self.attention is not None:
+                            x = self.attention_modules[attn_idx](x)
+                            attn_idx += 1
                         stage_outputs.append(x)
                     idx += 1
 
