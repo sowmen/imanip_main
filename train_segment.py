@@ -145,7 +145,6 @@ def train(name, df, VAL_FOLD=0, resume=None):
     model = nn.DataParallel(model).to(device)
     # print(model.load_state_dict(torch.load('(defacto+customloss)UnetPP_[29|04_21|04|41].h5')))
     
-    # wandb.watch(model, log_freq=50, log='all')
     
     start_epoch = 0
     if resume is not None:
@@ -199,6 +198,10 @@ def train(name, df, VAL_FOLD=0, resume=None):
         }
         torch.save(checkpoint, os.path.join(CKPT_DIR, f"{run}.pt"))
 
+        del valid_metrics
+        del train_metrics
+        gc.collect()
+
 
     if os.path.exists(os.path.join(OUTPUT_DIR, f"{run}.h5")):
         print(model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{run}.h5"))))
@@ -208,7 +211,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
     calculate_auc(model, test_dataset, 'TEST')
     calculate_auc(model, valid_dataset, 'VAL')
 
-    wandb.save(os.path.join(OUTPUT_DIR, f"{run}.h5"))
+    # wandb.save(os.path.join(OUTPUT_DIR, f"{run}.h5"))
     
     
     

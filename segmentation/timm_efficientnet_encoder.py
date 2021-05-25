@@ -48,7 +48,7 @@ class TimmEfficientNetBaseEncoder(nn.Module):
             stage_outputs = []
             
             x = self.stem(x)
-            x = self.attention_modules[0](x)
+            # x = self.attention_modules[0](x)
 
             stage_outputs.append(x)
             
