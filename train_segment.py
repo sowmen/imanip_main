@@ -28,12 +28,12 @@ from sim_dataset import SimDataset
 from segmentation.merged_netv2 import Mani_FeatX
 from segmentation.unetpp_v2 import MyUnetPP
 
-OUTPUT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/weights"
-CKPT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/checkpoint"
+OUTPUT_DIR = "weights"
+CKPT_DIR = "checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 20,
+    "train_batch_size": 16,
     "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0001,
@@ -41,7 +41,7 @@ config_defaults = {
     "schedule_patience": 5,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "SMP-UnetPP",
+    "model": "MyUPP-v2-Attn",
 }
 TEST_FOLD = 1
 
@@ -131,15 +131,16 @@ def train(name, df, VAL_FOLD=0, resume=None):
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        patience=config.schedule_patience,
-        mode="min",
-        factor=config.schedule_factor,
-        verbose=True
-    )
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    #     optimizer,
+    #     patience=config.schedule_patience,
+    #     mode="min",
+    #     factor=config.schedule_factor,
+    #     verbose=True
+    # )
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.01, steps_per_epoch=len(train_loader), epochs=config.epochs)
     criterion = get_lossfn()
-    es = EarlyStopping(patience=20, mode="min")
+    es = EarlyStopping(patience=200, mode="min")
 
 
     model = nn.DataParallel(model).to(device)
@@ -163,10 +164,10 @@ def train(name, df, VAL_FOLD=0, resume=None):
         # if epoch == 6:
         #     model.module.encoder.unfreeze()
 
-        train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
+        train_metrics = train_epoch(model, train_loader, optimizer, criterion, scheduler, epoch)
         valid_metrics = valid_epoch(model, valid_loader, criterion,  epoch)
         
-        scheduler.step(valid_metrics["valid_loss_segmentation"])
+        # scheduler.step(valid_metrics["valid_loss_segmentation"])
 
         print(
             f"TRAIN_LOSS = {train_metrics['train_loss_segmentation']}, \
@@ -180,7 +181,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
         )
         print("New LR", optimizer.param_groups[0]['lr'])
         wandb.log({
-            'learning_rate': optimizer.param_groups[0]['lr']
+            'epoch-learning_rate': optimizer.param_groups[0]['lr']
         })
 
         es(valid_metrics["valid_loss_segmentation"],
@@ -212,7 +213,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
     
     
     
-def train_epoch(model, train_loader, optimizer, criterion, epoch):
+def train_epoch(model, train_loader, optimizer, criterion, scheduler, epoch):
     model.train()
 
     total_loss = AverageMeter()
@@ -235,14 +236,17 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         loss_segmentation.backward()
 
         optimizer.step()
-
+        scheduler.step()
+        wandb.log({
+            'batch-learning_rate': optimizer.param_groups[0]['lr']
+        })
         ############## SRM Step ###########
         bayer_mask = torch.zeros(3,3,5,5).cuda()
         bayer_mask[:, :, 5//2, 5//2] = 1
-        bayer_weight = model.module.bayer_conv.weight * (1-bayer_mask)
+        bayer_weight = model.module.encoder.bayer_conv.weight * (1-bayer_mask)
         bayer_weight = (bayer_weight / torch.sum(bayer_weight, dim=(2,3), keepdim=True)) + 1e-7
         bayer_weight -= bayer_mask
-        model.module.bayer_conv.weight = nn.Parameter(bayer_weight)
+        model.module.encoder.bayer_conv.weight = nn.Parameter(bayer_weight)
         ###################################
             
         # ---------------------Batch Loss Update-------------------------
@@ -464,7 +468,7 @@ from losses import DiceLoss, ImanipLoss
 def get_lossfn():
     bce = nn.BCEWithLogitsLoss()
     dice = DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
-    criterion = ImanipLoss(bce, dice)
+    criterion = ImanipLoss(bce, dice, dice_weight=1.15)
     return criterion
 
     
@@ -518,7 +522,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(CASIA_FULL+customloss)" + config_defaults["model"],
+        name=f"(1CycleLR)(CASIA_FULL+sumloss1.15)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,
