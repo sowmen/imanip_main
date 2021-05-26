@@ -5,6 +5,7 @@ from pytorch_toolbelt import losses
 import numpy as np  
 from sklearn.metrics import roc_auc_score, confusion_matrix
 import wandb
+import gc
 
 def get_avg_dice(predictions:torch.tensor, targets:torch.tensor): 
     if len(predictions) == 0:
@@ -276,7 +277,7 @@ class MetricMeter:
         _, (mx_avg_dice, best_avg_dice_idx), (worst_avg_dice, worst_avg_dice_idx) = get_avg_dice(predictions, targets)
 
         if self.mode != "TRAIN":
-            if(np.random.rand() < 0.5 and len(self.example_images) < 100):
+            if(np.random.rand() < 0.5 and len(self.example_images) < 50):
                 self.example_images.append(
                     wandb.Image(
                         get_image_plot(fake_images[best_fake_dice_idx],
@@ -328,26 +329,26 @@ class MetricMeter:
                             caption= real_image_paths[best_real_dice_idx].split('/', 2)[-1]
                         )
                     )
-                self.example_images.append(
-                        wandb.Image(
-                            get_image_plot(real_images[worst_real_dice_idx],
-                                real_pred_mask[worst_real_dice_idx], 
-                                real_gt[worst_real_dice_idx],
-                                f"WorstRealDice : {worst_real_dice}"
-                            ),
-                            caption= real_image_paths[worst_real_dice_idx].split('/', 2)[-1]
-                        )
-                    )
-                self.example_images.append(
-                        wandb.Image(
-                            get_image_plot(images[worst_avg_dice_idx],
-                                predictions[worst_avg_dice_idx], 
-                                targets[worst_avg_dice_idx],
-                                f"WorstAvgDice : {worst_avg_dice}"
-                            ),
-                            caption= paths[worst_avg_dice_idx].split('/', 2)[-1]
-                        )
-                    )
+                # self.example_images.append(
+                #         wandb.Image(
+                #             get_image_plot(real_images[worst_real_dice_idx],
+                #                 real_pred_mask[worst_real_dice_idx], 
+                #                 real_gt[worst_real_dice_idx],
+                #                 f"WorstRealDice : {worst_real_dice}"
+                #             ),
+                #             caption= real_image_paths[worst_real_dice_idx].split('/', 2)[-1]
+                #         )
+                #     )
+                # self.example_images.append(
+                #         wandb.Image(
+                #             get_image_plot(images[worst_avg_dice_idx],
+                #                 predictions[worst_avg_dice_idx], 
+                #                 targets[worst_avg_dice_idx],
+                #                 f"WorstAvgDice : {worst_avg_dice}"
+                #             ),
+                #             caption= paths[worst_avg_dice_idx].split('/', 2)[-1]
+                #         )
+                #     )
 
 
 from matplotlib import gridspec
@@ -356,7 +357,7 @@ import io
 import PIL
 
 def get_image_plot(image, pred, gt, title):
-    fig = plt.figure(figsize=(12,5))
+    fig = plt.figure(figsize=(10,5))
     gs = gridspec.GridSpec(1,3)
     gs.update(wspace=0., hspace=0.)
 
@@ -379,6 +380,9 @@ def get_image_plot(image, pred, gt, title):
     fig.savefig(buf, format='png', bbox_inches = 'tight', pad_inches = 0)
     buf.seek(0)
     im = PIL.Image.open(buf)
+    
+    del buf
+    gc.collect()
 
     return im
 

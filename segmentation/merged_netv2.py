@@ -6,13 +6,14 @@ from torch import nn
 from segmentation.srm_kernel import setup_srm_layer
 from segmentation.timm_efficientnet_encoder import TimmEfficientNetBaseEncoder, timm_efficientnet_encoder_params
 from segmentation import layers
+from timm.models.layers.adaptive_avgmax_pool import SelectAdaptivePool2d
 
 import re
 from tqdm import tqdm
 
 
 class Mani_FeatX(nn.Module):
-    def __init__(self,  in_channels=3, num_classes=1, 
+    def __init__(self,  encoder_attention, in_channels=3, num_classes=1,
                         model_name='tf_efficientnet_b4_ns', freeze=False, checkpoint=None):
         super(Mani_FeatX, self).__init__()
         
@@ -42,16 +43,22 @@ class Mani_FeatX(nn.Module):
         nn.init.xavier_uniform_(self.ela_net[1].weight)
 
 
-        self.encoder = TimmEfficientNetBaseEncoder(in_channels=54, model_name=model_name, pretrained=True)
+        self.encoder = TimmEfficientNetBaseEncoder(in_channels=54, model_name=model_name, pretrained=True, encoder_attention=encoder_attention)
         self.encoder_params = timm_efficientnet_encoder_params[model_name.rsplit('_', 1)[0]]['params']
 
-        self.conv_reducer = nn.Sequential(
-            nn.Conv2d(self.encoder_params['out_channels'][-1], 256, kernel_size=(1, 1), stride=(1, 1), bias=False),
-            nn.BatchNorm2d(256, eps=0.001),
-            nn.SiLU(inplace=True)
+        self.reducer = nn.Sequential(
+            SelectAdaptivePool2d(pool_type="avg", flatten=True),
+            nn.Dropout(0.3),
+            nn.Linear(self.encoder_params['head_channel'], self.encoder_params['head_channel']//4),
+            nn.ReLU(inplace=True),
+            nn.Linear(self.encoder_params['head_channel']//4, 256),
+            nn.ReLU(inplace=True),
         )
+        nn.init.xavier_uniform_(self.reducer[2].weight)
+        nn.init.xavier_uniform_(self.reducer[4].weight)
         
-        self.classifier = layers.ClassificationHead(in_channels=256, classes=num_classes, dropout=self.encoder_params['drop_rate'])
+        self.classifier = nn.Linear(256, num_classes)
+        nn.init.xavier_uniform_(self.classifier.weight)
 
         if freeze:
             self.freeze()
@@ -69,8 +76,8 @@ class Mani_FeatX(nn.Module):
 
         _merged_input = torch.cat([x1, x2, x3, x_ela], dim=1)
         
-        stage_outputs = self.encoder(_merged_input)
-        reduced_feat = self.conv_reducer(stage_outputs[-1])
+        stage_outputs, head_feat = self.encoder(_merged_input)
+        reduced_feat = self.reducer(head_feat)
         class_tensor = self.classifier(reduced_feat)
         
         return class_tensor, (reduced_feat, _merged_input, stage_outputs)

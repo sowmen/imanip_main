@@ -41,7 +41,7 @@ config_defaults = {
     "schedule_patience": 5,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "MyUPP-v2-Attn",
+    "model": "MyUnetPP-v2-Attn",
 }
 TEST_FOLD = 1
 
@@ -65,7 +65,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
     # encoder = SRM_Classifer(encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5', freeze_encoder=True)
     # model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
 
-    encoder = Mani_FeatX()
+    encoder = Mani_FeatX(encoder_attention=None)
     model = MyUnetPP(encoder)
 
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
@@ -146,7 +146,6 @@ def train(name, df, VAL_FOLD=0, resume=None):
     model = nn.DataParallel(model).to(device)
     # print(model.load_state_dict(torch.load('(defacto+customloss)UnetPP_[29|04_21|04|41].h5')))
     
-    # wandb.watch(model, log_freq=50, log='all')
     
     start_epoch = 0
     if resume is not None:
@@ -200,6 +199,10 @@ def train(name, df, VAL_FOLD=0, resume=None):
         }
         torch.save(checkpoint, os.path.join(CKPT_DIR, f"{run}.pt"))
 
+        del valid_metrics
+        del train_metrics
+        gc.collect()
+
 
     if os.path.exists(os.path.join(OUTPUT_DIR, f"{run}.h5")):
         print(model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, f"{run}.h5"))))
@@ -209,7 +212,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
     calculate_auc(model, test_dataset, 'TEST')
     calculate_auc(model, valid_dataset, 'VAL')
 
-    wandb.save(os.path.join(OUTPUT_DIR, f"{run}.h5"))
+    # wandb.save(os.path.join(OUTPUT_DIR, f"{run}.h5"))
     
     
     
@@ -522,7 +525,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(1CycleLR)(CASIA_FULL+sumloss1.15)" + config_defaults["model"],
+        name=f"(CASIA_FULL+sumloss1.15)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,
