@@ -26,7 +26,7 @@ class DiceLoss(_Loss):
         classes: List[int] = None,
         log_loss=False,
         from_logits=True,
-        smooth: float = 0.0,
+        smooth: float = 1e-6,
         ignore_index=None,
         eps=1e-7,
     ):
@@ -129,6 +129,85 @@ class DiceLoss(_Loss):
             loss = loss[self.classes]
 
         return loss.mean()
+
+
+class BinaryTverskyLoss(nn.Module):
+    def __init__(self,  alpha=0.5, beta=0.5, 
+                        smooth=1e-6, 
+                        from_logits=True, 
+                        log_loss = True,
+                        eps = 1e-7,
+                ):
+        super(BinaryTverskyLoss, self).__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.smooth = smooth
+        self.from_logits = from_logits
+        self.log_loss = log_loss
+        self.eps = eps
+
+
+    def forward(self, predictions, targets):
+        
+        #comment out if your model contains a sigmoid or equivalent activation layer
+        if self.from_logits:
+            predictions = F.logsigmoid(predictions).exp()
+        
+        #flatten label and prediction tensors
+        predictions = predictions.view(-1)
+        targets = targets.view(-1)
+        
+        #True Positives, False Positives & False Negatives
+        TP = torch.sum(predictions * targets)
+        FP = torch.sum((1-targets) * predictions)
+        FN = torch.sum(targets * (1-predictions))
+       
+        tversky = (TP + self.smooth) / (TP + self.alpha*FP + self.beta*FN + self.smooth)
+
+        if self.log_loss:
+            loss = -torch.log(tversky.clamp_min(self.eps))
+        else:
+            loss = 1.0 - tversky
+        
+        return loss
+
+
+
+class BinaryFocalTverskyLoss(nn.Module):
+    def __init__(self,  alpha=0.5, beta=0.5, gamma=1.0,
+                        smooth=1e-6, 
+                        from_logits=True, 
+                        eps = 1e-7,
+                ):
+        super(BinaryTverskyLoss, self).__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+        self.smooth = smooth
+        self.from_logits = from_logits
+        self.eps = eps
+
+
+    def forward(self, predictions, targets):
+        
+        #comment out if your model contains a sigmoid or equivalent activation layer
+        if self.from_logits:
+            predictions = F.logsigmoid(predictions).exp()
+        
+        #flatten label and prediction tensors
+        predictions = predictions.view(-1)
+        targets = targets.view(-1)
+        
+        #True Positives, False Positives & False Negatives
+        TP = torch.sum(predictions * targets)
+        FP = torch.sum((1-targets) * predictions)
+        FN = torch.sum(targets * (1-predictions))
+       
+        tversky = (TP + self.smooth) / (TP + self.alpha*FP + self.beta*FN + self.smooth)
+
+        loss = torch.pow(1.0 - tversky, self.gamma)
+        
+        return loss
 
 
 """
