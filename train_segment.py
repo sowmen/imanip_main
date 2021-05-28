@@ -28,20 +28,20 @@ from sim_dataset import SimDataset
 from segmentation.merged_netv2 import Mani_FeatX
 from segmentation.unetpp_v2 import MyUnetPP
 
-OUTPUT_DIR = "weights"
-CKPT_DIR = "checkpoint"
+OUTPUT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/weights"
+CKPT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 16,
-    "valid_batch_size": 32,
+    "train_batch_size": 12,
+    "valid_batch_size": 20,
     "optimizer": "adam",
     "learning_rate": 0.0001,
     "weight_decay": 0.0005,
     "schedule_patience": 5,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "MyUnetPP-v2-Attn",
+    "model": "MyUnetPP-v2-Attn(enc_attn-none)",
 }
 TEST_FOLD = 1
 
@@ -72,7 +72,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
     
     wandb.save('segmentation/merged_netv2.py')
     wandb.save('segmentation/unetpp_v2.py')
-    wandb.save('segmentation/layers.py')
+    wandb.save('segmentation/timm_efficientnet_encoder.py')
     wandb.save('dataset.py')
     
     
@@ -463,11 +463,35 @@ def calculate_auc(model, dataset, step):
     print(f"{step} AUC : ", dataset_auc)
 
 
-from losses import DiceLoss, ImanipLoss
+from losses import DiceLoss
+from torch.nn.modules.loss import _Loss
+class ImanipLoss(_Loss):
+
+    def __init__(self,  bce: nn.Module, seglossA: nn.Module, seglossB: nn.Module, 
+                        bce_weight=1.0, seglossA_weight=1.0, seglossB_weight=1.0
+                ):
+        super().__init__()
+        self.bce = bce
+        self.seglossA = seglossA
+        self.seglossB = seglossB
+        self.bce_weight = bce_weight
+        self.seglossA_weight = seglossA_weight
+        self.seglossB_weight = seglossB_weight
+
+    def forward(self, pred_mask, gt, label_tensor, target_label):
+        bce_loss = self.bce(label_tensor, target_label)
+
+        seglossA_loss = self.seglossA(pred_mask, gt)
+        seglossB_loss = self.seglossB(pred_mask, gt)
+
+        final_loss = self.bce_weight * bce_loss + self.seglossA_weight * seglossA_loss + self.seglossB_weight * seglossB_loss
+        return final_loss, bce_loss, seglossA_loss
+
 def get_lossfn():
     bce = nn.BCEWithLogitsLoss()
     dice = DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
-    criterion = ImanipLoss(bce, dice, dice_weight=1.15)
+    focal = losses.BinaryFocalLoss(alpha=0.25)
+    criterion = ImanipLoss(bce, seglossA=dice, seglossA_weight=1.15, seglossB=focal)
     return criterion
 
     
@@ -521,7 +545,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(CASIA_FULL+sumloss1.15)" + config_defaults["model"],
+        name=f"(CASIA_FULL+ FocalLoss-a0.25)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,

@@ -129,26 +129,6 @@ class DiceLoss(_Loss):
             loss = loss[self.classes]
 
         return loss.mean()
-    
-    
-    
-    
-
-class ImanipLoss(_Loss):
-
-    def __init__(self, bce: nn.Module, dice: nn.Module, bce_weight=1.0, dice_weight=1.0):
-        super().__init__()
-        self.bce = bce
-        self.dice = dice
-        self.bce_weight = bce_weight
-        self.dice_weight = dice_weight
-
-    def forward(self, pred_mask, gt, label_tensor, target_label):
-        bce_loss = self.bce(label_tensor, target_label)
-        dice_loss = self.dice(pred_mask, gt)
-        final_loss = self.bce_weight * bce_loss + self.dice_weight * dice_loss
-        return final_loss, bce_loss, dice_loss
-
 
 
 """
