@@ -284,6 +284,9 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
     }
     wandb.log(train_metrics)
 
+    del scores
+    gc.collect()
+
     return train_metrics
 
 
@@ -346,6 +349,9 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     }
     wandb.log(valid_metrics)
 
+    del scores
+    gc.collect()
+    
     return valid_metrics
 
 
