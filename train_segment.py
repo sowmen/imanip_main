@@ -285,8 +285,6 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
     wandb.log(train_metrics)
     
     del metrics
-    gc.collect()
-
     del scores
     gc.collect()
 
@@ -353,8 +351,6 @@ def valid_epoch(model, valid_loader, criterion, epoch):
     wandb.log(valid_metrics)
     
     del metrics
-    gc.collect()
-
     del scores
     gc.collect()
     
@@ -475,11 +471,11 @@ def calculate_auc(model, dataset, step):
     print(f"{step} AUC : ", dataset_auc)
 
 
-from losses import DiceLoss
+from losses import DiceLoss, BinaryFocalTverskyLoss
 from torch.nn.modules.loss import _Loss
 class ImanipLoss(_Loss):
 
-    def __init__(self,  bce: nn.Module, seglossA: nn.Module, seglossB: nn.Module, 
+    def __init__(self,  bce: nn.Module, seglossA: nn.Module, seglossB: nn.Module=None, 
                         bce_weight=1.0, seglossA_weight=1.0, seglossB_weight=1.0
                 ):
         super().__init__()
@@ -494,16 +490,17 @@ class ImanipLoss(_Loss):
         bce_loss = self.bce(label_tensor, target_label)
 
         seglossA_loss = self.seglossA(pred_mask, gt)
-        seglossB_loss = self.seglossB(pred_mask, gt)
+        # seglossB_loss = self.seglossB(pred_mask, gt)
 
-        final_loss = self.bce_weight * bce_loss + self.seglossA_weight * seglossA_loss + self.seglossB_weight * seglossB_loss
+        final_loss = self.bce_weight * bce_loss + self.seglossA_weight * seglossA_loss #+ self.seglossB_weight * seglossB_loss
         return final_loss, bce_loss, seglossA_loss
 
 def get_lossfn():
     bce = nn.BCEWithLogitsLoss()
-    dice = DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
-    focal = losses.BinaryFocalLoss(alpha=0.25)
-    criterion = ImanipLoss(bce, seglossA=dice, seglossA_weight=1.15, seglossB=focal)
+    # dice = DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
+    tvf = BinaryFocalTverskyLoss(gamma=2.0)
+    # focal = losses.BinaryFocalLoss(alpha=0.25)
+    criterion = ImanipLoss(bce, seglossA=tvf, seglossA_weight=1.15, seglossB=None)
     return criterion
 
     
@@ -557,7 +554,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(CASIA_FULL+ FocalLoss-a0.25)" + config_defaults["model"],
+        name=f"(CASIA_FULL+ TverskyFocalLoss-a0.5,b0.5,g2.0)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,
