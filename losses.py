@@ -131,7 +131,7 @@ class DiceLoss(_Loss):
         return loss.mean()
 
 
-class BinaryTverskyLoss(nn.Module):
+class BinaryTverskyLoss(_Loss):
     def __init__(self,  alpha=0.5, beta=0.5, 
                         smooth=1e-6, 
                         from_logits=True, 
@@ -173,13 +173,13 @@ class BinaryTverskyLoss(nn.Module):
 
 
 
-class BinaryFocalTverskyLoss(nn.Module):
+class BinaryFocalTverskyLoss(_Loss):
     def __init__(self,  alpha=0.5, beta=0.5, gamma=1.0,
                         smooth=1e-6, 
                         from_logits=True, 
                         eps = 1e-7,
                 ):
-        super(BinaryTverskyLoss, self).__init__()
+        super(BinaryFocalTverskyLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma

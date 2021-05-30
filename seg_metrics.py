@@ -64,7 +64,7 @@ def get_pixel_auc(predictions:torch.tensor, targets:torch.tensor, paths):
     sum, i = 0, 0
     for pred, truth, path in zip(predictions, targets, paths):
         try:
-            roc = roc_auc_score(truth.ravel(), pred.ravel())
+            roc = roc_auc_score(truth.numpy().ravel(), pred.numpy().ravel())
             sum += roc
             i += 1
         except ValueError as e:

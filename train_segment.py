@@ -33,8 +33,8 @@ CKPT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 12,
-    "valid_batch_size": 20,
+    "train_batch_size": 14,
+    "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0001,
     "weight_decay": 0.0005,
@@ -103,7 +103,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
         imgaug_augment=None,
         geo_augment=train_geo_aug,
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=2, pin_memory=True, drop_last=False)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -114,7 +114,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
         transforms_normalize=transforms_normalize,
         equal_sample=True
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=2, pin_memory=True, drop_last=False)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -125,7 +125,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
         transforms_normalize=transforms_normalize,
         equal_sample=True
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=2, pin_memory=True, drop_last=False)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
     #endregion ######################################################################################
 
 
@@ -179,7 +179,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
         )
         print("New LR", optimizer.param_groups[0]['lr'])
         wandb.log({
-            'learning_rate': optimizer.param_groups[0]['lr']
+            'epoch-learning_rate': optimizer.param_groups[0]['lr']
         })
 
         es(valid_metrics["valid_loss_segmentation"],
@@ -238,7 +238,7 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         loss_segmentation.backward()
 
         optimizer.step()
-
+        
         ############## SRM Step ###########
         bayer_mask = torch.zeros(3,3,5,5).cuda()
         bayer_mask[:, :, 5//2, 5//2] = 1
@@ -283,7 +283,8 @@ def train_epoch(model, train_loader, optimizer, criterion, epoch):
         "train_iou2" : iou2,
     }
     wandb.log(train_metrics)
-
+    
+    del metrics
     del scores
     gc.collect()
 
@@ -348,7 +349,8 @@ def valid_epoch(model, valid_loader, criterion, epoch):
         "examples": metrics.example_images,
     }
     wandb.log(valid_metrics)
-
+    
+    del metrics
     del scores
     gc.collect()
     
@@ -469,11 +471,11 @@ def calculate_auc(model, dataset, step):
     print(f"{step} AUC : ", dataset_auc)
 
 
-from losses import DiceLoss
+from losses import DiceLoss, BinaryFocalTverskyLoss
 from torch.nn.modules.loss import _Loss
 class ImanipLoss(_Loss):
 
-    def __init__(self,  bce: nn.Module, seglossA: nn.Module, seglossB: nn.Module, 
+    def __init__(self,  bce: nn.Module, seglossA: nn.Module, seglossB: nn.Module=None, 
                         bce_weight=1.0, seglossA_weight=1.0, seglossB_weight=1.0
                 ):
         super().__init__()
@@ -488,16 +490,17 @@ class ImanipLoss(_Loss):
         bce_loss = self.bce(label_tensor, target_label)
 
         seglossA_loss = self.seglossA(pred_mask, gt)
-        seglossB_loss = self.seglossB(pred_mask, gt)
+        # seglossB_loss = self.seglossB(pred_mask, gt)
 
-        final_loss = self.bce_weight * bce_loss + self.seglossA_weight * seglossA_loss + self.seglossB_weight * seglossB_loss
+        final_loss = self.bce_weight * bce_loss + self.seglossA_weight * seglossA_loss #+ self.seglossB_weight * seglossB_loss
         return final_loss, bce_loss, seglossA_loss
 
 def get_lossfn():
     bce = nn.BCEWithLogitsLoss()
-    dice = DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
-    focal = losses.BinaryFocalLoss(alpha=0.25)
-    criterion = ImanipLoss(bce, seglossA=dice, seglossA_weight=1.15, seglossB=focal)
+    # dice = DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
+    tvf = BinaryFocalTverskyLoss(gamma=2.0)
+    # focal = losses.BinaryFocalLoss(alpha=0.25)
+    criterion = ImanipLoss(bce, seglossA=tvf, seglossA_weight=1.15, seglossB=None)
     return criterion
 
     
@@ -551,7 +554,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(CASIA_FULL+ FocalLoss-a0.25)" + config_defaults["model"],
+        name=f"(CASIA_FULL+ TverskyFocalLoss-a0.5,b0.5,g2.0)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,
