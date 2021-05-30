@@ -33,7 +33,7 @@ CKPT_DIR = "checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 16,
+    "train_batch_size": 14,
     "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0001,
@@ -41,7 +41,7 @@ config_defaults = {
     "schedule_patience": 5,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "MyUnetPP-v2-Attn",
+    "model": "MyUnetPP-v2",
 }
 TEST_FOLD = 1
 
@@ -72,7 +72,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
     
     wandb.save('segmentation/merged_netv2.py')
     wandb.save('segmentation/unetpp_v2.py')
-    wandb.save('segmentation/layers.py')
+    wandb.save('segmentation/timm_efficientnet_encoder.py')
     wandb.save('dataset.py')
     
     
@@ -103,7 +103,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
         imgaug_augment=None,
         geo_augment=train_geo_aug,
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=2, pin_memory=True, drop_last=False)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -114,7 +114,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
         transforms_normalize=transforms_normalize,
         equal_sample=True
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=2, pin_memory=True, drop_last=False)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -125,22 +125,21 @@ def train(name, df, VAL_FOLD=0, resume=None):
         transforms_normalize=transforms_normalize,
         equal_sample=True
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=2, pin_memory=True, drop_last=False)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
     #endregion ######################################################################################
 
 
 
     optimizer = get_optimizer(model, config.optimizer, config.learning_rate, config.weight_decay)
-    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    #     optimizer,
-    #     patience=config.schedule_patience,
-    #     mode="min",
-    #     factor=config.schedule_factor,
-    #     verbose=True
-    # )
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.01, steps_per_epoch=len(train_loader), epochs=config.epochs)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        patience=config.schedule_patience,
+        mode="min",
+        factor=config.schedule_factor,
+        verbose=True
+    )
     criterion = get_lossfn()
-    es = EarlyStopping(patience=200, mode="min")
+    es = EarlyStopping(patience=20, mode="min")
 
 
     model = nn.DataParallel(model).to(device)
@@ -163,10 +162,10 @@ def train(name, df, VAL_FOLD=0, resume=None):
         # if epoch == 6:
         #     model.module.encoder.unfreeze()
 
-        train_metrics = train_epoch(model, train_loader, optimizer, criterion, scheduler, epoch)
+        train_metrics = train_epoch(model, train_loader, optimizer, criterion, epoch)
         valid_metrics = valid_epoch(model, valid_loader, criterion,  epoch)
         
-        # scheduler.step(valid_metrics["valid_loss_segmentation"])
+        scheduler.step(valid_metrics["valid_loss_segmentation"])
 
         print(
             f"TRAIN_LOSS = {train_metrics['train_loss_segmentation']}, \
@@ -216,7 +215,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
     
     
     
-def train_epoch(model, train_loader, optimizer, criterion, scheduler, epoch):
+def train_epoch(model, train_loader, optimizer, criterion, epoch):
     model.train()
 
     total_loss = AverageMeter()
@@ -239,10 +238,7 @@ def train_epoch(model, train_loader, optimizer, criterion, scheduler, epoch):
         loss_segmentation.backward()
 
         optimizer.step()
-        scheduler.step()
-        wandb.log({
-            'batch-learning_rate': optimizer.param_groups[0]['lr']
-        })
+        
         ############## SRM Step ###########
         bayer_mask = torch.zeros(3,3,5,5).cuda()
         bayer_mask[:, :, 5//2, 5//2] = 1
@@ -287,6 +283,9 @@ def train_epoch(model, train_loader, optimizer, criterion, scheduler, epoch):
         "train_iou2" : iou2,
     }
     wandb.log(train_metrics)
+    
+    del metrics
+    gc.collect()
 
     return train_metrics
 
@@ -349,6 +348,9 @@ def valid_epoch(model, valid_loader, criterion, epoch):
         "examples": metrics.example_images,
     }
     wandb.log(valid_metrics)
+    
+    del metrics
+    gc.collect()
 
     return valid_metrics
 
@@ -525,7 +527,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(CASIA_FULL+sumloss1.15)" + config_defaults["model"],
+        name=f"(CASIA_FULL+MyUPPv2)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,
