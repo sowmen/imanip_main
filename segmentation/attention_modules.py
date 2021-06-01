@@ -65,7 +65,7 @@ class Attention(nn.Module):
             self.attention = nn.Identity(**params)
         elif name == 'scse':
             self.attention = SCSEModule(**params)
-        elif name == "gcb":
+        elif name == 'gcb':
             self.attention = GlobalContext(**params)
         else:
             raise ValueError("Attention {} is not implemented".format(name))

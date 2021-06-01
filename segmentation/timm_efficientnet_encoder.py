@@ -1,7 +1,7 @@
 import timm
 import torch.nn as nn
 import gc
-from segmentation_models_pytorch.base import modules as md
+from segmentation.attention_modules import Attention
 
 class TimmEfficientNetBaseEncoder(nn.Module):
         def __init__(self, encoder_attention, model_name="tf_efficientnet_b4_ns", in_channels=3, pretrained=True):
@@ -30,7 +30,7 @@ class TimmEfficientNetBaseEncoder(nn.Module):
             self.encoder_attention_modules = nn.ModuleList()
             for num_channel in self.params['out_channels']:
                 if self.encoder_attention is not None:
-                    self.encoder_attention_modules.append(md.Attention(encoder_attention, in_channels=num_channel))
+                    self.encoder_attention_modules.append(Attention(encoder_attention, in_channels=num_channel))
                 else:
                     self.encoder_attention_modules.append(nn.Identity())
 
