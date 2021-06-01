@@ -4,8 +4,10 @@ sys.path.append('../image_manipulation/')
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from segmentation.layers import upsize2#, Decode
-from segmentation.layers import AttentionDecoderBlock as Decode
+from segmentation.layers import upsize2
+# from segmentation.layers import Decode
+# from segmentation.layers import AttentionDecoderBlock as Decode
+from segmentation.layers import GatedDecoder as Decode
 
 
 class MyUnetPP(nn.Module):
@@ -25,19 +27,19 @@ class MyUnetPP(nn.Module):
         self.mix = nn.Parameter(torch.FloatTensor(5))
         self.mix.data.fill_(1)
         
-        self.decode0_1 = Decode(self.size[0] + self.size[1], 32)
-        self.decode1_1 = Decode(self.size[1] + self.size[2], 64)
-        self.decode2_1 = Decode(self.size[2] + self.size[3], 128)
-        self.decode3_1 = Decode(self.size[3] + self.size[4], 512)
+        self.decode0_1 = Decode([self.size[0] , self.size[1]], 32)
+        self.decode1_1 = Decode([self.size[1] , self.size[2]], 64)
+        self.decode2_1 = Decode([self.size[2] , self.size[3]], 128)
+        self.decode3_1 = Decode([self.size[3] , self.size[4]], 512)
         
-        self.decode0_2 = Decode(self.size[0] +32+64, 64)
-        self.decode1_2 = Decode(self.size[1] +64+128, 128)
-        self.decode2_2 = Decode(self.size[2] +128+512, 512)
+        self.decode0_2 = Decode([self.size[0] ,32,64], 64)
+        self.decode1_2 = Decode([self.size[1] ,64,128], 128)
+        self.decode2_2 = Decode([self.size[2] ,128,512], 512)
         
-        self.decode0_3 = Decode(self.size[0] +32+64+128, 128)
-        self.decode1_3 = Decode(self.size[1] +64+128+512, 512)
+        self.decode0_3 = Decode([self.size[0] ,32,64,128], 128)
+        self.decode1_3 = Decode([self.size[1] ,64,128,512], 512)
         
-        self.decode0_4 = Decode(self.size[0] +32+64+128+512, 512)
+        self.decode0_4 = Decode([self.size[0] ,32,64,128,512], 512)
         
         # self.logit0 = nn.Conv2d(self.size[0], self.num_classes, kernel_size=1)
         self.logit1 = nn.Conv2d(32, self.num_classes, kernel_size=1)
