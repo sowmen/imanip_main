@@ -28,8 +28,8 @@ from sim_dataset import SimDataset
 from segmentation.merged_netv2 import Mani_FeatX
 from segmentation.unetpp_v2 import MyUnetPP
 
-OUTPUT_DIR = "weights"
-CKPT_DIR = "checkpoint"
+OUTPUT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/weights"
+CKPT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
