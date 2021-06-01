@@ -28,8 +28,8 @@ from sim_dataset import SimDataset
 from segmentation.merged_netv2 import Mani_FeatX
 from segmentation.unetpp_v2 import MyUnetPP
 
-OUTPUT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/weights"
-CKPT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/checkpoint"
+OUTPUT_DIR = "weights"
+CKPT_DIR = "checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
@@ -41,7 +41,7 @@ config_defaults = {
     "schedule_patience": 5,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "MyUnetPP-v2-Attn(enc_attn-none)",
+    "model": "MyUnetPP-v2-Attn(ENC-ATTN)",
 }
 TEST_FOLD = 1
 
@@ -65,7 +65,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
     # encoder = SRM_Classifer(encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5', freeze_encoder=True)
     # model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
 
-    encoder = Mani_FeatX(encoder_attention=None)
+    encoder = Mani_FeatX(encoder_attention="scse")
     model = MyUnetPP(encoder)
 
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
@@ -490,17 +490,16 @@ class ImanipLoss(_Loss):
         bce_loss = self.bce(label_tensor, target_label)
 
         seglossA_loss = self.seglossA(pred_mask, gt)
-        # seglossB_loss = self.seglossB(pred_mask, gt)
+        seglossB_loss = self.seglossB(pred_mask, gt)
 
-        final_loss = self.bce_weight * bce_loss + self.seglossA_weight * seglossA_loss #+ self.seglossB_weight * seglossB_loss
+        final_loss = self.bce_weight * bce_loss + self.seglossA_weight * seglossA_loss + self.seglossB_weight * seglossB_loss
         return final_loss, bce_loss, seglossA_loss
 
 def get_lossfn():
     bce = nn.BCEWithLogitsLoss()
-    # dice = DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
-    tvf = BinaryFocalTverskyLoss(gamma=2.0)
-    # focal = losses.BinaryFocalLoss(alpha=0.25)
-    criterion = ImanipLoss(bce, seglossA=tvf, seglossA_weight=1.15, seglossB=None)
+    dice = DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
+    focal = losses.BinaryFocalLoss(alpha=0.25, reduced_threshold=0.5)
+    criterion = ImanipLoss(bce, seglossA=dice, seglossB=focal)
     return criterion
 
     
@@ -554,7 +553,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(CASIA_FULL+ TverskyFocalLoss-a0.5,b0.5,g2.0)" + config_defaults["model"],
+        name=f"(CASIA_FULL+ Focal-reduce + Dice)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,
