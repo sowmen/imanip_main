@@ -46,8 +46,8 @@ def ELA(param, DIR_ROOT):
 
 def main():
 
-    df = pd.read_csv('D:/image_manipulation/dataset_csv/coco2014cmfd.csv')
-    DIR_ROOT = "H:/Datasets/COCO"
+    df = pd.read_csv('/home/msi_55/Sowmen_2016331055/image_manipulation/dataset_csv/spliced_nist.csv')
+    DIR_ROOT = "/home/msi_55/Sowmen_2016331055/image_manipulation/Image_Manipulation_Dataset"
 
     params = []
     for idx, row in df.iterrows():
