@@ -1,7 +1,9 @@
 import math
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from segmentation.attention_modules import Attention, AttentionGate, RRCNN_block
 
 
 class Swish(nn.Module):
@@ -40,6 +42,26 @@ class Conv2dSamePadding(nn.Conv2d):
         return F.conv2d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 
+class ConvBnReLu(nn.Module):
+    """
+    Convolution Block 
+    """
+    def __init__(self, in_ch, out_ch):
+        super(ConvBnReLu, self).__init__()
+        
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=1, padding=1, bias=True),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_ch, out_ch, kernel_size=3, stride=1, padding=1, bias=True),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU(inplace=True))
+
+    def forward(self, x):
+
+        x = self.conv(x)
+        return x
+
 
 def double_conv(in_channels, out_channels):
     return nn.Sequential(
@@ -54,7 +76,7 @@ def double_conv(in_channels, out_channels):
     )
 
 
-def up_conv(in_channels, out_channels):
+def transpose_conv(in_channels, out_channels):
     return nn.ConvTranspose2d(
         in_channels, out_channels, kernel_size=2, stride=2
     )
@@ -63,13 +85,13 @@ def up_conv(in_channels, out_channels):
 def upsize2(x, sampling='nearest'):
     x = F.interpolate(x, scale_factor=2, mode=sampling)
     return x
-
     
     
 class Decode(nn.Module):
     def __init__(self, in_channel, out_channel):
         super(Decode, self).__init__()
 
+        in_channel = np.sum(in_channel)
         self.top = nn.Sequential(
             nn.Conv2d(in_channel, out_channel//2, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d( out_channel//2),
@@ -95,11 +117,12 @@ class Decode(nn.Module):
         return x
 
 
-
 class BnInception(nn.Module):
     def __init__(self,  in_channels, out_channels, kernel_size=[1,3,5], padding =[0,1,2]):
         super(BnInception, self).__init__()
         
+        in_channels = np.sum(in_channels)
+
         self.conv_c0 = nn.Conv2d(in_channels, out_channels, kernel_size[0], padding=padding[0])
         nn.init.xavier_uniform_(self.conv_c0.weight)
         self.conv_c1 = nn.Conv2d(in_channels, out_channels, kernel_size[1], padding=padding[1])
@@ -130,7 +153,6 @@ class BnInception(nn.Module):
 
 
 from segmentation_models_pytorch.base import modules as md
-from segmentation.attention_modules import Attention
 
 class AttentionDecoderBlock(nn.Module):
     def __init__(
@@ -139,6 +161,9 @@ class AttentionDecoderBlock(nn.Module):
             out_channels,
     ):
         super().__init__()
+
+        in_channels = np.sum(in_channels)
+
         self.conv1 = md.Conv2dReLU(
             in_channels,
             out_channels,
@@ -156,13 +181,36 @@ class AttentionDecoderBlock(nn.Module):
         )
         self.attention2 = Attention('scse', in_channels=out_channels)
 
-    def forward(self, x):
-        x = torch.cat(x, 1)
+    def forward(self, x): # x -> list of tensors coming from current and previous layers
+        x = torch.cat(x, dim=1)
         
         x = self.attention1(x)
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.attention2(x)
+        return x
+
+
+class GatedDecoder(nn.Module):
+
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+
+        self.F_layer = np.sum(in_channels[:-1])
+        self.F_gate = in_channels[-1]
+
+        in_channels = np.sum(in_channels)
+
+        self.attention = AttentionGate(F_l=self.F_layer, F_g=self.F_gate, F_int=self.F_gate // 2)
+        # self.conv = ConvBnReLu(in_channels, out_channels)
+        self.conv = RRCNN_block(in_channels, out_channels)
+
+    def forward(self, x):
+        l = torch.cat(x[:-1], dim=1)
+        g = x[-1]
+        att_l = self.attention(l, g)
+        x = torch.cat([att_l, g], dim=1)
+        x = self.conv(x)
         return x
 
 
