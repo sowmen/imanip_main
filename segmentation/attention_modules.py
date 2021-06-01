@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+from segmentation.gc_block import GlobalContext
 
 class SCSEModule(nn.Module):
     def __init__(self, in_channels, reduction=16):
@@ -64,6 +65,8 @@ class Attention(nn.Module):
             self.attention = nn.Identity(**params)
         elif name == 'scse':
             self.attention = SCSEModule(**params)
+        elif name == "gcb":
+            self.attention = GlobalContext(**params)
         else:
             raise ValueError("Attention {} is not implemented".format(name))
 
@@ -114,3 +117,5 @@ class RRCNN_block(nn.Module):
         x2 = self.RCNN(x1)
         out = x1 + x2
         return out
+
+############################################################################################
