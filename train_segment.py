@@ -499,7 +499,7 @@ def get_lossfn():
     bce = nn.BCEWithLogitsLoss()
     # dice = DiceLoss(mode='binary', log_loss=True, smooth=1e-7)
     tvf = BinaryFocalTverskyLoss(gamma=2.0)
-    # focal = losses.BinaryFocalLoss(alpha=0.25)
+    focal = losses.BinaryFocalLoss(alpha=0.25)
     criterion = ImanipLoss(bce, seglossA=tvf, seglossA_weight=1.15, seglossB=None)
     return criterion
 

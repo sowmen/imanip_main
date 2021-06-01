@@ -129,8 +129,8 @@ class BnInception(nn.Module):
         return x
 
 
-
 from segmentation_models_pytorch.base import modules as md
+from segmentation.attention_modules import Attention
 
 class AttentionDecoderBlock(nn.Module):
     def __init__(
@@ -146,7 +146,7 @@ class AttentionDecoderBlock(nn.Module):
             padding=1,
             use_batchnorm=True,
         )
-        self.attention1 = md.Attention('scse', in_channels=in_channels)
+        self.attention1 = Attention('scse', in_channels=in_channels)
         self.conv2 = md.Conv2dReLU(
             out_channels,
             out_channels,
@@ -154,7 +154,7 @@ class AttentionDecoderBlock(nn.Module):
             padding=1,
             use_batchnorm=True,
         )
-        self.attention2 = md.Attention('scse', in_channels=out_channels)
+        self.attention2 = Attention('scse', in_channels=out_channels)
 
     def forward(self, x):
         x = torch.cat(x, 1)
