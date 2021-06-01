@@ -38,12 +38,12 @@ class TimmEfficientNetBaseEncoder(nn.Module):
         def forward(self, x):
             """
             Output shapes for EfficientNet-B4
-            stage_outputs = [  48  x 128 x 128,     -> output after stem
-                               24  x 128 x 128,     -> Block 1
-                               32  x 64  x 64 ,     -> Block 5
-                               56  x 32  x 32 ,     -> Block 9
-                               160 x 16  x 16 ,     -> Block 21
-                               448 x 8   x 8        -> Block 31, before conv_head
+            stage_outputs = [  48  x 128 x 128,     -> output after stem,           attn_idx:0
+                               24  x 128 x 128,     -> Block 1,                     attn_idx:1 | stage_idxs:0
+                               32  x 64  x 64 ,     -> Block 5,                     attn_idx:2 | stage_idxs:1
+                               56  x 32  x 32 ,     -> Block 9,                     attn_idx:3 | stage_idxs:2
+                               160 x 16  x 16 ,     -> Block 21,                    attn_idx:4 | stage_idxs:3
+                               448 x 8   x 8        -> Block 31, before conv_head   attn_idx:5 | stage_idxs:4
                             ]
             """
             stage_outputs = []
