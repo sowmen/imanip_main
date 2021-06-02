@@ -32,14 +32,14 @@ class MyUnetPP(nn.Module):
         self.decode2_1 = Decode([self.size[2] , self.size[3]], 128)
         self.decode3_1 = Decode([self.size[3] , self.size[4]], 512)
         
-        self.decode0_2 = Decode([self.size[0] ,32,64], 64)
-        self.decode1_2 = Decode([self.size[1] ,64,128], 128)
-        self.decode2_2 = Decode([self.size[2] ,128,512], 512)
+        self.decode0_2 = Decode([self.size[0] , 32,64], 64)
+        self.decode1_2 = Decode([self.size[1] , 64,128], 128)
+        self.decode2_2 = Decode([self.size[2] , 128,512], 512)
         
-        self.decode0_3 = Decode([self.size[0] ,32,64,128], 128)
-        self.decode1_3 = Decode([self.size[1] ,64,128,512], 512)
+        self.decode0_3 = Decode([self.size[0] , 32,64,128], 128)
+        self.decode1_3 = Decode([self.size[1] , 64,128,512], 512)
         
-        self.decode0_4 = Decode([self.size[0] ,32,64,128,512], 512)
+        self.decode0_4 = Decode([self.size[0] , 32,64,128,512], 512)
         
         # self.logit0 = nn.Conv2d(self.size[0], self.num_classes, kernel_size=1)
         self.logit1 = nn.Conv2d(32, self.num_classes, kernel_size=1)

@@ -1,7 +1,7 @@
 import timm
 import torch.nn as nn
 import gc
-from segmentation_models_pytorch.base import modules as md
+from segmentation.attention_modules import Attention
 
 class TimmEfficientNetBaseEncoder(nn.Module):
         def __init__(self, encoder_attention, model_name="tf_efficientnet_b4_ns", in_channels=3, pretrained=True):
@@ -30,7 +30,7 @@ class TimmEfficientNetBaseEncoder(nn.Module):
             self.encoder_attention_modules = nn.ModuleList()
             for num_channel in self.params['out_channels']:
                 if self.encoder_attention is not None:
-                    self.encoder_attention_modules.append(md.Attention(encoder_attention, in_channels=num_channel))
+                    self.encoder_attention_modules.append(Attention(encoder_attention, in_channels=num_channel))
                 else:
                     self.encoder_attention_modules.append(nn.Identity())
 
@@ -38,12 +38,12 @@ class TimmEfficientNetBaseEncoder(nn.Module):
         def forward(self, x):
             """
             Output shapes for EfficientNet-B4
-            stage_outputs = [  48  x 128 x 128,     -> output after stem
-                               24  x 128 x 128,     -> Block 1
-                               32  x 64  x 64 ,     -> Block 5
-                               56  x 32  x 32 ,     -> Block 9
-                               160 x 16  x 16 ,     -> Block 21
-                               448 x 8   x 8        -> Block 31, before conv_head
+            stage_outputs = [  48  x 128 x 128,     -> output after stem,           attn_idx:0
+                               24  x 128 x 128,     -> Block 1,                     attn_idx:1 | stage_idxs:0
+                               32  x 64  x 64 ,     -> Block 5,                     attn_idx:2 | stage_idxs:1
+                               56  x 32  x 32 ,     -> Block 9,                     attn_idx:3 | stage_idxs:2
+                               160 x 16  x 16 ,     -> Block 21,                    attn_idx:4 | stage_idxs:3
+                               448 x 8   x 8        -> Block 31, before conv_head   attn_idx:5 | stage_idxs:4
                             ]
             """
             stage_outputs = []

@@ -28,8 +28,8 @@ from sim_dataset import SimDataset
 from segmentation.merged_netv2 import Mani_FeatX
 from segmentation.unetpp_v2 import MyUnetPP
 
-OUTPUT_DIR = "weights"
-CKPT_DIR = "checkpoint"
+OUTPUT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/weights"
+CKPT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
@@ -70,9 +70,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
 
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     
-    wandb.save('segmentation/merged_netv2.py')
-    wandb.save('segmentation/unetpp_v2.py')
-    wandb.save('segmentation/timm_efficientnet_encoder.py')
+    wandb.save('segmentation/*.py')
     wandb.save('dataset.py')
     
     
