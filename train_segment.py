@@ -40,7 +40,7 @@ config_defaults = {
     "weight_decay": 0.0005,
     "schedule_patience": 5,
     "schedule_factor": 0.25,
-    'sampling':'nearest',
+    'sampling':'bilinear',
     "model": "MyUnetPP-v2-Attn(Enc-None, Dec-GCA)",
 }
 TEST_FOLD = 1
@@ -66,7 +66,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
     # model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
 
     encoder = Mani_FeatX(encoder_attention=None)
-    model = MyUnetPP(encoder)
+    model = MyUnetPP(encoder, sampling=config.sampling)
 
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     
@@ -551,7 +551,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(CASIA_FULL+ Focal-reduce + Dice)" + config_defaults["model"],
+        name=f"(CASIA_FULL + Sampling-bilinear)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,
