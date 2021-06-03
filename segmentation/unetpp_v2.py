@@ -6,8 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from segmentation.layers import upsize2
 # from segmentation.layers import Decode
-# from segmentation.layers import AttentionDecoderBlock as Decode
-from segmentation.layers import GatedDecoder as Decode
+from segmentation.layers import AttentionDecoderBlock as Decode
+# from segmentation.layers import GatedDecoder as Decode
 
 
 class MyUnetPP(nn.Module):

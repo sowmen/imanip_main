@@ -28,12 +28,12 @@ from sim_dataset import SimDataset
 from segmentation.merged_netv2 import Mani_FeatX
 from segmentation.unetpp_v2 import MyUnetPP
 
-OUTPUT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/weights"
-CKPT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/checkpoint"
+OUTPUT_DIR = "weights"
+CKPT_DIR = "checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 12,
+    "train_batch_size": 16,
     "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0001,
@@ -41,7 +41,7 @@ config_defaults = {
     "schedule_patience": 5,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "MyUnetPP-v2-[R2U Gated]",
+    "model": "MyUnetPP-v2-[Enc-gcb, Dec-gcb]",
 }
 TEST_FOLD = 1
 
@@ -551,7 +551,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(CASIA_FULL+ Focal-reduce + Dice)" + config_defaults["model"],
+        name=f"(CASIA_FULL:All gcb)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,
