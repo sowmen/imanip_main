@@ -16,7 +16,7 @@ from timm.models.layers.norm import LayerNorm2d
 class GlobalContext(nn.Module):
 
     def __init__(self, in_channels, use_attn=True, fuse_add=True, fuse_scale=False, init_last_zero=False,
-                 rd_ratio=1./8, rd_channels=None, rd_divisor=1, act_layer=nn.ReLU, gate_layer='sigmoid'):
+                 rd_ratio=1./4, rd_channels=None, rd_divisor=1, act_layer=nn.ReLU, gate_layer='sigmoid'):
         super(GlobalContext, self).__init__()
         act_layer = get_act_layer(act_layer)
 

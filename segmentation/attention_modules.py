@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 from segmentation.gc_block import GlobalContext
+from timm.models.layers.norm import LayerNorm2d
 
 class SCSEModule(nn.Module):
     def __init__(self, in_channels, reduction=16):
@@ -52,6 +53,50 @@ class AttentionGate(nn.Module):
         l1 = self.W_l(l)
         psi = self.relu(g1 + l1)
         psi = self.psi(psi)
+        out = l * psi
+        return out
+
+
+
+class GatedContextAttention(nn.Module):
+    """
+    Attention Block from "Attention U-Net: Learning Where to Look for the Pancreas"
+    """
+
+    def __init__(self, layer_channels, gate_channels, inter_channels):
+        super().__init__()
+
+        self.W_gate = nn.Sequential(
+            nn.Conv2d(gate_channels, inter_channels, kernel_size=1, stride=1, padding=0, bias=True),
+            # nn.BatchNorm2d(inter_channels)
+        )
+
+        self.layer_gcb_context = GlobalContext(layer_channels)
+        self.W_layer = nn.Sequential(
+            nn.Conv2d(layer_channels, inter_channels, kernel_size=1, stride=1, padding=0, bias=True),
+            # nn.BatchNorm2d(inter_channels)
+        )
+
+        self.psi = nn.Sequential(
+            nn.Conv2d(inter_channels, 1, kernel_size=1, stride=1, padding=0, bias=True),
+            # nn.BatchNorm2d(1),
+            nn.Sigmoid()
+        )
+
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, l, g): 
+        # l -> current layer all skip connections
+        # g -> output of below layer after upsize. Acts as gate
+
+        l1 = self.layer_gcb_context(l)
+        l1 = self.W_layer(l1)
+
+        g1 = self.W_gate(g)
+        
+        psi = self.relu(g1 + l1)
+        psi = self.psi(psi)
+        
         out = l * psi
         return out
 
