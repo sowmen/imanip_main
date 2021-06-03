@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from segmentation.attention_modules import Attention, AttentionGate, RRCNN_block
+from segmentation.attention_modules import Attention, AttentionGate, GatedContextAttention, RRCNN_block
 
 
 class Swish(nn.Module):
@@ -211,6 +211,50 @@ class GatedDecoder(nn.Module):
         att_l = self.attention(l, g)
         x = torch.cat([att_l, g], dim=1)
         x = self.conv(x)
+        return x
+
+
+class GatedContextDecoder(nn.Module):
+
+    def __init__(self, in_channels, out_channels):
+        super(GatedContextDecoder, self).__init__()
+
+        self.layer_channels = np.sum(in_channels[:-1])
+        self.gate_channels = in_channels[-1]
+
+        in_channels = np.sum(in_channels)
+
+        self.attention = GatedContextAttention(
+                                layer_channels=self.layer_channels, 
+                                gate_channels=self.gate_channels, 
+                                inter_channels=self.gate_channels // 2
+                        )
+        # self.conv = ConvBnReLu(in_channels, out_channels)
+        # self.conv = RRCNN_block(in_channels, out_channels)
+        self.conv1 = md.Conv2dReLU(
+            in_channels,
+            out_channels,
+            kernel_size=3,
+            padding=1,
+            use_batchnorm=True,
+        )
+        self.conv2 = md.Conv2dReLU(
+            out_channels,
+            out_channels,
+            kernel_size=3,
+            padding=1,
+            use_batchnorm=True,
+        )
+        nn.init.kaiming_normal_(self.conv1[0].weight, mode='fan_in', nonlinearity='relu')
+        nn.init.kaiming_normal_(self.conv2[0].weight, mode='fan_in', nonlinearity='relu')
+
+    def forward(self, x):
+        l = torch.cat(x[:-1], dim=1)
+        g = x[-1]
+        att_l = self.attention(l, g)
+        x = torch.cat([att_l, g], dim=1)
+        x = self.conv1(x)
+        x = self.conv2(x)
         return x
 
 
