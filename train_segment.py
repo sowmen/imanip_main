@@ -41,7 +41,7 @@ config_defaults = {
     "schedule_patience": 5,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "MyUnetPP-v2-Attn(ENC-ATTN)",
+    "model": "MyUnetPP-v2-Attn(Enc-None, Dec-GCA)",
 }
 TEST_FOLD = 1
 
@@ -65,7 +65,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
     # encoder = SRM_Classifer(encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5', freeze_encoder=True)
     # model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
 
-    encoder = Mani_FeatX(encoder_attention="scse")
+    encoder = Mani_FeatX(encoder_attention=None)
     model = MyUnetPP(encoder)
 
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))

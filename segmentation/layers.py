@@ -217,7 +217,7 @@ class GatedDecoder(nn.Module):
 class GatedContextDecoder(nn.Module):
 
     def __init__(self, in_channels, out_channels):
-        super().__init__()
+        super(GatedContextDecoder, self).__init__()
 
         self.layer_channels = np.sum(in_channels[:-1])
         self.gate_channels = in_channels[-1]
@@ -245,6 +245,8 @@ class GatedContextDecoder(nn.Module):
             padding=1,
             use_batchnorm=True,
         )
+        nn.init.kaiming_normal_(self.conv1[0].weight, mode='fan_in', nonlinearity='relu')
+        nn.init.kaiming_normal_(self.conv2[0].weight, mode='fan_in', nonlinearity='relu')
 
     def forward(self, x):
         l = torch.cat(x[:-1], dim=1)
