@@ -90,34 +90,34 @@ class AverageMeter:
 def get_train_transforms():
     train_imgaug  = iaa.Sequential(
         [
-            iaa.SomeOf((0, 5),
+            iaa.SomeOf((0, 2),
                 [   
-                    # iaa.OneOf([
-                    #     iaa.JpegCompression(compression=(10, 60)),
-                    #     iaa.GaussianBlur((0, 1.75)), # blur images with a sigma between 0 and 3.0
-                    #     iaa.AverageBlur(k=(2, 7)), # blur image using local means with kernel sizes between 2 and 7
-                    #     iaa.MedianBlur(k=(3, 7)), # blur image using local medians with kernel sizes between 2 and 7
-                    # ]),
+                    iaa.OneOf([
+                        iaa.JpegCompression(compression=(10, 40)),
+                        iaa.GaussianBlur((0, 1.75)), # blur images with a sigma between 0 and 3.0
+                        iaa.AverageBlur(k=(1, 3)), # blur image using local means with kernel sizes between 2 and 7
+                        iaa.MedianBlur(k=(1, 3)), # blur image using local medians with kernel sizes between 2 and 7
+                    ]),
                     # iaa.Sharpen(alpha=(0, 1.0), lightness=(0.75, 1.5)), # sharpen images
                     # iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5), # add gaussian noise to images
                     # # iaa.Sometimes(0.3, iaa.Invert(0.05, per_channel=True)), # invert color channels
                     # # iaa.Add((-10, 10), per_channel=0.5), # change brightness of images (by -10 to 10 of original value)
                     # iaa.AddToHueAndSaturation((-20, 20)), # change hue and saturation
-                    # iaa.LinearContrast((0.5, 2.0), per_channel=0.5), # improve or worsen the contrast
+                    iaa.LinearContrast((0.5, 1.5)), # improve or worsen the contrast
                     # # # either change the brightness of the whole image (sometimes
                     # # # per channel) or change the brightness of subareas
-                    # iaa.Sometimes(0.4,
-                    #     iaa.OneOf([
-                    #         iaa.Multiply((0.5, 1.5), per_channel=0.5),
-                    #         iaa.MultiplyAndAddToBrightness(mul=(0.5, 2.5), add=(-10,10)),
-                    #         iaa.MultiplyHueAndSaturation(),
-                    #         # iaa.BlendAlphaFrequencyNoise(
-                    #         #     exponent=(-4, 0),
-                    #         #     foreground=iaa.Multiply((0.5, 1.5), per_channel=True),
-                    #         #     background=iaa.LinearContrast((0.5, 2.0))
-                    #         # )
-                    #     ])
-                    # ),
+                    iaa.Sometimes(0.4,
+                        iaa.OneOf([
+                            iaa.Multiply((0.5, 1.5)),
+                            iaa.MultiplyAndAddToBrightness(mul=(0.5, 1.5), add=(-20,20)),
+                            iaa.MultiplyHueAndSaturation(),
+                            # iaa.BlendAlphaFrequencyNoise(
+                            #     exponent=(-4, 0),
+                            #     foreground=iaa.Multiply((0.5, 1.5), per_channel=True),
+                            #     background=iaa.LinearContrast((0.5, 2.0))
+                            # )
+                        ])
+                    ),
                 ], random_order=True
             )
         ], random_order=True
@@ -204,8 +204,8 @@ def image2np(image: torch.Tensor) -> np.ndarray:
 import pandas as pd
 from sklearn.model_selection import train_test_split, StratifiedKFold
 
-def get_dataframe(csv, folds=None):
-    df = pd.read_csv(csv, keep_default_na=False).sample(frac=1.0, random_state=123)
+def get_dataframe(csv, folds=None, frac=1.0):
+    df = pd.read_csv(csv, keep_default_na=False).sample(frac=frac, random_state=123)
     
     if folds is not None:
         df['fold'] = -1
