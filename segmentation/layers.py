@@ -245,8 +245,10 @@ class GatedContextDecoder(nn.Module):
             padding=1,
             use_batchnorm=True,
         )
-        nn.init.kaiming_normal_(self.conv1[0].weight, mode='fan_in', nonlinearity='relu')
-        nn.init.kaiming_normal_(self.conv2[0].weight, mode='fan_in', nonlinearity='relu')
+        # nn.init.kaiming_normal_(self.conv1[0].weight, mode='fan_in', nonlinearity='relu')
+        # nn.init.kaiming_normal_(self.conv2[0].weight, mode='fan_in', nonlinearity='relu')
+
+        self.attention2 = Attention('scse', in_channels=out_channels)
 
     def forward(self, x):
         l = torch.cat(x[:-1], dim=1)
@@ -255,6 +257,7 @@ class GatedContextDecoder(nn.Module):
         x = torch.cat([att_l, g], dim=1)
         x = self.conv1(x)
         x = self.conv2(x)
+        x = self.attention2(x)
         return x
 
 

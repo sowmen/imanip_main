@@ -33,14 +33,14 @@ CKPT_DIR = "checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 16,
+    "train_batch_size": 14,
     "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0001,
     "weight_decay": 0.0005,
     "schedule_patience": 5,
     "schedule_factor": 0.25,
-    'sampling':'bilinear',
+    'sampling':'nearest',
     "model": "MyUnetPP-v2-Attn(Enc-None, Dec-GCA)",
 }
 TEST_FOLD = 1
@@ -551,7 +551,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(CASIA_FULL + Sampling-bilinear)" + config_defaults["model"],
+        name=f"(CASIA_FULL + GCA + SCSE)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,
