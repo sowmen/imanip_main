@@ -28,8 +28,8 @@ from sim_dataset import SimDataset
 from segmentation.merged_netv2 import Mani_FeatX
 from segmentation.unetpp_v2 import MyUnetPP
 
-OUTPUT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/weights"
-CKPT_DIR = "/content/drive/MyDrive/Image_Manipulation_Dataset/checkpoint"
+OUTPUT_DIR = "weights"
+CKPT_DIR = "checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
@@ -40,7 +40,7 @@ config_defaults = {
     "weight_decay": 0.0005,
     "schedule_patience": 5,
     "schedule_factor": 0.25,
-    'sampling':'bilinear',
+    'sampling':'nearest',
     "model": "MyUnetPP-v2-Attn(Enc-None, Dec-GCA)",
 }
 TEST_FOLD = 1
@@ -469,7 +469,7 @@ def calculate_auc(model, dataset, step):
     print(f"{step} AUC : ", dataset_auc)
 
 
-from losses import DiceLoss, BinaryFocalTverskyLoss
+from losses import DiceLoss
 from torch.nn.modules.loss import _Loss
 class ImanipLoss(_Loss):
 
@@ -551,7 +551,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(CASIA_FULL + Sampling-bilinear)" + config_defaults["model"],
+        name=f"(CASIA_FULL + GCA + SCSE)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,

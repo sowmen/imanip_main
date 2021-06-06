@@ -68,18 +68,18 @@ class GatedContextAttention(nn.Module):
 
         self.W_gate = nn.Sequential(
             nn.Conv2d(gate_channels, inter_channels, kernel_size=1, stride=1, padding=0, bias=True),
-            # nn.BatchNorm2d(inter_channels)
+            nn.BatchNorm2d(inter_channels)
         )
 
         self.layer_gcb_context = GlobalContext(layer_channels)
         self.W_layer = nn.Sequential(
             nn.Conv2d(layer_channels, inter_channels, kernel_size=1, stride=1, padding=0, bias=True),
-            # nn.BatchNorm2d(inter_channels)
+            nn.BatchNorm2d(inter_channels)
         )
 
         self.psi = nn.Sequential(
             nn.Conv2d(inter_channels, 1, kernel_size=1, stride=1, padding=0, bias=True),
-            # nn.BatchNorm2d(1),
+            nn.BatchNorm2d(1),
             nn.Sigmoid()
         )
 
