@@ -171,7 +171,7 @@ class AttentionDecoderBlock(nn.Module):
             padding=1,
             use_batchnorm=True,
         )
-        self.attention1 = Attention('gcb', in_channels=in_channels)
+        self.attention1 = Attention('scse', in_channels=in_channels)
         self.conv2 = md.Conv2dReLU(
             out_channels,
             out_channels,
@@ -179,7 +179,7 @@ class AttentionDecoderBlock(nn.Module):
             padding=1,
             use_batchnorm=True,
         )
-        self.attention2 = Attention('gcb', in_channels=out_channels)
+        self.attention2 = Attention('scse', in_channels=out_channels)
 
     def forward(self, x): # x -> list of tensors coming from current and previous layers
         x = torch.cat(x, dim=1)
