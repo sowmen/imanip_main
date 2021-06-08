@@ -34,8 +34,8 @@ CKPT_DIR = "checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 10,
-    "valid_batch_size": 32,
+    "train_batch_size": 48,
+    "valid_batch_size": 64,
     "optimizer": "adam",
     "learning_rate": 0.0001,
     "weight_decay": 0.0005,
@@ -553,7 +553,7 @@ if __name__ == "__main__":
     # #---------------------------------------------------------------------#
     
     df = pd.concat([df_full, casia128_real, imd128_real, nist16_128_real, \
-                coverage128_real, casia64_real]).sample(frac=1.0, random_state=123)
+                coverage128_real, casia64_real]).sample(frac=1.0, random_state=123).reset_index(drop=True)
     # df = df_full
     
     #---------------------------------- 128 ---------------------------------------#
@@ -573,9 +573,9 @@ if __name__ == "__main__":
         print(df.groupby('fold').root_dir.value_counts())
 
     
-    # train(
-    #     name=f"(CASIA_FULL)" + config_defaults["model"],
-    #     df=df,
-    #     VAL_FOLD=0,
-    #     resume=None,
-    # )
+    train(
+        name=f"(ALL_TRAIN_AWS)" + config_defaults["model"],
+        df=df,
+        VAL_FOLD=0,
+        resume=None,
+    )
