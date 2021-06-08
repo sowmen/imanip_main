@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+from torch._C import NoneType
 from tqdm import tqdm
 from datetime import datetime
 import gc
@@ -506,51 +507,54 @@ if __name__ == "__main__":
     #---------------------------------- FULL --------------------------------------#
     # combo_all_df = get_dataframe('combo_all_FULL.csv', folds=None)
     casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
-    # imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
-    # cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
-    # nist_full = get_dataframe('dataset_csv/nist16v2.csv', folds=None)
-    # coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
+    imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
+    cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
+    nist_fullv2 = get_dataframe('dataset_csv/nist16v2.csv', folds=None)
+    
+    coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
+    coverage_full_fake = coverage_full[coverage_full['label'] == 1]
 
-    # nist_extend = get_dataframe('dataset_csv/nist_extendv2.csv', folds=None)
-    # coverage_extend = get_dataframe('dataset_csv/coverage_extend.csv', folds=None)
+    nist_extendv2 = get_dataframe('dataset_csv/nist_extendv2.csv', folds=None)
+    
+    coverage_extend = get_dataframe('dataset_csv/coverage_extend.csv', folds=None)
+    coverage_extend_fake = coverage_extend[coverage_extend['label'] == 1]
+    
+    defacto_cp = get_dataframe('dataset_csv/defacto_copy_move.csv', folds=-1)
+    defacto_inpaint = get_dataframe('dataset_csv/defacto_inpainting.csv', folds=-1)
+    defacto_s1 = get_dataframe('dataset_csv/defacto_splicing1.csv', folds=-1, frac=0.4)
+    defacto_s3 = get_dataframe('dataset_csv/defacto_splicing3.csv', folds=-1, frac=0.4)
+    defacto_s5 = get_dataframe('dataset_csv/defacto_splicing5.csv', folds=-1, frac=0.4)
 
-    # defacto_cp = get_dataframe('dataset_csv/defacto_copy_move.csv', folds=-1)
-    # defacto_inpaint = get_dataframe('dataset_csv/defacto_inpainting.csv', folds=-1)
-    # defacto_s1 = get_dataframe('dataset_csv/defacto_splicing1.csv', folds=-1, frac=0.4)
-    # defacto_s3 = get_dataframe('dataset_csv/defacto_splicing3.csv', folds=-1, frac=0.4)
-    # defacto_s5 = get_dataframe('dataset_csv/defacto_splicing5.csv', folds=-1, frac=0.4)
+    coco_cmfd = get_dataframe('dataset_csv/coco2014cmfd.csv', folds=-1)
+    dresden_spliced = get_dataframe('dataset_csv/dresden_spliced.csv', folds=-1)
+    spliced_nist = get_dataframe('dataset_csv/spliced_nist.csv', folds=-1)
 
-    # coco_cmfd = get_dataframe('dataset_csv/coco2014cmfd.csv', folds=-1)
-    # dresden_spliced = get_dataframe('dataset_csv/dresden_spliced.csv', folds=-1)
-    # spliced_nist = get_dataframe('dataset_csv/spliced_nist.csv', folds=-1)
-
-    # df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_full, coverage_full, \
-    #                     nist_extend, coverage_extend, defacto_cp, defacto_inpaint, \
-    #                     defacto_s1, defacto_s3, defacto_s5, \
-    #                     coco_cmfd, dresden_spliced, spliced_nist])
-    df_full = casia_full
+    df_full = pd.concat([casia_full, imd_full, cmfd_full, nist_fullv2, coverage_full_fake, \
+                        nist_extendv2, coverage_extend_fake, defacto_cp, defacto_inpaint, \
+                        defacto_s1, defacto_s3, defacto_s5, \
+                        coco_cmfd, dresden_spliced, spliced_nist])
     df_full.insert(0, 'image', '')
 
     #--------------------------- REAL -----------------------------------#
-    # casia128 = get_dataframe('dataset_csv/casia_128.csv', folds=-1)
-    # casia128_real = casia128[casia128['label'] == 0]
+    casia128 = get_dataframe('dataset_csv/casia_128.csv', folds=-1)
+    casia128_real = casia128[casia128['label'] == 0]
 
-    # imd128 = get_dataframe('dataset_csv/imd_128.csv', folds=-1)
-    # imd128_real = imd128[imd128['label'] == 0]
+    imd128 = get_dataframe('dataset_csv/imd_128.csv', folds=-1)
+    imd128_real = imd128[imd128['label'] == 0]
 
-    # nist16_128 = get_dataframe('dataset_csv/nist16_128.csv', folds=-1)
-    # nist16_128_real = nist16_128[nist16_128['label'] == 0]
+    nist16_128 = get_dataframe('dataset_csv/nist16_128.csv', folds=-1)
+    nist16_128_real = nist16_128[nist16_128['label'] == 0]
 
-    # coverage128 = get_dataframe('dataset_csv/coverage_128.csv', folds=-1)
-    # coverage128_real = coverage128[coverage128['label'] == 0]
+    coverage128 = get_dataframe('dataset_csv/coverage_128.csv', folds=-1)
+    coverage128_real = coverage128[coverage128['label'] == 0]
 
-    # casia64 = get_dataframe('dataset_csv/casia_64.csv', folds=-1, frac=0.4)
-    # casia64_real = casia64[casia64['label'] == 0]
+    casia64 = get_dataframe('dataset_csv/casia_64.csv', folds=-1, frac=0.5)
+    casia64_real = casia64[casia64['label'] == 0]
     # #---------------------------------------------------------------------#
     
-    # df = pd.concat([df_full, casia128_real, imd128_real, nist16_128_real, \
-    #             coverage128_real, casia64_real]).sample(frac=1.0, random_state=123)
-    df = df_full
+    df = pd.concat([df_full, casia128_real, imd128_real, nist16_128_real, \
+                coverage128_real, casia64_real]).sample(frac=1.0, random_state=123)
+    # df = df_full
     
     #---------------------------------- 128 ---------------------------------------#
 
@@ -569,9 +573,9 @@ if __name__ == "__main__":
         print(df.groupby('fold').root_dir.value_counts())
 
     
-    train(
-        name=f"(CASIA_FULL)" + config_defaults["model"],
-        df=df,
-        VAL_FOLD=0,
-        resume=None,
-    )
+    # train(
+    #     name=f"(CASIA_FULL)" + config_defaults["model"],
+    #     df=df,
+    #     VAL_FOLD=0,
+    #     resume=None,
+    # )
