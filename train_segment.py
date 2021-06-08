@@ -508,10 +508,10 @@ if __name__ == "__main__":
     casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
     # imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
     # cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
-    # nist_full = get_dataframe('dataset_csv/nist16_FULL.csv', folds=None)
+    # nist_full = get_dataframe('dataset_csv/nist16v2.csv', folds=None)
     # coverage_full = get_dataframe('dataset_csv/coverage_FULL.csv', folds=None)
 
-    # nist_extend = get_dataframe('dataset_csv/nist_extend.csv', folds=None)
+    # nist_extend = get_dataframe('dataset_csv/nist_extendv2.csv', folds=None)
     # coverage_extend = get_dataframe('dataset_csv/coverage_extend.csv', folds=None)
 
     # defacto_cp = get_dataframe('dataset_csv/defacto_copy_move.csv', folds=-1)

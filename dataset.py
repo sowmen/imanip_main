@@ -100,8 +100,8 @@ class DATASET(Dataset):
                 if(not os.path.exists(mask_path)): print(f"Mask Not Found : {mask_path}")
                 
                 mask_image = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-                if('NIST16' in root_dir):
-                    mask_image = 255 - mask_image
+                # if('NIST16' in root_dir):
+                #     mask_image = 255 - mask_image
     
 
             if self.imgaug_augment:

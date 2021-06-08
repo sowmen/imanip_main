@@ -205,7 +205,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split, StratifiedKFold
 
 def get_dataframe(csv, folds=None, frac=1.0):
-    df = pd.read_csv(csv, keep_default_na=False).sample(frac=frac, random_state=123)
+    df = pd.read_csv(csv, keep_default_na=False).sample(frac=frac, random_state=123).reset_index(drop=True)
     
     if folds is not None:
         df['fold'] = -1
