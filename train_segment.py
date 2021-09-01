@@ -34,15 +34,15 @@ CKPT_DIR = "checkpoint"
 device = 'cuda'
 config_defaults = {
     "epochs": 60,
-    "train_batch_size": 48,
-    "valid_batch_size": 64,
+    "train_batch_size": 14,
+    "valid_batch_size": 32,
     "optimizer": "adam",
     "learning_rate": 0.0001,
     "weight_decay": 0.0005,
     "schedule_patience": 5,
     "schedule_factor": 0.25,
     'sampling':'nearest',
-    "model": "MyUnetPP-v2-Attn(Enc-None, Dec-SCSE)",
+    "model": "MyUnetPP-v2-Attn(Enc-None, Dec-GCA+SCSE)",
 }
 TEST_FOLD = 1
 
@@ -102,7 +102,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
         imgaug_augment=train_imgaug,
         geo_augment=train_geo_aug,
     )
-    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
+    train_loader = DataLoader(train_dataset, batch_size=config.train_batch_size, shuffle=True, num_workers=6, pin_memory=True, drop_last=False)
 
     valid_dataset = DATASET(
         dataframe=df,
@@ -113,7 +113,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
         transforms_normalize=transforms_normalize,
         equal_sample=True
     )
-    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
+    valid_loader = DataLoader(valid_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=6, pin_memory=True, drop_last=False)
 
     test_dataset = DATASET(
         dataframe=df,
@@ -124,7 +124,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
         transforms_normalize=transforms_normalize,
         equal_sample=True
     )
-    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=False)
+    test_loader = DataLoader(test_dataset, batch_size=config.valid_batch_size, shuffle=True, num_workers=6, pin_memory=True, drop_last=False)
     #endregion ######################################################################################
 
 
@@ -505,7 +505,6 @@ def get_lossfn():
 if __name__ == "__main__":
 
     #---------------------------------- FULL --------------------------------------#
-    # combo_all_df = get_dataframe('combo_all_FULL.csv', folds=None)
     casia_full = get_dataframe('dataset_csv/casia_FULL.csv', folds=None)
     imd_full = get_dataframe('dataset_csv/imd_FULL.csv', folds=None)
     cmfd_full = get_dataframe('dataset_csv/cmfd_FULL.csv', folds=-1)
@@ -521,11 +520,11 @@ if __name__ == "__main__":
     
     defacto_cp = get_dataframe('dataset_csv/defacto_copy_move.csv', folds=-1)
     defacto_inpaint = get_dataframe('dataset_csv/defacto_inpainting.csv', folds=-1)
-    defacto_s1 = get_dataframe('dataset_csv/defacto_splicing1.csv', folds=-1, frac=0.4)
-    defacto_s3 = get_dataframe('dataset_csv/defacto_splicing3.csv', folds=-1, frac=0.4)
-    defacto_s5 = get_dataframe('dataset_csv/defacto_splicing5.csv', folds=-1, frac=0.4)
+    defacto_s1 = get_dataframe('dataset_csv/defacto_splicing1.csv', folds=-1)
+    defacto_s3 = get_dataframe('dataset_csv/defacto_splicing3.csv', folds=-1)
+    defacto_s5 = get_dataframe('dataset_csv/defacto_splicing5.csv', folds=-1)
 
-    coco_cmfd = get_dataframe('dataset_csv/coco2014cmfd.csv', folds=-1)
+    coco_cmfd = get_dataframe('dataset_csv/coco2014cmfd.csv', folds=-1, frac=0.7)
     dresden_spliced = get_dataframe('dataset_csv/dresden_spliced.csv', folds=-1)
     spliced_nist = get_dataframe('dataset_csv/spliced_nist.csv', folds=-1)
 
@@ -548,13 +547,13 @@ if __name__ == "__main__":
     coverage128 = get_dataframe('dataset_csv/coverage_128.csv', folds=-1)
     coverage128_real = coverage128[coverage128['label'] == 0]
 
-    casia64 = get_dataframe('dataset_csv/casia_64.csv', folds=-1, frac=0.5)
+    casia64 = get_dataframe('dataset_csv/casia_64.csv', folds=-1, frac=0.4)
     casia64_real = casia64[casia64['label'] == 0]
     # #---------------------------------------------------------------------#
     
     df = pd.concat([df_full, casia128_real, imd128_real, nist16_128_real, \
                 coverage128_real, casia64_real]).sample(frac=1.0, random_state=123).reset_index(drop=True)
-    # df = df_full
+
     
     #---------------------------------- 128 ---------------------------------------#
 
@@ -574,7 +573,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(ALL_TRAIN_AWS)" + config_defaults["model"],
+        name=f"(ALL_TRAIN_GTX)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,

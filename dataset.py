@@ -11,9 +11,6 @@ from torch.utils.data import Dataset
 from albumentations import augmentations
 from torchvision import transforms
 
-from dft_dwt import generate_dft_dwt_vector
-from utils import get_ela
-
 
 class DATASET(Dataset):
     def __init__(self, dataframe, mode, val_fold, test_fold, nonzero_filter=100, imgaug_augment=None,
@@ -200,7 +197,7 @@ class DATASET(Dataset):
         if os.path.exists("filtermask100.txt"):
             with open("filtermask100.txt", "r") as fp: lines = fp.read().splitlines()
         
-        pbar = tqdm(data, desc="Filtering empty mask", dynamic_ncols=True)
+        pbar = tqdm(data, desc="Filtering empty mask")
         for row in pbar:
             image_name, _, mask_patch, _, _, _, root_dir = row
 
