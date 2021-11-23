@@ -59,9 +59,6 @@ class AttentionGate(nn.Module):
 
 
 class GatedContextAttention(nn.Module):
-    """
-    Attention Block from "Attention U-Net: Learning Where to Look for the Pancreas"
-    """
 
     def __init__(self, layer_channels, gate_channels, inter_channels):
         super().__init__()
