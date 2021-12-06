@@ -20,7 +20,7 @@ torch.backends.cudnn.benchmark = True
 
 from utils import *
 from dataset import DATASET
-from segmentation.merged_net import SRM_Classifer
+from models.merged_netv2 import Mani_FeatX
 
 
 OUTPUT_DIR = "weights"
@@ -51,7 +51,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
     config = wandb.config
 
 
-    model = SRM_Classifer(num_classes=1, encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5')
+    model = Mani_FeatX(num_classes=1, encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5')
 
     # for name_, param in model.named_parameters():
     #     if 'classifier' in name_:
@@ -62,8 +62,7 @@ def train(name, df, VAL_FOLD=0, resume=None):
     print("Parameters : ", sum(p.numel() for p in model.parameters() if p.requires_grad))    
     
 
-    wandb.save('segmentation/merged_net.py')
-    wandb.save('dataset.py')
+    wandb.save('models/*.py')
 
 
     train_imgaug, train_geo_aug = get_train_transforms()
