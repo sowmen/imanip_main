@@ -4,7 +4,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from pytorch_toolbelt.utils.torch_utils import to_tensor
-from torch import Tensor
 from torch.nn.modules.loss import _Loss
 
 from pytorch_toolbelt.losses.functional import soft_dice_score
@@ -55,7 +54,7 @@ class DiceLoss(_Loss):
         self.ignore_index = ignore_index
         self.log_loss = log_loss
 
-    def forward(self, y_pred: Tensor, y_true: Tensor) -> Tensor:
+    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
         """
 
         :param y_pred: NxCxHxW

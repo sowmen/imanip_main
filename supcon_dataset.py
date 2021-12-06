@@ -1,3 +1,6 @@
+# Experimentation with Supervised-Constrative learning.
+# Results inconclusive. Further work needed
+
 import os
 import random
 import numpy as np
@@ -11,7 +14,7 @@ from torch.utils.data import Dataset
 from albumentations import augmentations
 from torchvision import transforms
 
-from dft_dwt import generate_dft_dwt_vector
+from extras.dft_dwt import generate_dft_dwt_vector
 from utils import get_ela
 
 

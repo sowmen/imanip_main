@@ -21,13 +21,12 @@ import seg_metrics
 from pytorch_toolbelt import losses
 from utils import *
 
-from segmentation.smp_srm import SMP_SRM_UPP
-from segmentation.timm_srm_unetpp import UnetPP
-from segmentation.merged_net import SRM_Classifer 
-from sim_dataset import SimDataset
+from models.smp_srm import SMP_SRM_UPP
+from models.timm_srm_unetpp import UnetPP
+from extras.sim_dataset import SimDataset
 
-from segmentation.merged_netv2 import Mani_FeatX
-from segmentation.unetpp_v2 import MyUnetPP
+from models.merged_netv2 import Mani_FeatX
+from models.unetpp_v2 import MyUnetPP
 
 OUTPUT_DIR = "weights"
 CKPT_DIR = "checkpoint"
@@ -60,18 +59,12 @@ def train(name, df, VAL_FOLD=0, resume=None):
     config = wandb.config
 
 
-    # model = smp.DeepLabV3('resnet34', classes=1, encoder_weights='imagenet')
-    # model = SMP_SRM_UPP()
-    
-    # encoder = SRM_Classifer(encoder_checkpoint='weights/pretrain_[31|03_12|16|32].h5', freeze_encoder=True)
-    # model = UnetPP(encoder, num_classes=1, sampling=config.sampling, layer='end')
-
     encoder = Mani_FeatX(encoder_attention=None)
     model = MyUnetPP(encoder)
 
     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     
-    wandb.save('segmentation/*.py')
+    wandb.save('models/*.py')
     wandb.save('dataset.py')
     
     

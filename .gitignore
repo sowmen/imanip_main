@@ -2,7 +2,6 @@ Image_Manipulation_Dataset/
 dfdc-env/
 .vscode/
 */*.png
-/home/saurav/Sowmen_DL/Image Manipulation/Image_Manipulation_Dataset
 wandb/
 weights/
 history/
@@ -10,7 +9,5 @@ __pycache__/
 *.h5
 best_weights/
 checkpoint/
-phase2 (SRM+Fake,ELA+Unet).ipynb
-256_features/
 *.zip
 Supplementary/
