@@ -16,7 +16,6 @@ class DATASET(Dataset):
     def __init__(self, dataframe, mode, val_fold, test_fold, nonzero_filter=100, imgaug_augment=None,
                  transforms_normalize=None, geo_augment=None, equal_sample=False, segment=False
     ):
-
         super().__init__()
         self.dataframe = dataframe
         self.mode = mode
@@ -61,7 +60,7 @@ class DATASET(Dataset):
         self.data = rows.values
         np.random.shuffle(self.data)
         
-        if nonzero_filter > 0:
+        if nonzero_filter > 0: # filter images that do not have at least 'nonzero_filter' fake pixels
             self.data = self._filter_mask(self.data, nonzero_filter)
 
     def __len__(self):

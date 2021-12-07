@@ -1,7 +1,7 @@
 import sys
 sys.path.append('../image_manipulation/')
 
-from models.unetplusplus_modules.SMPUnetPlusPlus import UnetPlusPlus
+from models.smp_unetplusplus_modules.SMPUnetPlusPlus import UnetPlusPlus
 import torch
 import torch.nn as nn
 import gc

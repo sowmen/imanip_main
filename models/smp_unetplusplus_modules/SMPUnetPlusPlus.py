@@ -3,7 +3,7 @@ sys.path.append('../image_manipulation/')
 
 from typing import Optional, Union, List
 from segmentation_models_pytorch.unetplusplus.decoder import UnetPlusPlusDecoder
-from models.failed_unetplusplus_modules.initialization import get_encoder
+from models.smp_unetplusplus_modules.initialization import get_encoder
 from segmentation_models_pytorch.base import SegmentationModel
 from segmentation_models_pytorch.base import SegmentationHead, ClassificationHead
 
