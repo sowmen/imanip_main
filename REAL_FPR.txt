@@ -1,0 +1,19 @@
+GCA 
+Combined Real (351) = 7.23
+Combined Fake (200) = 4.37
+Full (551) = 4.88
+
+Casia Real (200) = 9.88
+IMD real (151) = 6.42
+Casia Fake (100) = 3.30
+IMD Fake (100) = 6.02
+
+MantraNet
+Combined Real (351) = 5.01
+Combined Fake (200) = 3.93
+Full (551) = 4.70
+
+Casia Real (200) = 5.39
+IMD Real (151) = 4.57
+Casia Fake (100) = 4.77
+IMD Fake (100) = 4.08
