@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import pandas as pd
-from torch._C import NoneType
 from tqdm import tqdm
 from datetime import datetime
 import gc
@@ -525,7 +524,7 @@ if __name__ == "__main__":
                         nist_extendv2, coverage_extend_fake, defacto_cp, defacto_inpaint, \
                         defacto_s1, defacto_s3, defacto_s5, \
                         coco_cmfd, dresden_spliced, spliced_nist])
-    df_full.insert(0, 'image', '')
+    df_full.insert(0, 'image', '') # Add this to match with 64/128 patch csv's
 
     #--------------------------- REAL -----------------------------------#
     casia128 = get_dataframe('dataset_csv/casia_128.csv', folds=-1)
@@ -543,7 +542,7 @@ if __name__ == "__main__":
     casia64 = get_dataframe('dataset_csv/casia_64.csv', folds=-1, frac=0.4)
     casia64_real = casia64[casia64['label'] == 0]
     # #---------------------------------------------------------------------#
-    
+
     df = pd.concat([df_full, casia128_real, imd128_real, nist16_128_real, \
                 coverage128_real, casia64_real]).sample(frac=1.0, random_state=123).reset_index(drop=True)
 
@@ -566,7 +565,7 @@ if __name__ == "__main__":
 
     
     train(
-        name=f"(ALL_TRAIN_GTX)" + config_defaults["model"],
+        name=f"TESTING (ALL_TRAIN_GTX)" + config_defaults["model"],
         df=df,
         VAL_FOLD=0,
         resume=None,

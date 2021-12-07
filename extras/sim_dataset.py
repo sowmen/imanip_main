@@ -2,7 +2,7 @@
 
 
 from torch.utils.data import Dataset
-import simulation
+from extras import simulation
 import numpy as np
 
 class SimDataset(Dataset):
